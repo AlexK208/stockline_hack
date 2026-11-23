@@ -223,10 +223,17 @@ aucun n'était descendu sous 4526 ms, et les deux passages suivants sont tous le
 jetons est inchangé au jeton près entre les deux nouveaux passages (175 402 puis 175 418 par appel) — la
 modification est purement transport, elle ne change pas ce que le modèle fait.
 
-**Ce que la mesure sous-estime.** `make calls` enchaîne les tours sans attendre ; un vrai appel laisse l'appelant
-parler plusieurs secondes entre deux tours, donc la connexion y était encore plus souvent froide. Le gain réel au
-téléphone devrait être supérieur à ce que ce tableau montre — mais nous ne pouvons pas le chiffrer : les crédits
-TTS sont épuisés depuis 23 h 43, personne ne peut plus mesurer un tour vocal complet.
+**Ce que la mesure sous-estime, et ce qu'elle ne couvre pas.** `make calls` enchaîne les tours sans attendre ; un
+vrai appel laisse l'appelant parler plusieurs secondes entre deux tours, donc la connexion y était encore plus
+souvent froide : le gain réel au téléphone devrait dépasser ce tableau. Mais `make calls` passe par `POST /chat`,
+**sans TTS ni STT** : ce que nous avons mesuré ici est uniquement la réutilisation de la connexion vers Anthropic.
+La moitié ElevenLabs du gain est déduite de la mesure de `GUIDE-VOIX.md` § 4.9, pas mesurée par nous — les crédits
+TTS sont épuisés depuis 23 h 43 et personne ne peut plus chronométrer un tour vocal complet.
+
+**Ce correctif ne touche pas la reconnaissance vocale.** Le flux Soniox est un WebSocket séparé (`clients/ws.py`),
+pas le pool httpx. Mesuré de son côté : ouverture du socket 300–950 ms, et `finalize` → mots définitifs seulement
+95–375 ms — donc Soniox n'est pas le poste coûteux que nous croyions, et le reste du délai de transcription est
+dans notre propre code, pas chez le fournisseur.
 
 ---
 

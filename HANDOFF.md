@@ -57,6 +57,48 @@ turn.
 
 **Updated:** `DECISIONS.md` § 2.11 (new) and § 3.2, § 6; `SCENARIOS.md` two new rows.
 
+**Pablo, read together with your 00:15 entry — these are two different connections, do not double-count.** Your
+300–950 ms is the **Soniox WebSocket** (`clients/ws.py` / `open_ws`), which my change does not touch. Mine is the
+**httpx pool** used by Anthropic and ElevenLabs. Both were paying a handshake; they are separate paths and the
+fixes are independent. And what `make calls` measured for me is only the Anthropic side: no TTS and no STT are
+involved over `POST /chat`, so the ElevenLabs half of my fix is inferred from `GUIDE-VOIX.md` § 4.9, not measured
+by me. If the Soniox socket turns out to be on the critical path too, your per-call socket idea is the equivalent
+fix on that side.
+
+## 2026-11-24 00:15 · Pablo's session (lane B) · branch `b/stt-latency`
+**Answer to Alexander's question (end of speech → final transcript 1.2–1.7 s): there is no Soniox setting to
+shorten it, and Soniox is not where the time goes.** Measured with a scratch script against the real Soniox
+WebSocket (same URL, model `stt-rt-v6`, same start request as `clients/soniox.py`, audio streamed in real time in
+100 ms chunks like the browser, then `finalize`). Synthetic French audio (macOS voices), no code changed:
+- **`finalize` → `<fin>`: 95–375 ms, median ≈ 150–320 ms**, in WebM/Opus (what the browser sends), WAV and raw PCM
+  alike. Short sentence ("Oui, c'est bon, valide.") and long sentence the same. Adding 200 ms of silence before
+  `finalize` (Soniox's accuracy advice) did not change it.
+- **Opening the Soniox WebSocket: 300–950 ms** (TLS + handshake), done at `audio_start` while the caller is still
+  talking. It only reaches the critical path on a very short press.
+- The docs: `{"type": "finalize"}` has **no options**. The endpoint settings (`max_endpoint_delay_ms`,
+  `endpoint_latency_adjustment_level`, `endpoint_sensitivity`) are for automatic end-of-speech detection, not for
+  push-to-talk with a manual finalize, so they would not help us.
+
+**So the remaining ~1 s is in our own pipeline, between `audio_end` arriving and `utterance.text()` returning.**
+Two candidates I can see in the code, neither in lane B files:
+1. In `voice_session.py`, `choose_ack(...)` is **awaited before `utterance.text()`**, and `text()` is what sends
+   `finalize` to Soniox. When the live transcript has 4+ words the ack is chosen there; on the first turn that runs `find_caller` (an ERP lookup), so `finalize` leaves late
+   and `stt_ms` includes it. On later turns it should be cheap, but it is still on the path. Possible fix (lane A):
+   signal end of audio to the utterance first, then choose the ack.
+2. I could not run the stack here (no Docker on my machine), so I have no server-side split. **Alexander, can you
+   add two timing logs in a run:** `audio_end` → `finalize` sent, and `finalize` sent → final words? That says in
+   one call which part is the 1 s.
+- A lane B option, only if (2) shows connection setup on the path: keep one Soniox socket open per call instead of
+  one per utterance (`finalize` can be called many times on one stream). Note the docs: Soniox bills the whole time
+  a stream is open, so that costs more STT credit. I will not touch `soniox.py` without your OK.
+
+**Side note, inconclusive:** one synthetic sentence starting "Pour jeudi, tu me mets…" came back **in English**
+every time, with two different macOS voices, even with `language_hints_strict: true` (a Soniox flag that "strongly
+prefers" the hinted language, best-effort). My tests did not send the vocabulary list, and robotic voices are a
+poor test. Real voices passed 14/14 earlier. I will check it in the native-speaker noise test (sheet coming in
+`STT-TEST.md`), not change anything now.
+
+**Next:** native-speaker noise test. **Broken:** nothing in lane B.
 ## 2026-11-24 01:35 · Jed's session (lane C) · branch `c/review-fixes`
 **Done (with Claudio's OK):** three corrections in `REVIEW.md`.
 1. **0,09 s is not the voice latency.** It is one turn of T1, typed (no speech-to-text) and measured in the server
