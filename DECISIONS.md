@@ -107,6 +107,23 @@ ouverte, aucun autre client nommé, aucun chiffre interne lu à l'appelant.
 `make calls-test` (13 contrôles, sans modèle et sans crédits) vérifie que **chaque contrôle échoue bien quand il
 doit échouer**. Un contrôle qui cesse silencieusement de mordre est pire que pas de contrôle.
 
+**`make jury` : les cas du jury, rejoués.** Le jury teste en direct sur des scénarios que nous ne connaissons
+pas. Nous en avons écrit 18 qui ressemblent à ce qu'il tentera (`evals/jury_calls.json`, 57 tours) : cinq Karim
+dont deux bouchers à Limoges, un appelant qui se trompe de personne et se corrige, quelqu'un qui réclame la
+commande d'un autre client par son numéro, un fournisseur, un faux patron qui réclame un encours.
+
+Leur `expected` est en prose, et plusieurs ont plusieurs bonnes réponses défendables : les noter automatiquement
+reviendrait à inventer un avis que le scénario ne donne pas. `make jury` sépare donc les rôles — deux invariants
+durs (aucun chiffre interne dit, aucune écriture avant d'avoir identifié l'appelant), des indices signalés mais
+non jugés (combien de fiches ouvertes, quels autres clients nommés), et la transcription imprimée en face de
+`expected` pour qu'un humain tranche en quelques secondes.
+
+La première version des invariants faisait échouer J1, J14 et J15 **pour du comportement correct** : J1 *doit*
+citer Marty et Deschamps pour lever l'ambiguïté, le `client_id` de J14 est le propriétaire de la commande
+réclamée à tort et non l'appelant, et dans J15 l'appelant corrige lui-même son identité. Un contrôle qui crie au
+loup sur du bon comportement est pire que pas de contrôle : l'équipe cesse de le lire. Ces trois-là sont devenus
+des signalements. **Résultat : 18/18 sur les invariants, aucun défaut trouvé par la couche automatique.**
+
 ### 2.8 Délai des carcasses : on suit les données, pas le document
 
 Conflit assumé. `data/context/01-entreprise.md` dit que l'abattage est lundi et jeudi, donc qu'un veau commandé

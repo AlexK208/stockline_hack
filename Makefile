@@ -58,6 +58,9 @@ calls: ## replay the test calls of SCENARIOS.md and check the ERP (resets the ER
 calls-test: ## check the test-call checks themselves, both ways (no model, no credits; ERP running)
 	@python3 evals/test_checks.py
 
+jury: ## replay the jury-style hard calls of evals/jury_calls.json (resets the ERP! ARGS="J1 J5" or "-v")
+	@python3 evals/run_jury.py $(ARGS)
+
 types: ## regenerate frontend types from the Python OpenAPI schemas (services running; needs Node + pnpm)
 	@./scripts/gen-types.sh
 
