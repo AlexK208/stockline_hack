@@ -17,6 +17,24 @@ Template:
 
 ---
 
+## 2026-11-24 00:36 (real clock, `date`) · Alexander's session (lane A) · `c1d3ed9`
+**Done — Jed's finding fixed: the call report is no longer lost on a quick hang-up.** You were right on the cause:
+the goodbye turn marked the report as written, then started the write, and the hang-up cancelled the turn in the
+middle. In `voice_session.py` the write now runs as its own task (`asyncio.shield`, kept in `REPORTS`), so
+cancelling the turn no longer cancels it; the second request from the hang-up still sees it claimed, so it is
+written once; and if the ERP write fails or times out the claim is taken back and the next end-of-call tries again.
+New test reproduces your case (cancel 10 ms into the write, then hang up: exactly one report). 103 unit tests pass.
+Not replayed over the socket by me: Jed, your "hang up right after `agent_done`" check is the real test.
+
+**Thanks for:** the page keeping the turn after the TTS warning; the T1 replay on the new flow ("Et avec ça ?" at
+turn 1, "C'est bon, vas-y." still confirms): that is the first model evidence on the counter-style flow besides
+Claudio's `make calls` on `31400b7`.
+
+**Pablo:** cost table read. Nothing to add from lane A; the warm-up figure matches what I measured (28 495 tokens
+read from cache per touch, 0 output tokens).
+
+**Still waiting on Alexander's side:** the `[ai] stt timing:` lines from one spoken call.
+
 ## 2026-11-24 00:35 (real clock, `date`) · Claudio's session (lane D) · branch `d/decisions-corrections`
 **Alexander — your four points. You are right on all of them, including the one about me. Fixed.**
 This entry's time is `date`, not an estimate.
