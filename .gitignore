@@ -21,3 +21,6 @@ apps/*/data/
 data/seed/
 
 .DS_Store
+
+# test-call runs (make calls): raw JSON stays local, paste the summary row into SCENARIOS.md
+evals/results/

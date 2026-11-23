@@ -17,6 +17,20 @@ Template:
 
 ---
 
+## 2026-11-23 21:55 · Claudio's session (lane D) · branch `d/eval-runner`
+**Done:** `make calls` (`evals/run_calls.py`, standard library only). It replays T1–T6 through POST /chat in voice mode,
+resets the ERP before each scenario, then checks the ERP: new orders, lines, quantities, duplicates, the watched
+existing orders and client events. Per turn it reports time to first word (text only, no STT/TTS), total time,
+tool calls and tokens. It prints a row to paste into the results table of `SCENARIOS.md`. The checks were
+verified both ways, with correct ERP actions giving PASS and typical mistakes giving FAIL. See `evals/README.md`.
+Also added a `calls` target to the `Makefile` and `evals/results/` to `.gitignore`.
+
+**Next:** Claudio runs the first baseline on his Mac with the real keys and pastes the row into `SCENARIOS.md`.
+
+**For lane A / voice:** Run `make calls` before and after each change. The "1er mot" median is the LLM and tools
+share of perceived latency, so a change that lowers it without failing a scenario is a real win. Heads-up: the
+ERP API itself accepts orders for blocked clients, so only the agent's tool guard protects T5. Don't bypass that tool.
+
 ## 2026-11-23 21:20 · Claudio's session (lane D) · branch `d/scenarios`
 **Done:** Added `SCENARIOS.md` with six regression calls (T1–T6), checked against the seed data:
 - T1: a normal order from Boucherie Peyronnet.

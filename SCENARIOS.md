@@ -4,7 +4,10 @@ Six appels de non-régression pour le cœur du produit : **la prise de commande 
 restaurants**. On les rejoue après chaque changement important ; la vitrine (lecture du bon de pesée) n'est
 travaillée que quand les six passent.
 
-**Avant chaque série : `make reset`.** Le pack est figé au **mardi 24/11/2026, 05h00**.
+**En automatique : `make calls`** (ou `make calls ARGS="T3 T6"`) rejoue les six appels en texte, vérifie l'ERP
+et affiche la ligne à coller dans le tableau ci-dessous. Voir `evals/README.md`.
+
+**À la main : `make reset` avant chaque série.** Le pack est figé au **mardi 24/11/2026, 05h00**.
 Chaque appel dit : qui appelle, ce qu'il dit, ce que l'ERP doit contenir à la fin, et les pièges.
 Les faits viennent des fiches `data/context/clients/` et de `data/seed/` ; si l'ERP dit autre chose qu'un attendu,
 on vérifie la donnée et on corrige ce fichier.
