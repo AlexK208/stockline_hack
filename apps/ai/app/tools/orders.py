@@ -36,13 +36,23 @@ async def checked_lines(ctx: ToolContext, client_id: str, delivery_date: str, li
     problems = desk.problems_of(checked)
     if problems:
         return [], {"written": False, "problems": problems, "instruction": NOT_WRITTEN, **checked}
-    return [l.to_erp(row["qty"]) for l, row in zip(lines, checked["items"])], None
+    return [{**l.to_erp(row["qty"]), **({"_say": row["say"]} if row.get("say") else {})} for l, row in zip(lines, checked["items"])], None
+
+
+def for_erp(line: dict) -> dict:
+    """An ERP line without our private keys (the ones starting with an underscore)."""
+    return {k: v for k, v in line.items() if not k.startswith("_")}
 
 
 def estimates(order: dict, erp_lines: list[dict], lines: list[OrderLine]) -> dict:
-    """Adds, for lines given in pieces, the reminder that the weight is an estimate."""
+    """Adds what the agent should say with the result: weights estimated from pieces, house rules worth mentioning."""
     said = [f"{desk.fmt(l.pieces)} pièce(s) ≈ {desk.fmt(e['qty'])} kg" for l, e in zip(lines, erp_lines) if l.pieces and l.qty is None]
-    return {**order, **({"estimatedFromPieces": said, "say": "poids estimé, facturé au poids réel"} if said else {})}
+    notes = [e["_say"] for e in erp_lines if e.get("_say")]
+    return {
+        **order,
+        **({"estimatedFromPieces": said, "say": "poids estimé, facturé au poids réel"} if said else {}),
+        **({"alsoSay": notes} if notes else {}),
+    }
 
 
 HOUSE_ONLY_WARNINGS = {"expiring_soon", "price_below_cost"}
@@ -70,13 +80,15 @@ def summarize_order(o: dict) -> dict:
 BLOCKING_WARNINGS = {"client_blocked", "insufficient_stock", "no_route"}
 
 
-async def refuse_if_blocked(ctx: ToolContext, client_id: str) -> None:
+async def refuse_if_blocked(ctx: ToolContext, client_id: str) -> dict:
+    """Raises for a blocked account (the ERP only warns). Returns the client detail otherwise."""
     client = await ctx.erp.get(f"/api/clients/{enc(client_id)}")
     if client.get("status") == "blocked":
         raise ValueError(
-            f"Compte bloqué ({client['name']}) : aucune commande tant que la comptabilité n'a pas levé le blocage. "
-            "Prends le message (log_client_event), ne promets rien."
+            f"Compte bloqué ({client['name']}) : aucune commande ni modification tant que la comptabilité n'a pas levé le "
+            "blocage. Prends le message (log_client_event), ne promets rien."
         )
+    return client
 
 
 @tool
@@ -93,17 +105,28 @@ async def create_draft_order(
     S'il y a un problème il N'ÉCRIT RIEN et renvoie `problems` : explique-les au client. Sinon il renvoie la commande (prix du client).
     Inutile d'appeler check_products avant. Delivery date defaults to the client's next delivery day.
     """
-    await refuse_if_blocked(ctx, client_id)
+    client = await refuse_if_blocked(ctx, client_id)
+    delivery_date = delivery_date or await desk.default_delivery_date(ctx.erp, client_id)
+    # One open order per client and delivery day. Also what protects against a duplicate when the caller interrupts
+    # while an order is being written, or repeats himself.
+    same_day = [o for o in client.get("recentOrders") or [] if o["deliveryDate"] == delivery_date and o["status"] in ("draft", "confirmed")]
+    if same_day:
+        existing = summarize_order(await ctx.erp.get(f"/api/orders/{enc(same_day[0]['id'])}"))
+        return {
+            "written": False,
+            "instruction": "Ce client a déjà une commande en cours pour ce jour : rien n'a été créé. Modifie celle-ci "
+            "(add_order_line, update_order_line, remove_order_line) au lieu d'en créer une deuxième.",
+            "existingOrder": existing,
+        }
     erp_lines: list[dict] = []
     if lines:
-        delivery_date = delivery_date or await desk.default_delivery_date(ctx.erp, client_id)
         erp_lines, refusal = await checked_lines(ctx, client_id, delivery_date, lines)
         if refusal:
             return refusal
     body = {
         "clientId": client_id,
         "deliveryDate": delivery_date,
-        "lines": erp_lines if lines is not None else None,
+        "lines": [for_erp(e) for e in erp_lines] if lines is not None else None,
         "note": note,
         "source": "voice_agent" if ctx.actor == "voice_agent" else "web",
     }
@@ -126,11 +149,12 @@ async def add_order_line(
     pièces → kilos : en cas de problème il n'écrit rien et renvoie `problems`. Add a line to an order.
     """
     order = await ctx.erp.get(f"/api/orders/{enc(order_id)}")
+    await refuse_if_blocked(ctx, order["clientId"])
     line = OrderLine(product_id=product_id, qty=qty, pieces=pieces, note=note, substitute_for=substitute_for)
     erp_lines, refusal = await checked_lines(ctx, order["clientId"], order["deliveryDate"], [line])
     if refusal:
         return refusal
-    updated = summarize_order(await ctx.erp.post(f"/api/orders/{enc(order_id)}/lines", erp_lines[0]))
+    updated = summarize_order(await ctx.erp.post(f"/api/orders/{enc(order_id)}/lines", for_erp(erp_lines[0])))
     return estimates(updated, erp_lines, [line])
 
 
@@ -174,11 +198,21 @@ async def update_order_line(
         current = next((l for l in order["lines"] if l["id"] == line_id), None)
         if current is None:
             raise ValueError(f"Ligne {line_id} introuvable sur cette commande : relis ses lignes avec get_order.")
+        await refuse_if_blocked(ctx, order["clientId"])
+        same_product = product_id is None or product_id == current["productId"]
         wanted = OrderLine(product_id=product_id or current["productId"], qty=qty if (qty is not None or pieces is not None) else current["qty"], pieces=pieces)
-        erp_lines, refusal = await checked_lines(ctx, order["clientId"], order["deliveryDate"], [wanted])
-        if refusal:
-            return refusal
-        qty = erp_lines[0]["qty"]
+        if same_product and pieces is None and wanted.qty is not None and wanted.qty <= current["qty"]:
+            qty = wanted.qty  # less of what is already on the order: nothing to check
+        else:
+            erp_lines, refusal = await checked_lines(ctx, order["clientId"], order["deliveryDate"], [wanted])
+            if refusal and same_product and order["status"] in ("confirmed", "prepared") and wanted.qty is not None and wanted.qty > current["qty"]:
+                # The order already reserves its own quantity: only the extra has to be available.
+                extra = OrderLine(product_id=current["productId"], qty=round(wanted.qty - current["qty"], 3))
+                more, refusal = await checked_lines(ctx, order["clientId"], order["deliveryDate"], [extra])
+                erp_lines = [{"qty": wanted.qty}] if more else []
+            if refusal:
+                return refusal
+            qty = erp_lines[0]["qty"]
     body = {"qty": qty, "productId": product_id, "note": note, "substituteFor": substitute_for}
     return summarize_order(await ctx.erp.patch(f"/api/orders/{enc(order_id)}/lines/{enc(line_id)}", without_none(body)))
 
@@ -199,7 +233,19 @@ async def update_order(
     delivery_date: str | None = Field(None, description="Nouvelle date de livraison YYYY-MM-DD"),
     note: str | None = Field(None, description="Note de commande, ex. « livrer avant 6 h 30 »"),
 ) -> dict:
-    """Change la date de livraison ou la note d'une commande brouillon ou confirmée. Change delivery date or note."""
+    """
+    Change la date de livraison ou la note d'une commande brouillon ou confirmée. Pour une nouvelle date, l'outil revérifie toutes
+    les lignes (jour de livraison du client, délai de commande, stock à la date) : en cas de problème il n'écrit rien et renvoie
+    `problems`. Change delivery date or note.
+    """
+    if delivery_date is not None:
+        order = await ctx.erp.get(f"/api/orders/{enc(order_id)}")
+        await refuse_if_blocked(ctx, order["clientId"])
+        if delivery_date != order["deliveryDate"] and order["lines"]:
+            lines = [OrderLine(product_id=l["productId"], qty=l["qty"]) for l in order["lines"]]
+            _, refusal = await checked_lines(ctx, order["clientId"], delivery_date, lines)
+            if refusal:
+                return refusal
     return summarize_order(await ctx.erp.patch(f"/api/orders/{enc(order_id)}", without_none({"deliveryDate": delivery_date, "note": note})))
 
 
