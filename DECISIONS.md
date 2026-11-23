@@ -200,6 +200,41 @@ termes en trop étaient **supprimés en silence**. Un produit ajouté à l'ERP p
 que personne le sache, et le symptôme ressemble à une erreur du modèle. `clients/soniox.py` journalise maintenant
 le nombre de termes abandonnés (une fois par changement, pas à chaque tour).
 
+### 2.11 Connexions gardées ouvertes : le gain le plus rentable de la nuit
+
+**Une ligne de configuration, le pire tour passe de 4,5–8,0 s à 3,5–4,2 s.**
+
+`clients/http.py` partage un pool de connexions entre tous les fournisseurs (Anthropic, ElevenLabs, Deepgram…).
+Il était construit avec les réglages httpx par défaut — et **httpx ferme une connexion inactive au bout de
+5 secondes**. Au téléphone, l'appelant parle plus de 5 secondes entre deux tours. Le pool était donc vide à
+presque chaque tour, et nous repayions une poignée de main TLS complète vers Anthropic et ElevenLabs à chaque
+fois. `GUIDE-VOIX.md` § 4.9 avait mesuré le côté TTS : **≈ 1,9 s à froid contre 170–370 ms à chaud**.
+
+Le correctif est `keepalive_expiry = 600 s` sur le pool partagé. Rien d'autre ne change : si le fournisseur ferme
+la connexion de son côté, httpx se reconnecte.
+
+| | pire tour | médiane |
+|---|---|---|
+| Avant (6 passages complets) | 4526 – 7992 ms | 3032 – 3446 ms |
+| Après (2 passages) | **3513 – 4157 ms** | **2696 – 2756 ms** |
+
+**Les deux plages de « pire tour » ne se recouvrent pas**, ce qui est l'argument : sur six passages antérieurs,
+aucun n'était descendu sous 4526 ms, et les deux passages suivants sont tous les deux en dessous. Le nombre de
+jetons est inchangé au jeton près entre les deux nouveaux passages (175 402 puis 175 418 par appel) — la
+modification est purement transport, elle ne change pas ce que le modèle fait.
+
+**Ce que la mesure sous-estime, et ce qu'elle ne couvre pas.** `make calls` enchaîne les tours sans attendre ; un
+vrai appel laisse l'appelant parler plusieurs secondes entre deux tours, donc la connexion y était encore plus
+souvent froide : le gain réel au téléphone devrait dépasser ce tableau. Mais `make calls` passe par `POST /chat`,
+**sans TTS ni STT** : ce que nous avons mesuré ici est uniquement la réutilisation de la connexion vers Anthropic.
+La moitié ElevenLabs du gain est déduite de la mesure de `GUIDE-VOIX.md` § 4.9, pas mesurée par nous — les crédits
+TTS sont épuisés depuis 23 h 43 et personne ne peut plus chronométrer un tour vocal complet.
+
+**Ce correctif ne touche pas la reconnaissance vocale.** Le flux Soniox est un WebSocket séparé (`clients/ws.py`),
+pas le pool httpx. Mesuré de son côté : ouverture du socket 300–950 ms, et `finalize` → mots définitifs seulement
+95–375 ms — donc Soniox n'est pas le poste coûteux que nous croyions, et le reste du délai de transcription est
+dans notre propre code, pas chez le fournisseur.
+
 ---
 
 ## 3. Mesures
@@ -238,7 +273,9 @@ les outils appelés — c'est-à-dire exactement les contrôles qui avaient fait
 | `be7eb4b` | 6/6 | 676 ms | 3446 ms | 4700 ms | 4709 ms | 4033 ms |
 | `93fc71b` | 6/6 | 1091 ms | 2764 ms | 5517 ms | 7023 ms | 5932 ms |
 | `8a2d158` | 6/6 | 591 ms | 3124 ms | **4286 ms** | **4526 ms** | **3935 ms** |
-| **`31400b7` (final)** | **6/6** | 605 ms | 3192 ms | 5263 ms | 6451 ms | 5846 ms |
+| `31400b7` | 6/6 | 605 ms | 3192 ms | 5263 ms | 6451 ms | 5846 ms |
+| **`608a233` (final), passage 1** | **6/6** | 561 ms | **2756 ms** | 3777 ms | 4157 ms | 3596 ms |
+| **`608a233` (final), passage 2** | **6/6** | 583 ms | **2696 ms** | **3498 ms** | **3513 ms** | **2930 ms** |
 
 **Ce n'est pas la médiane qui a bougé, c'est la queue, et c'est ce que nous visions.** Par rapport à la référence,
 le passage final garde une médiane quasi identique (3032 → 3124 ms) mais **le p90 perd 2525 ms et le pire tour
@@ -387,10 +424,10 @@ sans rien dire.
 
 | | |
 |---|---|
-| Scénarios | **6/6 sur `31400b7`**, la pointe de `main`, tous contrôles actifs (ERP + parole + outils appelés) · **18/18** sur les invariants des appels jury |
-| Latence texte | médiane 3192 ms, p90 5263 ms, pire 6451 ms (18 tours) — le pire tour est toujours un 1er tour d'appel |
+| Scénarios | **6/6 sur `608a233`**, deux passages, tous contrôles actifs (ERP + parole + outils appelés) · **18/18** sur les invariants des appels jury |
+| Latence texte | médiane **2696–2756 ms**, p90 3498–3777 ms, **pire 3513–4157 ms** (2 × 18 tours) — pire tour 8,0 s → 3,5 s depuis la référence |
 | Latence voix | 0,09 s jusqu'au premier son, 8,7 s au départ |
-| Coût | ~181 000 jetons d'entrée par appel, dont ~27 000 hors cache (85,1 % servi par le cache) |
+| Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |

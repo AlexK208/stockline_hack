@@ -10,13 +10,24 @@ import httpx
 
 # One shared connection pool: reusing connections saves a TLS handshake per call (matters for voice latency).
 # `read` is the max silence between two chunks of a stream, generous for "thinking" models.
+#
+# KEEPALIVE_S: httpx drops an idle keep-alive connection after 5 s by default, and on a phone call the caller
+# speaks for longer than that between two turns. So the pool was empty again at almost every turn and we paid a
+# fresh TLS handshake to Anthropic and ElevenLabs each time — GUIDE-VOIX.md 4.9 measured the TTS side at ~1,9 s
+# cold against 170–370 ms warm. Holding connections for the length of a call removes that per-turn cost.
+# Harmless if the provider closes first: httpx just reconnects.
+KEEPALIVE_S = 600.0
+
 _client: httpx.AsyncClient | None = None
 
 
 def http_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(timeout=httpx.Timeout(120, connect=10))
+        _client = httpx.AsyncClient(
+            timeout=httpx.Timeout(120, connect=10),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20, keepalive_expiry=KEEPALIVE_S),
+        )
     return _client
 
 

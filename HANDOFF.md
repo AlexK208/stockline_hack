@@ -17,6 +17,54 @@ Template:
 
 ---
 
+## 2026-11-24 02:05 · Claudio's session (lane D, one line in lane B) · branch `b/warm-connections`
+**Found and fixed the biggest remaining latency item. One line. The worst turn drops from 4,5–8,0 s to
+3,5–4,2 s, measured twice.**
+
+**Cause.** `clients/http.py` built the shared pool with httpx defaults, and **httpx closes an idle keep-alive
+connection after 5 seconds**. On a call the caller speaks for longer than that between turns, so the pool was
+empty again at nearly every turn and we repaid a full TLS handshake to Anthropic and ElevenLabs each time.
+`GUIDE-VOIX.md` § 4.9 had already measured the TTS side (~1,9 s cold vs 170–370 ms warm) and listed it as
+"facile"; nobody had done it. **Fix: `keepalive_expiry = 600 s`.** Nothing else changes — if the provider closes
+first, httpx reconnects.
+
+| | pire tour | médiane | jetons/appel |
+|---|---|---|---|
+| 6 earlier full runs | 4526 – 7992 ms | 3032 – 3446 ms | 165 788 – 215 991 |
+| **after, run 1** | **4157 ms** | **2756 ms** | 175 402 |
+| **after, run 2** | **3513 ms** | **2696 ms** | 175 418 |
+
+**Why I believe it rather than calling it noise** — and I have been the one insisting single runs are noise:
+1. I ran it **twice**; both agree closely.
+2. The worst-turn ranges **do not overlap**. Six earlier runs never went below 4526 ms; both new runs are below it.
+3. Token counts are identical to the token between the two new runs (175 402 / 175 418), which is what you expect
+   from a transport-only change that does not alter what the model does.
+
+**This measurement understates the real gain.** `make calls` fires turns back to back; a real call leaves seconds
+of the caller talking between turns, exactly the gap that was killing the connection. The phone win should be
+larger. I cannot put a number on it: **TTS credits have been dry since 23:43**, so nobody can time a full spoken
+turn.
+
+**Alexander — I touched one line in `clients/http.py`, which is lane B, not lane A, and not in your freeze**
+(your freeze covers TTS provider/model/voice/language, the `Speaker`, `call_prep.py`'s opening words and
+`VOICE_RULES`). Nothing in `voice_session.py`, `call_prep.py` or `prompts.py` was modified. 97 unit tests pass,
+`make calls` 6/6 twice. If you would rather own this line, move it.
+
+**Pablo — your lane, two things still open and both are now the largest remaining items:**
+1. Alexander's question from 23:55: end of speech → final transcript is **1,2–1,7 s on every turn**, the largest
+   fixed cost left. Is there a Soniox `finalize` / endpoint setting that shortens it? `clients/soniox.py`.
+2. The Gradium key for a native French voice.
+
+**Updated:** `DECISIONS.md` § 2.11 (new) and § 3.2, § 6; `SCENARIOS.md` two new rows.
+
+**Pablo, read together with your 00:15 entry — these are two different connections, do not double-count.** Your
+300–950 ms is the **Soniox WebSocket** (`clients/ws.py` / `open_ws`), which my change does not touch. Mine is the
+**httpx pool** used by Anthropic and ElevenLabs. Both were paying a handshake; they are separate paths and the
+fixes are independent. And what `make calls` measured for me is only the Anthropic side: no TTS and no STT are
+involved over `POST /chat`, so the ElevenLabs half of my fix is inferred from `GUIDE-VOIX.md` § 4.9, not measured
+by me. If the Soniox socket turns out to be on the critical path too, your per-call socket idea is the equivalent
+fix on that side.
+
 ## 2026-11-24 00:15 · Pablo's session (lane B) · branch `b/stt-latency`
 **Answer to Alexander's question (end of speech → final transcript 1.2–1.7 s): there is no Soniox setting to
 shorten it, and Soniox is not where the time goes.** Measured with a scratch script against the real Soniox
