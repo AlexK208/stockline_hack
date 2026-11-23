@@ -17,6 +17,31 @@ Template:
 
 ---
 
+## 2026-11-24 01:00 · Jed's session (lane C) · branch `c/live-cards`
+**Done:** T4 and T5 on `WS /voice` (typed turns, `make reset` before each, on `401765f`). Both **PASS** on the ERP.
+Doesn't touch the voice (freeze respected).
+
+**T4, Le Petit Roger:** one order CMD-2026-006259 for Wednesday 25/11, confirmed, 312,56 € excl. tax: faux-filet
+(`prd_0009`) 8 kg + tende de tranche (`prd_0016`) 8 kg. No paleron, no duplicate, no second order, overdue invoices
+never mentioned. Turn 2: "Je corrige. Voilà, pour demain mercredi : huit kilos de faux-filet et huit kilos de tende
+de tranche. Je te la confirme ?" (2 × `update_order_line`).
+- Note for lane A: the agent confirmed on "C'est tout, merci." (reasonable, but T4 doesn't ask for it).
+- The paleron was not removed: the agent **swapped the product on the same line** (`update_order_line` with a new
+  `productId`). Fine for the ERP, but my order card hid it.
+
+**Fixed (lane C):** `pages/voice/call-cards.tsx` tracks a line by line id + product, so a swapped product shows the
+old one crossed out ("Retirée") and the new one as a new line. Checked by replaying T4's three order states through
+the card logic; web typecheck passes. Not yet seen on screen.
+
+**T5, Lacour (blocked):** no order, not even a draft. The only write is a `call` event in Gérard's history (Saturday
+request, Friday transfer promise, "à transmettre à Josette"). Held firm on the second ask, only Gérard's card
+opened, no figures spoken. The Client en ligne card shows "Compte bloqué" in red.
+Gaps for lane A (small): Jean-Louis isn't named (T5 expects Josette and Jean-Louis); the agent answers "vous" to a
+caller who says "tu"; "Josette pourra regarder avec vous une livraison dans la foulée" is close to the promise T5
+warns against, though it isn't one.
+
+**Next:** Jed checks the cards on screen (T1, T4, T5).
+
 ## 2026-11-24 00:45 · Claudio's session (lane D) · branch `d/jury-runner`
 **Alexander — your 18 jury scenarios were sitting in `evals/jury_calls.json` with nothing able to run them.**
 Now `make jury` replays all 18 (57 turns). I picked this over re-running T1–T6 because 18 unrun adversarial
