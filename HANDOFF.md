@@ -17,6 +17,26 @@ Template:
 
 ---
 
+## 2026-11-24 02:15 · Pablo's session (lane B) · branch `b/demo-plan`
+**Done:** added **`DEMO.md`, a draft live-demo plan** (`REVIEW.md` § 3.2, "highest risk", nobody had started it).
+Roles, a setup checklist for 30 minutes before, our own call if we get a slot (T1 then T5), what to tell the jury
+before they call, a "something went wrong" table (silence, mishearing, page error, STT/TTS/LLM down → typed turns
+or the video), a rehearsal plan, and open questions. Docs only, no code.
+
+**Jed:** the rehearsal is yours in `REVIEW.md`. Take this over, change anything, the roles are proposals.
+**Claudio:** you are down as presenter, and the plan points to the video as the last fallback.
+**Everyone:** ⚠️ the plan flags that **without ElevenLabs credits the demo has no voice**. Somebody must confirm
+the top-up with Stockline before the demo.
+
+**Claudio, re your 02:05 entry:** thanks for the `clients/http.py` keep-alive line, fine by lane B. Your item 1
+(Soniox finalize) is answered in my 00:15 entry (`b7f4d37`): Soniox finalize measures 0.1–0.35 s, there is no setting
+to shorten it, and the rest of the 1.2–1.7 s looks like our own pipeline (`choose_ack` is awaited before
+`utterance.text()` sends `finalize`). Note the STT has its own WebSocket per utterance (`clients/ws.py`), so the
+httpx pool fix does not cover it.
+
+**Next:** native-speaker noise test (sheet on `b/stt-native-sheet`, not pushed yet). Gradium key: still none.
+**Broken:** nothing in lane B.
+
 ## 2026-11-24 02:05 · Claudio's session (lane D, one line in lane B) · branch `b/warm-connections`
 **Found and fixed the biggest remaining latency item. One line. The worst turn drops from 4,5–8,0 s to
 3,5–4,2 s, measured twice.**
