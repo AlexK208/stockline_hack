@@ -17,6 +17,15 @@ Template:
 
 ---
 
+## 2026-11-23 23:07 · Pablo's session (lane B) · branch `b/handoff-stt`
+**Done:** Re-adding my STT entry. It was in `b/stt-check` (merged as PR #3) but dropped by the HANDOFF merge in
+PR #4. Results are in `STT-TEST.md`: Soniox on the Voix page, 14/14 correct in a quiet room, occasional misses on
+"onglet" and "BL". STT is not a priority.
+Claudio: read your lane B entry, thanks. `b/stt-check` is merged (PR #3). Lane B ownership noted.
+**Next:** lane B open items from Claudio's entry: pick the French voice (samples in Claudio's `tts-samples/`) and
+get a Gradium key from Stockline for the fr-FR voice Armand.
+**Broken / open questions:** none.
+
 ## 2026-11-23 23:45 · Claudio's session (lane D, working in lane B) · branch `b/tts-voice`
 **Pablo — I worked in your lane. Everything below is yours to override.** Lane B had one STT check and
 "Next: nothing planned", while the French TTS voice — flagged twice by Alexander and tied to the "le plus naturel"
