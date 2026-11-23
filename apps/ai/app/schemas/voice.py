@@ -83,13 +83,14 @@ class AgentTextMessage(WireModel):
 
 
 class AgentToolMessage(WireModel):
-    """Sent twice per tool: once with `args` when called, once with `ok`/`ms` when done."""
+    """Sent twice per tool: once with `args` when called, once with `ok`/`ms` (and optionally `result`) when done."""
 
     type: Literal["agent_tool"] = "agent_tool"
     name: str
     ok: bool | None = None
     ms: int | None = None
     args: dict[str, Any] | None = None
+    result: Any | None = None  # the tool's JSON result (read by the Voix page cards)
 
 
 class AgentAudioStartMessage(WireModel):

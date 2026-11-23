@@ -148,8 +148,8 @@ export function useVoiceSession() {
           if (m.ok === undefined) tools.push({ id: `${t.id}-${tools.length}`, name: m.name, args: m.args });
           else {
             const i = tools.findIndex((x) => x.name === m.name && x.ok === undefined);
-            if (i >= 0) tools[i] = { ...tools[i], ok: m.ok, ms: m.ms };
-            else tools.push({ id: `${t.id}-${tools.length}`, name: m.name, ok: m.ok, ms: m.ms });
+            if (i >= 0) tools[i] = { ...tools[i], ok: m.ok, ms: m.ms, result: m.result };
+            else tools.push({ id: `${t.id}-${tools.length}`, name: m.name, ok: m.ok, ms: m.ms, result: m.result });
           }
           return { ...t, agent: { ...t.agent, tools, at: t.agent.at ?? Date.now() } };
         });
