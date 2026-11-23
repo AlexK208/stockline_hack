@@ -55,7 +55,7 @@ from app.schemas import (
 from app.schemas.base import WireModel
 from app.tools import ErpClient, all_tools
 
-from .call_prep import ack_note, caller_known, choose_ack, prefetch_caller
+from .call_prep import ack_note, choose_ack
 from .utterance import Utterance
 from .vocabulary import stt_hint
 
@@ -220,17 +220,9 @@ class VoiceConnection:
                 return
             await self.send(TranscriptMessage(text=heard, final=True))
 
-            # 2. Agent, on a working copy of the history (committed at the end). Until the caller is known, try to
-            #    identify them in code and give the model their card with the turn: one model step instead of two.
-            notes: list[str] = []
-            if not caller_known(conv.history):
-                with suppress(Exception):
-                    found = await prefetch_caller(heard, erp)
-                    if found:
-                        notes.append(found[1])
-            if ack:
-                notes.append(ack_note(ack))
-            working = [*conv.history, ChatMessage(role="user", content="\n\n".join([heard, *notes]))]
+            # 2. Agent, on a working copy of the history (committed at the end). The model is told what was already
+            #    said aloud. (The agent loop identifies the caller in code before the first model step.)
+            working = [*conv.history, ChatMessage(role="user", content=f"{heard}\n\n{ack_note(ack)}" if ack else heard)]
             llm_start = time.perf_counter()
             async for ev in run_agent(working, llm=get_llm_client(), tools=all_tools(), mode="voice", actor_name=conv.actor_name):
                 match ev:
