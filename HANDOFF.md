@@ -17,6 +17,37 @@ Template:
 
 ---
 
+## 2026-11-23 23:55 · Alexander's session (lane A) · `c60ea7f`
+**🚨 EVERYONE: the ElevenLabs key is out of credits.** Since about 23:43 every TTS call answers
+`401 quota_exceeded` ("quota of 194583, 0 credits remaining"). The agent still answers in text, with no sound. Until
+Stockline tops the key up or gives another one, **nobody can test by voice, and the demo has no voice.** Alexander is
+writing to Stockline now. To keep testing tonight without sound credits: `TTS_PROVIDER=mock` in your own `.env` (the
+browser speaks), or type the turns in the box of the Voix page. Put `elevenlabs` back afterwards. Pablo, Claudio:
+when credits are back, please keep TTS benchmarks short, the whole team shares this quota.
+
+**Done (from two voice calls by Alexander and a tester, screenshots read turn by turn):**
+- **The order flow no longer reads the whole order back and asks « je valide ? » on every turn** (the tester's main
+  complaint, and it also burns TTS credits). `VOICE_RULES` now follows a shop counter: confirm only what just
+  changed ("Dix kilos de bavette, c'est noté."), then a short "Et avec ça ? / Autre chose ? / Ensuite ?"; ONE
+  read-back with one agreement question when the caller says it is all; if the caller says "valide" himself, confirm
+  at once with the read-back inside the confirmation. A full read-back otherwise only on request.
+- **Slow turns explained and fixed in code.** The instant words were chosen on the live transcript at key release,
+  which on short sentences is empty or two words long. Result on the screenshots: no instant word at all on "Oui."
+  (3.7 s perceived), "Euh, tu me relis ?" (3.0 s), "Il te reste de l'onglet." (4.2 s), and the wrong one elsewhere
+  ("Je vérifie." after "Oui, c'est bon, valide."). `voice_session.py` now trusts a live transcript of 4 words or
+  more at once, and otherwise chooses again on the final transcript, so the word comes at STT time (about 1.5 s)
+  instead of never. Nothing is said before a re-read request.
+- Calls 5 and 6 (blocked account under pressure, another client's data, fake boss) behaved as intended.
+
+**Verified only lightly:** 97 unit tests pass, and Alexander typed one long call (nine turns, three changes of mind)
+on the Voix page and reports the new flow behaves as intended. Not heard (no TTS credits), `make calls` and
+`make jury` not run on it. **Claudio or Jed: one `make calls` on this commit, please.** The scripts still
+end with an explicit "valide" on T1–T4, so they should pass; T6 ends on "c'est tout, merci", which now gets the
+read-back and the agreement question instead of an immediate confirmation.
+
+**Pablo (lane B):** end of speech → final transcript is 1.2 to 1.7 s on every turn of both calls. That is now the
+largest fixed part of our latency. Is there a Soniox finalize / endpoint setting that shortens it?
+
 ## 2026-11-24 01:15 · Jed's session (lane C) · branch `c/live-cards`
 **Done:** T6 on `WS /voice` (typed turns, `make reset` first, on `53bc540`). **PASS** on the ERP.
 - Turn 1: "Bonjour Frédéric. Tu avais déjà sept kilos de bavette pour demain, donc ça fait douze kilos avec les cinq de
