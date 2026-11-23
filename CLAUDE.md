@@ -47,6 +47,8 @@ Lane A is working on next:
 
 ## Testing
 
+- **`make calls`** replays T1–T6 automatically and checks the ERP (see `evals/README.md`). It resets the local ERP and
+  uses real LLM credits. Run it before merging anything that touches the agent.
 - **`SCENARIOS.md`** holds the six regression calls (T1–T6). Run `make reset` before each series, replay them after
   every significant change, and add a row to its results table.
 - `make chat` talks to the agent in the terminal and shows tools, time and tokens. The **Voix** page runs a real

@@ -52,6 +52,9 @@ dev: ## run locally, already installed (live reload)
 chat: ## talk to the agent in the terminal
 	@if $(COMPOSE) ps --status running ai 2>/dev/null | grep -q ai; then $(COMPOSE) exec ai python -m app.cli; else cd apps/ai && uv run python -m app.cli; fi
 
+calls: ## replay the test calls of SCENARIOS.md and check the ERP (resets the ERP! ARGS="T3 T6" or "--repeat 3")
+	@python3 evals/run_calls.py $(ARGS)
+
 types: ## regenerate frontend types from the Python OpenAPI schemas (services running; needs Node + pnpm)
 	@./scripts/gen-types.sh
 
