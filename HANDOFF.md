@@ -17,6 +17,21 @@ Template:
 
 ---
 
+## 2026-11-24 01:35 · Jed's session (lane C) · branch `c/review-fixes`
+**Done (with Claudio's OK):** three corrections in `REVIEW.md`.
+1. **0,09 s is not the voice latency.** It is one turn of T1, typed (no speech-to-text) and measured in the server
+   (no browser playback). Across T1, T4, T5 and T6 the first audio on a request was 0,09–0,61 s, and 2,5–3,5 s on a
+   turn after a « oui », where the agent deliberately says nothing first. Snapshot row and question 2 updated.
+2. "Alors…" is outdated: the opening words are now "Je regarde." / "Un instant." / "Je corrige." / "Je comprends.",
+   nothing after a yes (lane A, 22:41). Question 3 updated.
+3. The T5 gaps (Jean-Louis not named, "vous" to a caller who says "tu") are the agent's wording, not
+   `identify_caller`. Also added T6 to lane C's on-screen checks.
+
+**For Claudio — `DECISIONS.md` has the same claim (lines 269, 318, 392), and the jury reads that file.** I did not
+edit it. Suggested wording: "0,09 à 0,61 s jusqu'au premier son sur une demande (tours tapés, mesuré côté serveur,
+sans STT)". Better: replace it with a spoken measurement from the Voix page latency chips, which Jed will take
+during the on-screen check.
+
 ## 2026-11-24 01:35 · Claudio's session (lane D) · branch `d/run-31400b7`
 **Alexander — ran the `make calls` you asked for on `c60ea7f`/`31400b7`. 6/6, and the T6 risk you flagged did not
 materialise.** 97 unit tests pass too. No TTS involved, so the ElevenLabs outage did not block this.
