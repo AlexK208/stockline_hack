@@ -172,11 +172,15 @@ function ClientBody({ c }: { c: ClientDetail }) {
 
 type Line = OrderDetail["lines"][number];
 
+/** A line is identified by its id AND its product: the agent may swap the product on an existing line ("enlève le
+ *  paleron, mets plutôt de la tende" → same lineId, new productId). The old product must then show crossed out. */
+const lineKey = (l: Line) => `${l.id}:${l.productId}`;
+
 interface Memory {
   orderId?: Id;
-  initial: Set<Id>; // lines already there when the card first saw the order (no flash)
-  lines: Map<Id, Line>; // every line seen during the call, in first-seen order
-  firstQty: Map<Id, number>;
+  initial: Set<string>; // line keys already there when the card first saw the order (no flash)
+  lines: Map<string, Line>; // every line key seen during the call, in first-seen order
+  firstQty: Map<string, number>;
 }
 
 function stockState(line: Line, order: OrderDetail, rows: Map<Id, StockAvailability>): "ok" | "short" | "out" | undefined {
@@ -192,16 +196,16 @@ function stockState(line: Line, order: OrderDetail, rows: Map<Id, StockAvailabil
 function OrderCard({ orderId, order }: { orderId?: Id; order?: OrderDetail }) {
   const mem = useRef<Memory>({ initial: new Set(), lines: new Map(), firstQty: new Map() });
   if (order && mem.current.orderId !== order.id) {
-    mem.current = { orderId: order.id, initial: new Set(order.lines.map((l) => l.id)), lines: new Map(), firstQty: new Map() };
+    mem.current = { orderId: order.id, initial: new Set(order.lines.map(lineKey)), lines: new Map(), firstQty: new Map() };
   }
   const m = mem.current;
-  if (order) for (const l of order.lines) { m.lines.set(l.id, l); if (!m.firstQty.has(l.id)) m.firstQty.set(l.id, l.qty); }
+  if (order) for (const l of order.lines) { const k = lineKey(l); m.lines.set(k, l); if (!m.firstQty.has(k)) m.firstQty.set(k, l.qty); }
 
   const ids = useMemo(() => [...new Set(order?.lines.map((l) => l.productId) ?? [])].sort(), [order]);
   const { data: avail } = useStockAvailability(order?.deliveryDate, ids);
   const rows = useMemo(() => new Map((avail ?? []).map((r) => [r.productId, r])), [avail]);
 
-  const current = new Set(order?.lines.map((l) => l.id));
+  const current = new Set(order?.lines.map(lineKey));
   const shown = [...m.lines.values()];
 
   return (
@@ -226,12 +230,13 @@ function OrderCard({ orderId, order }: { orderId?: Id; order?: OrderDetail }) {
           ) : (
             <ul>
               {shown.map((l) => {
-                const removed = !current.has(l.id) || order.status === "cancelled";
-                const first = m.firstQty.get(l.id);
+                const k = lineKey(l);
+                const removed = !current.has(k) || order.status === "cancelled";
+                const first = m.firstQty.get(k);
                 const changed = !removed && first != null && first !== l.qty;
                 const st = removed ? undefined : stockState(l, order, rows);
                 return (
-                  <li key={l.id} className={cn("flex items-center gap-2 px-4 py-1", !m.initial.has(l.id) && "animate-flash")}>
+                  <li key={k} className={cn("flex items-center gap-2 px-4 py-1", !m.initial.has(k) && "animate-flash")}>
                     <span className={cn("min-w-0 flex-1 truncate", removed && "text-muted-foreground line-through")} title={l.productName}>{l.productName}</span>
                     <span className={cn("flex shrink-0 items-baseline gap-1", removed && "line-through opacity-60")}>
                       {changed ? <span className="num text-[11px] text-muted-foreground line-through">{first}</span> : null}
