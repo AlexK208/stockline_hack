@@ -18,7 +18,7 @@ judgement call says so.
 | Unit tests | **97 pass** | `make test` |
 | Check-the-checks | green | `make calls-test` |
 | Text latency | median 3124 ms, p90 4286 ms, worst 4526 ms | 18 turns, one run |
-| Voice latency | **0,09 s to first sound** (was 8,7 s in the kit) | lane C, `WS /voice`, T1 |
+| Voice latency | **0,09–0,61 s to first audio** on a request (8,7 s in the kit); **2,5–3,5 s after a « oui »** (no acknowledgement there, by design). ⚠️ Typed turns, measured in the server: no STT, no browser playback. Spoken end-to-end not measured yet | lane C, `WS /voice`, T1 T4 T5 T6 |
 | Cost | ~177 400 input tokens per call, ~26 500 outside cache (85 % cache) | same run |
 | Model | `claude-sonnet-5-5` | `.env` |
 | Voice | 🔒 **FROZEN** on `401765f` — ElevenLabs `eleven_v4_turbo`, voice `JBFqnCBsd6RMkjVDRZzb`, fr | HANDOFF 23:20 |
@@ -90,7 +90,7 @@ if a key arrives, it goes on a branch and the tester listens before anything rea
 
 ### 3.6 Smaller open items
 
-- `identify_caller` wording gaps in T5: Jean-Louis is not named; the agent answers "vous" to a caller who says "tu".
+- Agent wording gaps in T5 (not `identify_caller`, which works there): Jean-Louis is not named; the agent answers "vous" to a caller who says "tu".
 - Haiku was rejected before the spoken checks existed. It is now re-evaluable and is ~2× faster. Nobody has retried.
 - `Jev` (the fast decision model) has a key in `.env` and is **not used at all** — only `agent/jev_examples.py`
   references it.
@@ -135,7 +135,7 @@ owner do it. This has held all night; the only conflicts we have had are in `HAN
 4. If time: `make calls ARGS="--repeat 3"` for a latency interval.
 
 **Lane C (Jed) — own the demo, you have the screen.**
-1. Finish checking the cards on screen (T1, T4, T5).
+1. Finish checking the cards on screen (T1, T4, T5, T6).
 2. **Drive the live-demo rehearsal.** Decide the scenario, who speaks, what we do if the agent stalls. This is
    §3.2 and it is nobody's lane today, so take it.
 3. Help film the video — you know what looks good on the page.
@@ -195,11 +195,14 @@ Open questions for whoever brainstorms with this file. None has an obvious answe
    fixed (`identify_caller` opening another client's file). It is our strongest evidence that the eval harness
    works. Does that read as rigour, or as an admission? We currently lead with it.
 2. **Median vs tail.** Our median latency is ordinary (~3,1 s); our tail is excellent (worst turn 4,5 s, from
-   8,0 s). The "fastest" prize is measured on end-of-speech → first sound, where we are at **0,09 s** thanks to
-   the spoken acknowledgement. Which number do we put on the slide?
-3. **Is the acknowledgement cheating?** The agent says "Alors…" instantly, then thinks for 2–4 s. It is honest
+   8,0 s). The "fastest" prize is measured on end-of-speech → first sound. On typed turns we measured
+   **0,09–0,61 s** thanks to the spoken acknowledgement, but that skips speech-to-text and browser playback, and a
+   turn after a « oui » gets no acknowledgement (2,5–3,5 s). Only a spoken measurement on the Voix page (its latency
+   chips) gives the number a jury would hear. Which number do we put on the slide?
+3. **Is the acknowledgement cheating?** The agent says "Je regarde." / "Un instant." / "Je corrige." instantly
+   (nothing after a yes), then thinks for 2–4 s. It is honest
    (it never states a fact) and it is what a human does on the phone. But a jury measuring "first sound" gets
-   0,09 s while the real answer takes longer. Do we explain this on the slide, or let the number speak?
+   well under a second while the real answer takes longer. Do we explain this on the slide, or let the number speak?
 4. **Haiku.** 2× faster, and it once claimed a delivery date without calling a tool. The checks that catch that
    now exist. Is a measured, fully green Haiku worth switching to 12 hours before the demo?
 5. **Weigh ticket or polish?** A new showpiece the jury has not seen before, versus a demo we have rehearsed
