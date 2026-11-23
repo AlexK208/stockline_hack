@@ -17,6 +17,38 @@ Template:
 
 ---
 
+## 2026-11-23 23:30 · Jed's session (lane C) · branch `c/live-cards`
+**Done:** Pulled `a85646c` (lane A) and `DECISIONS.md` (lane D), with no conflicts. 91/91 AI tests pass on the
+current code. The ai container only mounts `app/`, so its `tests/` folder is stale: a plain `pytest` inside the
+container shows 2 false failures. Web typecheck passes. The ai service reloaded with the new code.
+
+T1 again on `WS /voice` (typed turns, `make reset` first, claude-sonnet-5-5 / Soniox / ElevenLabs):
+
+| Turn | Agent said | Tools | First word / total |
+|---|---|---|---|
+| 1 | "Bonjour Céline. Ta commande de jeudi est prête : deux arrières, soit environ deux cents kilos, et un avant, environ cent dix kilos, facturés au poids réel. L'éleveur Dumontet et la livraison avant six heures trente sont notés sur la commande, mais je ne peux pas te les garantir. Je la confirme ?" | caller lookup (code) 0.17 s, `create_draft_order` 0.35 s | 0.11 s / 5.3 s |
+| 2 | "Très bien, c'est confirmé pour jeudi : deux arrières et un avant. Tu as besoin d'autre chose ?" | `confirm_order` 0.07 s | 2.9 s / 3.2 s |
+
+ERP: **PASS**, same as before. CMD-2026-006259 confirmed for Thursday 26/11: 200 kg at 10.20 € + 110 kg at 6.11 €,
+2 712,10 € excl. tax. Dumontet is on the order and on each line; CMD-2026-006219 is untouched.
+
+**Fixed since my 23:00 entry:** the read-back now gives each line's weight, as T1 expects. `create_draft_order` went
+from 1.2 s to 0.35 s.
+
+**Correction to my 23:00 entry:** "the caller lookup before the model did not happen" is wrong for the current code.
+The `identify_caller` with `said: "Boucherie Peyronnet"` is the code-side lookup in `agent/loop.py`, not the model,
+and takes 0.17 s with no extra model step. I hadn't checked where that call came from in the first run either.
+
+**Still open for lane A:**
+- "mais je ne peux pas te les garantir" still sounds negative to a regular client.
+- Turn 2: 2.9 s of silence after "C'est bon, vas-y." That follows the new "nothing after a yes" rule; your call
+  whether it's worth it.
+- **Forward `result` on `agent_tool`** (`voice_session.py` ~263-265: `case ToolResultEvent(name=name, ok=ok, ms=ms,
+  result=result)` and `AgentToolMessage(..., result=result)`). The loop already has the client card 0.17 s into the
+  turn. Without this, the Client en ligne card only appears at `create_draft_order`, about 4.5 s in.
+
+**Next:** Jed checks the cards on screen and runs T4 and T5.
+
 ## 2026-11-23 23:15 · Claudio's session (lane D) · branch `d/decisions`
 **Done:** Wrote **`DECISIONS.md`**. It did not exist, and it is a required deliverable in `BRIEF.md` — "le jury le
 lira". Lane D owns it. It is in French, like `BRIEF.md` and `SCENARIOS.md`.
