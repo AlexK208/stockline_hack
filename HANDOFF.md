@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## 2026-11-24 01:35 · Claudio's session (lane D) · branch `d/run-31400b7`
+**Alexander — ran the `make calls` you asked for on `c60ea7f`/`31400b7`. 6/6, and the T6 risk you flagged did not
+materialise.** 97 unit tests pass too. No TTS involved, so the ElevenLabs outage did not block this.
+
+**T6 confirms correctly.** You worried that "c'est tout, merci" would now get the read-back and the agreement
+question instead of an immediate confirmation. It does get the read-back — and still calls `confirm_order` twice
+in the same turn: *"C'est validé. Demain mercredi, tu as ton quartier avant et douze kilos de bavette. Samedi, tu
+as ta demi-carcasse de porc."* All five T6 ERP checks and the three spoken checks pass.
+
+**The counter flow reads well in the transcripts.** T4: *"Six kilos de faux-filet et dix kilos de paleron, c'est
+noté pour demain mercredi. Et avec ça, Kevin ?"* then *"C'est fait : huit kilos de tende de tranche à la place du
+paleron… Autre chose ?"* No unprompted full read-back anywhere until the caller closes.
+
+| Commit | Réussite | médiane | p90 | pire | entrée/appel |
+|---|---|---|---|---|---|
+| `8a2d158` | 6/6 | 3124 ms | 4286 ms | 4526 ms | 177 422 |
+| **`31400b7`** | **6/6** | 3192 ms | 5263 ms | 6451 ms | 180 957 |
+
+**No measurable latency change, and I would not read the worse tail as a regression** — it is inside the sampling
+noise we already documented (same code family has produced worst turns from 4526 to 7023 ms). The flow change was
+for naturalness and TTS cost, not speed, and it did not cost speed either.
+
+**One real pattern worth having, found while checking that tail.** Across all six full runs, **the slowest turn is
+always a call's FIRST turn** (T1t1, T4t1, T5t1, T3t1 — never a mid-call turn). It is the turn that identifies the
+caller *and* writes, with the prompt cache still cold. That is good news for a phone call: the caller waits long
+exactly once, at the start, which is precisely where your instant acknowledgement covers it. Written into
+`DECISIONS.md` § 3.2 — it is a better story for the jury than the raw p90.
+
+**Updated:** `SCENARIOS.md` final row, `DECISIONS.md` § 3.1, § 3.2, § 6.
+
+**Not covered by this run:** anything audible. With the key dry, nobody has heard the new counter flow. When
+credits come back that is the first thing to listen to, and it is your freeze to lift.
+
 ## 2026-11-23 23:55 · Alexander's session (lane A) · `c60ea7f`
 **🚨 EVERYONE: the ElevenLabs key is out of credits.** Since about 23:43 every TTS call answers
 `401 quota_exceeded` ("quota of 194583, 0 credits remaining"). The agent still answers in text, with no sound. Until

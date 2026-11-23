@@ -215,7 +215,8 @@ le nombre de termes abandonnés (une fois par changement, pas à chaque tour).
 | 22:25 | `2c052d5` | **T5 ✗, T6 ✓** | Les contrôles sur la parole entrent en service. T5 échoue — voir § 5.1. |
 | 22:59 | `38633a7` | **3/3** sur T5 | Garde-fou `identify_caller`. Défaut § 5.1 corrigé, confirmé sur 3 passages. |
 | 23:04 | `93fc71b` | **6/6** | Tous contrôles actifs. |
-| 23:29 | `8a2d158` | **6/6** | **Passage de référence final**, sur la pointe de `main` : audit lane A, gel de la voix, `make jury`. |
+| 23:29 | `8a2d158` | **6/6** | Audit lane A, gel de la voix, `make jury`. |
+| 00:02 | `31400b7` | **6/6** | **Passage de référence final** : déroulé « façon comptoir » (confirmer ce qui vient de changer, une seule relecture à la fin). |
 
 Le passage de 6/6 à T5 en échec n'est **pas une régression** : c'est un défaut présent depuis le début que les
 contrôles ERP ne voyaient pas. Il a été corrigé, puis revérifié (§ 5.1).
@@ -236,7 +237,8 @@ les outils appelés — c'est-à-dire exactement les contrôles qui avaient fait
 | `99842b2` | 5/6 | 1182 ms | 3022 ms | 7052 ms | 7890 ms | 6708 ms |
 | `be7eb4b` | 6/6 | 676 ms | 3446 ms | 4700 ms | 4709 ms | 4033 ms |
 | `93fc71b` | 6/6 | 1091 ms | 2764 ms | 5517 ms | 7023 ms | 5932 ms |
-| **`8a2d158` (final)** | **6/6** | 591 ms | 3124 ms | **4286 ms** | **4526 ms** | **3935 ms** |
+| `8a2d158` | 6/6 | 591 ms | 3124 ms | **4286 ms** | **4526 ms** | **3935 ms** |
+| **`31400b7` (final)** | **6/6** | 605 ms | 3192 ms | 5263 ms | 6451 ms | 5846 ms |
 
 **Ce n'est pas la médiane qui a bougé, c'est la queue, et c'est ce que nous visions.** Par rapport à la référence,
 le passage final garde une médiane quasi identique (3032 → 3124 ms) mais **le p90 perd 2525 ms et le pire tour
@@ -244,9 +246,15 @@ le passage final garde une médiane quasi identique (3032 → 3124 ms) mais **le
 le tour où la ligne a l'air morte. Le pire tour de tout le passage final est à 4,5 s, contre 8,0 s au départ — et
 ce avec un scénario de plus au vert et des contrôles plus stricts.
 
+**Le pire tour est toujours un PREMIER tour d'appel.** Sur les six passages complets, sans exception, le tour le
+plus lent est le tour 1 d'un scénario (T1, T3, T4 ou T5) : celui qui identifie l'appelant *et* écrit la commande,
+avec le cache de prompt encore froid. Les tours suivants sont systématiquement rapides. C'est une bonne nouvelle
+pour un appel téléphonique : le client n'attend longtemps qu'une seule fois, au tout début — précisément là où
+l'accusé de réception parlé (§ 2.4) couvre l'attente avec un son immédiat.
+
 **Réserve de méthode, et elle est visible dans le tableau.** Ces chiffres viennent d'**un** passage par commit et
-le modèle n'est pas déterministe. `93fc71b` et `8a2d158` sont du code presque identique : la médiane y va de
-2764 à 3124 ms et le pire tour de 7023 à 4526 ms. **Cet écart est du bruit de tirage, pas un effet du code.**
+le modèle n'est pas déterministe. `93fc71b`, `8a2d158` et `31400b7` sont du code très proche : la médiane y va de
+2764 à 3192 ms et le pire tour de 4526 à 7023 ms. **Cet écart est du bruit de tirage, pas un effet du code.**
 La médiane sur 18 tours est raisonnablement robuste ; le « pire tour » est un seul tour et doit se lire comme un
 ordre de grandeur. Donner un intervalle demanderait `--repeat 3`, que nous n'avons pas eu le temps de passer sur
 chaque commit.
@@ -379,10 +387,10 @@ sans rien dire.
 
 | | |
 |---|---|
-| Scénarios | **6/6 sur `8a2d158`**, la pointe de `main`, tous contrôles actifs (ERP + parole + outils appelés) · **18/18** sur les invariants des appels jury |
-| Latence texte | médiane 3124 ms, **p90 4286 ms, pire 4526 ms** (18 tours) — pire tour 8,0 s → 4,5 s depuis la référence |
+| Scénarios | **6/6 sur `31400b7`**, la pointe de `main`, tous contrôles actifs (ERP + parole + outils appelés) · **18/18** sur les invariants des appels jury |
+| Latence texte | médiane 3192 ms, p90 5263 ms, pire 6451 ms (18 tours) — le pire tour est toujours un 1er tour d'appel |
 | Latence voix | 0,09 s jusqu'au premier son, 8,7 s au départ |
-| Coût | ~177 400 jetons d'entrée par appel, dont ~26 500 hors cache (85,1 % servi par le cache) |
+| Coût | ~181 000 jetons d'entrée par appel, dont ~27 000 hors cache (85,1 % servi par le cache) |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |
