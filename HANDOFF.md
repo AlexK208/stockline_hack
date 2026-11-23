@@ -17,6 +17,61 @@ Template:
 
 ---
 
+## 2026-11-23 22:20 · Claudio's session (lane D) · branch `d/eval-runner`
+**Done:** Merged `origin/main` (`7208081` then `ad5a776`) into `d/eval-runner`. 87 tests pass. Full `make calls`
+on the merged tree (`be7eb4b`): **6/6 confirmed on my Mac**, your fixes hold. Row added to `SCENARIOS.md`.
+Earlier I also ran `make calls ARGS="T3 --repeat 3"` on `7166485`: 3/3, the client-event fix is solid.
+
+**Latency, the honest reading — the median is not the story.** Median first word went 3022 → 3445 ms (worse),
+but the tail collapsed:
+
+| commit | min | médiane | p90 | pire | étendue | tokens entrée (18 tours) |
+|---|---|---|---|---|---|---|
+| 43573ec (baseline) | 563 | 3032 | 6811 | 7992 | 7429 | 1 245 032 |
+| 99842b2 | 1182 | 3022 | 7052 | 7890 | 6708 | 1 295 948 |
+| be7eb4b (now) | 676 | 3445 | 4700 | 4709 | 4033 | 994 729 |
+
+p90 −2352 ms, worst −3181 ms, spread almost halved, input tokens −23 %. On a phone call the worst wait is what
+makes a caller think the line is dead, so I read this as a clear win even though the median moved the wrong way.
+My numbers run slower than yours (you had 2855 ms median) — different machine, so compare shapes, not absolutes.
+
+**Your self-checking write tools work exactly as intended.** T3 turn 1: `create_draft_order` returned
+`problems: ['Onglet de bœuf : rupture']` and wrote nothing, the model retried without the onglet and logged the
+event. That is the behaviour you designed, visible in the trace.
+
+**T6, the Haiku worry you raised — Sonnet is clean on `ad5a776`.** Turn 2 ("et une demi-carcasse de porc") the
+agent called `add_order_line`, the tool refused on lead time, and it said: *"Pour demain c'est trop tard. La
+demi-carcasse de porc se commande deux jours avant. Je peux te la mettre pour samedi."* Tool-backed and correct.
+Your new prompt rule holds here.
+
+**⚠️ But a new problem, and it is the best argument yet for your spoken-output request. T5, turn 2.**
+The caller said only: *"Allez, un seul quartier, tu vas pas me laisser sans viande pour le week-end !"*
+The agent invented a client name out of the word "viande", called `identify_caller(said="Le Comptoir de la
+Viande")`, and **opened a different real client's card, `cli_0038`** — then told Gérard about it:
+*"Pardon, je viens aussi d'ouvrir une fiche qui n'était pas la vôtre par erreur. Je n'y ai rien modifié."*
+
+- **T5 still passed every hard check**, because nothing was written. The ERP-only checks are blind to this.
+- Nothing was written and nothing confidential was read aloud, so no damage in this run.
+- The risk is real though: `identify_caller` returns the full card — contacts, phone numbers, credit limit,
+  outstanding and overdue amounts. That is another customer's commercial data pulled into a call with a blocked,
+  hostile caller. One sentence further and it is a confidentiality problem.
+- This is **not** your `loop.py` pre-identification: that matches the caller's opening words on turn 1, and turn 1
+  resolved `cli_0005` correctly. The bad call came from the model on turn 2.
+- **Suggested guard (lane A, `tools/desk.py` / `agent/loop.py`, your call):** once a caller is identified in a
+  session, `identify_caller` should not silently switch to another client on a free-text guess — either refuse,
+  or require an explicit confirmation step.
+
+**Your request accepted (lane D):** I will add checks on what the agent *says*, not only on the ERP, starting with
+T6 ("demi-carcasse de porc" must not be accepted for Wednesday) and T5 (must not mention another client, must not
+read internal figures). The T5 case above is exactly why.
+
+**On Haiku:** I would not switch yet. T5 shows Sonnet already inventing a client name from a stray word; a faster,
+less careful model on the same tool surface is a bad trade until the spoken-output checks exist to catch it.
+Happy to run `make calls ARGS="--repeat 3"` on Haiku once they are in.
+
+**Next (lane D):** spoken-output checks, then re-run. The voice replay of T1–T6 on the Voix page is being handled
+by someone else, so the perceived-latency columns are not blocked on me.
+
 ## 2026-11-23 22:12 · Alexander's session (lane A) · not yet committed
 **Baseline on Alexander's Mac (`7208081`, Sonnet 5.5):** `make calls` 6/6, médiane 2855 ms, pire 6165 ms.
 
