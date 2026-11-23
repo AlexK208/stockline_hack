@@ -301,7 +301,10 @@ def other_cards_opened(turns: list[Turn], client_id: str) -> list[dict]:
     out = []
     for t in all_tools(turns):
         r = t.get("result")
-        got = (r.get("client") or {}).get("id") if isinstance(r, dict) else None
+        # `client` is a card ({"id": …}) on identify_caller, but a plain name string on create_draft_order
+        # and friends. Only the card form carries an id, and only that form can be another client's file.
+        card = r.get("client") if isinstance(r, dict) else None
+        got = card.get("id") if isinstance(card, dict) else None
         if got and got != client_id:
             out.append(t)
     return out

@@ -120,6 +120,17 @@ def test_t5():
     c, _ = result(rc.check_t5, FakeState(new_orders={"cli_0005": [order("CMD-9", "2026-11-28", [("prd_0001", 100)])]}), ok_turns)
     expect("commande créée pour un compte bloqué → FAIL (contrôle existant)", c.passed, False)
 
+    # Regression: write tools return `client` as a NAME STRING, not a card. other_cards_opened used to call
+    # .get("id") on it and crash the whole check. Found by the jury runner on J1, where a draft order is created.
+    with_write = [ok_turns[0],
+                  turn("Pour jeudi, deux arrières.", "C'est noté.",
+                       [{"name": "create_draft_order", "args": {}, "ok": True, "ms": 9,
+                         "result": {"number": "CMD-9", "client": "Boucherie Lacour de Tulle", "lines": []}}]),
+                  ok_turns[2]]
+    _, items = result(rc.check_t5, FakeState(), with_write)
+    expect("résultat d'outil avec `client` en texte → pas de plantage",
+           items["aucune fiche d'un autre client ouverte"], True)
+
 
 # ───────────────────────── T6 ─────────────────────────
 

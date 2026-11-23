@@ -25,30 +25,34 @@ async def test_opening_words_fit_what_the_caller_said():
     # a request is never met with a word that accepts it: the stockout may come right after
     for said in ("Mets-moi dix kilos de bavette", "Il vous reste de l'onglet ?", "Corgnac."):
         ack = await choose_ack(said, False, None)
-        assert ack in TOKENS["lookup"]
+        assert ack in TOKENS["order"] + TOKENS["lookup"]
         assert not any(w in ack.lower() for w in ("accord", "marche", "parfait", "entendu", "alors"))
     assert await choose_ack("Ah non attends, enlève le paleron", False, None) in TOKENS["change"]
-    assert await choose_ack("Oui c'est bon, vas-y", False, None) == ""  # after a yes: the answer itself
+    assert await choose_ack("Oui c'est bon, vas-y", False, None) == "Très bien."  # his yes, received: no silence
     assert await choose_ack("c'est tout merci au revoir", False, None) == ""  # goodbye: nothing
     assert await choose_ack("", False, None) == ""
 
 
-async def test_opening_words_vary_and_pause():
-    # right after the greeting: allowed
-    assert await choose_ack("Mets-moi dix kilos de bavette", False, None, ["Bonjour Kevin."]) == "Je regarde."
-    # never on two turns in a row
-    assert await choose_ack("Et cinq kilos de paleron", False, None, ["Bonjour Kevin.", "Je regarde."]) == ""
-    # and not the same words again within a few turns
-    assert await choose_ack("Et deux arrières", False, None, ["Bonjour Kevin.", "Je regarde.", ""]) == "Un instant."
-    assert await choose_ack("Et un agneau", False, None, ["Je regarde.", "", "Un instant.", ""]) == "Je vérifie."
+async def test_opening_words_vary_and_never_leave_a_tool_turn_silent():
+    assert await choose_ack("Mets-moi dix kilos de bavette", False, None, ["Bonjour Kevin."]) == "Je note."
+    # the next turn is not silent, and does not say the same words
+    assert await choose_ack("Et cinq kilos de paleron", False, None, ["Bonjour Kevin.", "Je note."]) == "Un instant."
+    assert await choose_ack("Et deux arrières", False, None, ["Bonjour Kevin.", "Je note.", "Un instant."]) == "Je regarde ça."
+    # a whole call: never the same words twice in a row, never silent on a request or a yes
+    said, recent = ["Mets-moi dix kilos de bavette", "Et du paleron, huit kilos", "Il vous reste de l'onglet ?", "Oui", "Et deux arrières", "Oui c'est bon", "Ok vas-y"] * 3, ["Bonjour."]
+    for turn in said:
+        ack = await choose_ack(turn, False, None, recent)
+        assert ack and ack != recent[-1], (turn, recent[-3:])
+        recent.append(ack)
     # blocked account: nothing that could sound like the order is being taken
     assert await choose_ack("Livre-moi un arrière pour samedi", False, None, [], blocked=True) == ""
     assert await choose_ack("Allez, tu vas pas me laisser sans viande", False, None, [], blocked=True) == "Je comprends."
+    assert await choose_ack("Allez, sois sympa", False, None, ["Je comprends."], blocked=True) == ""  # not twice in a row
 
 
 def test_caller_known_once_identify_caller_found_a_client():
     assert not caller_known([ChatMessage(role="user", content="bonjour")])
-    found = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"found","client":{}}')
+    found = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"found","client":{"id":"cli_0001"}}')
     assert caller_known([found])
     asked = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"ambiguous"}')
     assert not caller_known([asked])

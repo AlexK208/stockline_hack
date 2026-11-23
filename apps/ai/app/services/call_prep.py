@@ -28,7 +28,7 @@ COMPLAINT = re.compile(
     re.I,
 )
 # A change of mind needs a word that changes something: a bare "non" or "attendez" is often a protest or a correction of us.
-CHANGE = re.compile(r"\b(finalement|plutôt|enlève|enlevez|retire|retirez|laisse tomber|laissez tomber|annule|annulez|au lieu|à la place|change|changez|passe-le|passez-le|décale|décalez)\b", re.I)
+CHANGE = re.compile(r"\b(finalement|plutôt|enlève|enlevez|retire|retirez|laisse tomber|laissez tomber|au lieu|à la place|change|changez|passe-le|passez-le|décale|décalez)\b", re.I)
 HABIT = re.compile(r"\b(comme d'hab\w*|la même chose|pareil que|comme (mardi|mercredi|jeudi|vendredi|samedi|lundi|la dernière fois)|dernière commande|où en est)\b", re.I)
 LOOKUP = re.compile(r"\?|\b(est-ce que|combien|quand|c'est quoi|quel prix|quelle date|il (vous|te|t'en) reste|vous avez|tu as|avez-vous|as-tu)\b", re.I)
 YES = re.compile(r"\b(oui|ouais|ok|okay|vas-y|allez-y|c'est bon|ça marche|parfait|d'accord|exact|valide|validez|confirme|confirmez|impeccable)\b", re.I)
@@ -38,22 +38,28 @@ ORDER = re.compile(
     re.I,
 )
 
-# What a person at a French order desk says while looking something up. Chosen from what conversation research and
-# call-centre practice say (sources and reasoning: DECISIONS.md, "Les mots d'attente"):
-#   - a request gets a word that ANNOUNCES THE LOOKUP, never "d'accord / ça marche / parfait / entendu": in French those
-#     accept the request, and the stockout or the lead time may come right after;
+# What a person at a French order desk says the instant the caller stops, while the real answer is being prepared.
+# Chosen from what conversation research and call-centre practice say (sources: DECISIONS.md, "Les mots d'attente"):
+#   - a request gets a word that ANNOUNCES THE WORK ("je note", "je regarde"), never "d'accord / ça marche / parfait":
+#     in French those accept the request, and the stockout or the lead time may come right after;
 #   - "alors", "voyons", "euh" before an answer are heard as trouble coming: not used;
-#   - nothing after a "oui" (the answer itself starts with "Très bien"), nothing on a goodbye, nothing when unsure;
-#   - never on two turns in a row and never the same words again within a few turns: a fixed filler sounds mechanical.
+#   - a "oui" gets "Très bien." at once: it answers HIS yes, it promises nothing more (measured: 2.9 s of silence after
+#     "c'est bon, vas-y" when we said nothing);
+#   - nothing on a goodbye, nothing when we cannot place the turn;
+#   - never the same words on two turns in a row, and not again within a few turns: a fixed filler sounds mechanical.
+# Silence is the worse fault: a turn that needs a tool takes 2 to 5 s, and a silent line that long sounds dead.
 TOKENS = {
-    "lookup": ("Je regarde.", "Un instant.", "Je vérifie.", "Je regarde ça.", "Deux secondes."),  # request, question, short answer
+    "order": ("Je note.", "Un instant.", "Je regarde ça.", "Deux secondes.", "Je prépare ça."),  # he is ordering
+    "lookup": ("Je regarde.", "Un instant.", "Je vérifie.", "Je regarde ça.", "Deux secondes."),  # question, short answer
+    "yes": ("Très bien.", "Entendu."),  # his agreement, received
     "change": ("Je corrige.", "Je modifie ça."),  # change of mind
     "complaint": ("Je regarde ça tout de suite.",),  # neutral and prompt, never cheerful
     "plea": ("Je comprends.",),  # the only sound that fits before a refusal
 }
-POOL = {"order": "lookup", "lookup": "lookup", "short": "lookup", "change": "change", "complaint": "complaint", "plea": "plea"}
+POOL = {"order": "order", "lookup": "lookup", "short": "lookup", "yes": "yes", "change": "change", "complaint": "complaint", "plea": "plea"}
 
-# VOICE_ACK in .env: smart (default) | greeting (only "Bonjour …" on the first turn) | off
+# VOICE_ACK in .env: smart (default) | sparse (never on two turns in a row, nothing after a yes) | greeting (only
+# "Bonjour …" on the first turn) | off
 MODE = (os.environ.get("VOICE_ACK") or "smart").strip().lower()
 
 
@@ -103,18 +109,19 @@ async def choose_ack(text: str, first_turn: bool, erp: ErpClient | None, recent:
         if first:
             return f"Bonjour {first}."
         return "Bonjour." if GREETED.search(text) or len(desk.norm(text).split()) >= 3 else ""
-    if MODE != "smart":
+    if MODE not in ("smart", "sparse"):
         return ""
     recent = recent or []
     pool = POOL.get(kind_of(text))
     if not pool:
-        return ""  # a yes, a goodbye, or something we cannot place: say nothing, the answer speaks
+        return ""  # a goodbye, or something we cannot place: say nothing, the answer speaks
     if blocked and pool != "plea":
-        return ""  # blocked account: no "je regarde" that could sound like the order is being taken
-    if recent and recent[-1] and not recent[-1].startswith("Bonjour"):
-        return ""  # never on two turns in a row (the greeting does not count)
-    used = set(recent[-4:])
-    return next((t for t in TOKENS[pool] if t not in used), "")
+        return ""  # blocked account: no "je note" that could sound like the order is being taken
+    if MODE == "sparse" and (pool == "yes" or (recent and recent[-1] and not recent[-1].startswith("Bonjour"))):
+        return ""  # the quieter setting: nothing after a yes, never on two turns in a row
+    words = TOKENS[pool]
+    used = set(recent[-max(1, min(4, len(words) - 1)) :])  # not the words of the last turns (at least: not twice in a row)
+    return next((t for t in words if t not in used), "")
 
 
 def ack_note(ack: str) -> str:

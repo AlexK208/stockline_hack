@@ -64,6 +64,8 @@ client_message = TypeAdapter(VoiceClientMessage)
 # Messages kept per call. A call is one conversation: with 40 (about ten turns) the client's card, fetched on the first
 # turn, fell out of the history mid-call and the agent lost the ids it needs to edit the order.
 CALL_MEMORY = 200
+# Longest text spoken before a tool call ("Je regarde ça tout de suite.").
+MAX_WAIT_WORDS = 5
 
 
 @dataclass
@@ -254,15 +256,18 @@ class VoiceConnection:
                         # Speak what was said before the tool ("Je regarde.") now, not when the tool comes back:
                         # the sentence splitter waits for a space after the full stop, which only arrives with
                         # the text of the next step, i.e. after the whole tool round-trip.
-                        if ack:
-                            speaker.drop()  # we already said something: the model's own step comment stays unspoken
+                        # Only a short waiting phrase is worth saying there. A longer text before a tool is the
+                        # model thinking aloud ("pas de commande existante, je la crée") : not for the caller.
+                        if ack or len(step_text.split()) > MAX_WAIT_WORDS:
+                            speaker.drop()  # (after an ack we already said something: the step comment stays unspoken)
                         else:
                             speaker.flush()
                         await show()
                         await self.send(AgentToolMessage(name=call.name, args=call.arguments))
-                    case ToolResultEvent(name=name, ok=ok, ms=ms):
+                    case ToolResultEvent(name=name, ok=ok, ms=ms, result=result):
                         step_text = ""
-                        await self.send(AgentToolMessage(name=name, ok=ok, ms=ms))
+                        # the result goes to the page too: the Voix page draws the client and order cards from it
+                        await self.send(AgentToolMessage(name=name, ok=ok, ms=ms, result=result))
                     case ErrorEvent(message=message):
                         await self.send(VoiceErrorMessage(message=message))
                         sorry = "Excusez-moi, j'ai un souci technique. Vous pouvez répéter ?"
