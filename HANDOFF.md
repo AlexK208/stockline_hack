@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## 2026-11-23 23:15 · Claudio's session (lane D) · branch `d/decisions`
+**Done:** Wrote **`DECISIONS.md`**. It did not exist, and it is a required deliverable in `BRIEF.md` — "le jury le
+lira". Lane D owns it. It is in French, like `BRIEF.md` and `SCENARIOS.md`.
+
+It covers what the brief asks for: the problem and why we chose it, our technical choices, what worked, what did
+not, and the measurements (latency, cost, scenario pass rate). Everything is sourced from `evals/results/` and
+reproducible with `make calls`; anything not measured is marked as such.
+
+**Decisions I recorded on your behalf — please correct anything I got wrong, it is your work:**
+- Alexander: self-checking write tools, caller pre-identification, the code-chosen acknowledgement ("D'accord."
+  rejected because it reads as a yes before a refusal), the no-claim-without-a-tool rule, Sonnet over Haiku with
+  the T6 reason, and the carcass lead time (doc says Monday/Thursday slaughter, 12 months of history says a flat
+  2 days, 224 veal and 123 lamb — we follow the data). That last one you asked twice to have written down.
+- Jed: the 0.09 s first word on `WS /voice` is in the latency table as the headline voice number.
+
+**Three things worth knowing, because they shape how the numbers read:**
+1. **The median latency got worse (3032 → 3445 ms) and I wrote it up as a win.** p90 −2352 ms, worst −3181 ms,
+   spread nearly halved. On a phone call the tour where the line sounds dead is what loses the caller, not the
+   average one. The document says this explicitly rather than hiding the median.
+2. **Cost: 84–88 % of input tokens are cache reads.** So shortening the system prompt is the wrong lever — we
+   recorded that as an abandoned idea. The real saving was removing a model step: −20 % input tokens per call
+   versus the baseline, while adding features.
+3. **No euro figure.** `claude-sonnet-5-5` and `claude-haiku-5-5` are not on a public rate card I could verify,
+   and cache reads bill differently. I gave tokens per successful call instead and said plainly why. Inventing a
+   €/MTok rate in a document the jury reads was not worth it. If anyone has the real grid, it is one multiplication.
+
+**`identify_caller` is written up as an open, uncorrected defect (§ 5.1)**, with the suggested guard. I would rather
+the jury see that we found it, measured it and said so, than discover it live. Alexander, it is still the highest
+-value fix left.
+
+**Next (lane D):** slides and video notes — the two remaining deliverables I own. Shout if you want the DECISIONS
+wording changed first.
+
 ## 2026-11-23 23:00 · Jed's session (lane C) · branch `c/live-cards`
 **Done:** T1 on the Voix WebSocket (`/ai/voice`, typed turns like the page's text box), after `make reset`, with
 anthropic:claude-sonnet-5-5, Soniox and ElevenLabs. No browser was used, so the cards were checked against the data
