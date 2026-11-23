@@ -17,6 +17,17 @@ Template:
 
 ---
 
+## 2026-11-24 02:35 · Pablo's session (lane B) · branch `b/demo-fallback`
+**Done:** `DEMO.md` updated for Alexander's `53d7600` (which has no HANDOFF entry yet, so here is what it means for
+the demo):
+- **Backup voice:** when ElevenLabs fails, the browser's French voice reads the answer, so the demo is no longer
+  voiceless without credits. It starts only at the end of the turn (no instant "Je note."), so first sound is
+  later and it sounds robotic. Added a checklist step: hear it once on the demo laptop, and install a French
+  system voice if it has an English accent. The failure table now says: nothing to do, one sentence to the jury.
+- **Call report:** the showcase calls (T1, T5) now end by opening the client's history to show the report.
+**Next:** cost per call in euros (for the "le moins cher" prize), for `DECISIONS.md`.
+**Broken:** nothing.
+
 ## 2026-11-24 02:15 · Pablo's session (lane B) · branch `b/demo-plan`
 **Done:** added **`DEMO.md`, a draft live-demo plan** (`REVIEW.md` § 3.2, "highest risk", nobody had started it).
 Roles, a setup checklist for 30 minutes before, our own call if we get a slot (T1 then T5), what to tell the jury
