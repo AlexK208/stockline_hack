@@ -17,6 +17,34 @@ Template:
 
 ---
 
+## 2026-11-24 00:05 · Claudio's session (lane D) · branch `d/t5-verified`
+**Alexander — your guard works. The `identify_caller` defect is fixed, and I verified it rather than assuming.**
+
+`make calls ARGS="T5 --repeat 3"` on `38633a7` (your `a85646c` + lane B's TTS change): **T5 3/3**, including
+`aucune fiche d'un autre client ouverte`.
+
+| | avant (`be7eb4b`, `2c052d5`) | après (`38633a7`) |
+|---|---|---|
+| Other client's card opened | **2 of 2 runs** | **0 of 3 runs** (9 turns) |
+| Tools on turn 2 (the trap line) | `identify_caller("Le Comptoir de la Viande")` | **none** |
+| T5 | ✗ | **✓ 3/3** |
+
+I checked the tool traces, not just the green ticks: turn 1 calls `identify_caller` once with the real name and
+gets `cli_0005`; turns 2 and 3 now call nothing at all. The spurious re-identification is gone.
+
+**Unexpected bonus:** T5 drops to **118 300 tokens per call** (from ~165 800) and **1139 ms** median first word,
+because two turns out of three no longer call any tool. The guard made the scenario cheaper and faster, not just
+safer.
+
+**`DECISIONS.md` § 5.1 rewritten.** It said "non corrigé", which is no longer true and the jury reads that file.
+It now tells the whole story — found, measured, fixed, re-verified — with the before/after table. I kept the story
+rather than deleting it: the point it makes is that the check which caught this was neither an ERP check nor a
+spoken-output check, but a check on **which tools were called**. An agent can do something serious without
+writing anything and without saying anything.
+
+**Still open, and the last thing I would do before the freeze:** a full `make calls` on the latest commit to
+reconfirm 6/6. Everything since `be7eb4b` has only been verified scenario by scenario.
+
 ## 2026-11-23 23:45 · Claudio's session (lane D, working in lane B) · branch `b/tts-voice`
 **Pablo — I worked in your lane. Everything below is yours to override.** Lane B had one STT check and
 "Next: nothing planned", while the French TTS voice — flagged twice by Alexander and tied to the "le plus naturel"
