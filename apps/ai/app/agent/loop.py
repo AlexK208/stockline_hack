@@ -59,7 +59,10 @@ async def run_agent(
         system = await build_system_prompt(mode, actor_name)
         # Start of a call: when what the caller said matches exactly ONE client, run identify_caller here, in code,
         # and hand its result to the model as if it had called the tool: one model round-trip less before the answer.
-        if mode == "voice" and messages and messages[-1].role == "user" and not caller_known(messages) and any(t.name == "identify_caller" for t in tools):
+        # Only before identify_caller has run at all: once the agent has asked "lequel ?", the answer ("celui de la
+        # place", "c'est Julien") is for the model to resolve with the candidates, not for a fresh match.
+        asked_before = any(m.role == "tool" and m.name == "identify_caller" for m in messages)
+        if mode == "voice" and messages and messages[-1].role == "user" and not asked_before and any(t.name == "identify_caller" for t in tools):
             pre_started = time.perf_counter()
             said = messages[-1].content.split("\n\n[Système", 1)[0]
             found = await prefetch_identify(said, ctx.erp)
@@ -106,8 +109,10 @@ async def run_agent(
             # 3. Run the tools (in parallel), append the results, loop.
             messages.append(ChatMessage(role="assistant", content=text, tool_calls=calls))
             results = await asyncio.gather(*(execute_tool(call, tools, ctx) for call in calls))
+            # All results go into the history BEFORE the first yield: if the caller interrupts while we stream them,
+            # an order that was written stays known and is not created a second time.
+            messages.extend(ChatMessage(role="tool", tool_call_id=r.call_id, name=r.name, content=to_json(r.result)) for r in results)
             for r in results:
-                messages.append(ChatMessage(role="tool", tool_call_id=r.call_id, name=r.name, content=to_json(r.result)))
                 yield r
 
         # Safety net: the model kept calling tools.

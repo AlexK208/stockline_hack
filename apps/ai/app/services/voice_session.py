@@ -61,12 +61,17 @@ from .vocabulary import stt_hint
 
 client_message = TypeAdapter(VoiceClientMessage)
 
+# Messages kept per call. A call is one conversation: with 40 (about ten turns) the client's card, fetched on the first
+# turn, fell out of the history mid-call and the agent lost the ids it needs to edit the order.
+CALL_MEMORY = 200
+
 
 @dataclass
 class Conversation:
     id: str
     actor_name: str | None = None
     history: list[ChatMessage] = field(default_factory=list)
+    acks: list[str] = field(default_factory=list)  # the opening word of each turn so far ("" = none), oldest first
 
 
 # In memory: a reconnect with the same sessionId continues the conversation.
@@ -147,6 +152,7 @@ class VoiceConnection:
             case ResetMessage():
                 await self.interrupt()
                 self.conversation.history = []
+                self.conversation.acks = []
                 await self.open(self.conversation.id)
 
     async def send_partial(self, update: STTUpdate) -> None:
@@ -199,15 +205,27 @@ class VoiceConnection:
             # 0. Instant acknowledgement ("Bonjour Christian.", "D'accord.") from the live transcript: spoken while
             #    the STT finalizes and the model thinks. Chosen in code (services/call_prep.py), never a fact.
             heard = (text or "").strip()  # a typed turn is known at once (kept if the turn is interrupted early)
-            speaker = Speaker(get_tts_client(), self.send, self.send_bytes)
+            # The page shows exactly what goes to the voice, sentence by sentence: a remark the model makes before
+            # calling a tool, which we do not speak, is not displayed either.
+            to_show: list[str] = []
+            speaker = Speaker(get_tts_client(), self.send, self.send_bytes, on_sentence=to_show.append)
+
+            async def show() -> None:
+                nonlocal spoken
+                while to_show:
+                    sentence = to_show.pop(0).strip()
+                    spoken += f"{sentence} "
+                    await self.send(AgentTextMessage(delta=f"{sentence} "))
+
             erp = ErpClient("voice_agent", conv.actor_name)
             ack = ""
             with suppress(Exception):
-                ack = await choose_ack(text or partial, not conv.history, erp)
+                blocked = any(m.role == "tool" and m.name == "identify_caller" and '"BLOCKED"' in (m.content or "") for m in conv.history)
+                ack = await choose_ack(text or partial, not conv.history, erp, conv.acks, blocked)
+            conv.acks.append(ack)
             if ack:
-                spoken += f"{ack} "
-                await self.send(AgentTextMessage(delta=f"{ack} "))
                 speaker.speak(ack)
+                await show()
 
             # 1. Speech → text: with a streaming STT only the last words are left to finalize
             if utterance is not None:
@@ -229,26 +247,34 @@ class VoiceConnection:
                     case TextEvent(delta=delta):
                         if timings.llm_first_token_ms is None:
                             timings.llm_first_token_ms = ms_since(llm_start)
-                        spoken += delta
                         step_text += delta
-                        await self.send(AgentTextMessage(delta=delta))
                         speaker.push(delta)
+                        await show()
                     case ToolCallEvent(call=call):
                         # Speak what was said before the tool ("Je regarde.") now, not when the tool comes back:
                         # the sentence splitter waits for a space after the full stop, which only arrives with
                         # the text of the next step, i.e. after the whole tool round-trip.
-                        speaker.flush()
+                        if ack:
+                            speaker.drop()  # we already said something: the model's own step comment stays unspoken
+                        else:
+                            speaker.flush()
+                        await show()
                         await self.send(AgentToolMessage(name=call.name, args=call.arguments))
                     case ToolResultEvent(name=name, ok=ok, ms=ms):
                         step_text = ""
                         await self.send(AgentToolMessage(name=name, ok=ok, ms=ms))
                     case ErrorEvent(message=message):
                         await self.send(VoiceErrorMessage(message=message))
+                        sorry = "Excusez-moi, j'ai un souci technique. Vous pouvez répéter ?"
+                        speaker.speak(sorry)
+                        await show()
             timings.llm_total_ms = ms_since(llm_start)
-            conv.history = trim(working)
+            conv.history = trim(working, CALL_MEMORY)
             committed = True
 
             # 3. Speak the last sentence and wait until all the audio is sent
+            speaker.flush()
+            await show()
             await speaker.finish()
             timings.tts_first_byte_ms = speaker.tts_first_byte_ms
             if speaker.first_byte_at:
@@ -264,12 +290,14 @@ class VoiceConnection:
                 last = kept[-1]
                 if step_text.strip() and not (last.role == "assistant" and last.tool_calls):
                     kept = [*kept, ChatMessage(role="assistant", content=f"{step_text.strip()} …")]
-                conv.history = trim(kept)
+                conv.history = trim(kept, CALL_MEMORY)
             if speaker:
                 await speaker.stop()
             raise
         except Exception as e:
             await self.send(VoiceErrorMessage(message=str(e) or type(e).__name__))
+            if speaker:
+                await speaker.stop()  # close the audio segment: the page must not wait for sound that will not come
         finally:
             if utterance:
                 utterance.cancel()  # interrupted while transcribing: close the provider stream
@@ -281,8 +309,14 @@ class Speaker:
     # a sentence ends with . ! ? … followed by a space ("18.50" is not a boundary)
     SENTENCE = re.compile(r"^([\s\S]*?[.!?…])\s+")
 
-    def __init__(self, tts: TTSClient, send: Callable[[WireModel], Awaitable], send_bytes: Callable[[bytes], Awaitable]):
-        self.tts, self.send, self.send_bytes = tts, send, send_bytes
+    def __init__(
+        self,
+        tts: TTSClient,
+        send: Callable[[WireModel], Awaitable],
+        send_bytes: Callable[[bytes], Awaitable],
+        on_sentence: Callable[[str], None] | None = None,  # called with each sentence as it goes to the TTS
+    ):
+        self.tts, self.send, self.send_bytes, self.on_sentence = tts, send, send_bytes, on_sentence
         self.buffer = ""
         self.sentences: asyncio.Queue[str | None] = asyncio.Queue()
         self.worker: asyncio.Task | None = None  # speaks the queued sentences one after the other
@@ -301,12 +335,18 @@ class Speaker:
             return
         if self.worker is None:
             self.worker = asyncio.create_task(self._speak_queued())
+        if self.on_sentence:
+            self.on_sentence(sentence)
         self.sentences.put_nowait(sentence)
 
     def flush(self) -> None:
         """Speak whatever is buffered right away (used when the model pauses to call a tool)."""
         if self.buffer.strip():
             self.speak(self.buffer)
+        self.buffer = ""
+
+    def drop(self) -> None:
+        """Forget what is buffered and not yet sent to the TTS (a remark the model made before calling a tool)."""
         self.buffer = ""
 
     async def finish(self) -> None:

@@ -196,6 +196,42 @@ Happy to run `make calls ARGS="--repeat 3"` on Haiku once they are in.
 **Next (lane D):** spoken-output checks, then re-run. The voice replay of T1–T6 on the Voix page is being handled
 by someone else, so the perceived-latency columns are not blocked on me.
 
+## 2026-11-23 22:41 · Alexander's session (lane A) · not yet committed
+Three agents ran against the core: a code audit, a research pass on spoken French, and a "juror" who wrote 12 new
+calls (`evals/jury_calls.json`, J1 to J12, with expected ERP state and what the agent must or must not say).
+
+**Audit findings fixed (the first one was serious):**
+- `tools/desk.py` matcher picked a WRONG client on a bare first name, a surname shared with another account, or an
+  everyday word ("c'est Julien" → the hospital, "Peyrat" → Peyrat Traiteur, "de la viande hachée" → Le Comptoir de
+  la Viande, an unknown butcher in Tulle → Lacour). My earlier "never wrong" claim only covered full names. Now: a
+  first name, a town or a trade word alone never names a client; two accounts that explain the same words are both
+  returned; a changed letter is another word. Replayed on 1,176 introductions built from the seed: 0 wrong.
+- `identify_caller` with `clientId`: refused when what the caller said still fits several clients ("Karim, le
+  boucher, à Limoges" fits two). Candidates now show each client's trade.
+- `agent/loop.py`: the code-side lookup runs only before `identify_caller` has been called at all (it was also
+  running on the caller's answer to "lequel ?").
+- `tools/orders.py`: `update_order` re-checks every line for a new date; lowering a quantity is never refused;
+  `create_draft_order` refuses a second open order for the same client and day; blocked accounts are refused on
+  every write tool.
+- Canteens: 3 days ahead (`check_items`). Lead-time messages now give the client's first possible delivery day.
+- `voice_session.py`: the client card is kept for the whole call (was dropped after about 10 turns); a technical
+  error is spoken; the page shows only what is spoken.
+
+**Opening words (the "Alors…" complaint), rebuilt from the research:** a request gets "Je regarde." / "Un instant."
+/ "Je vérifie." (never "d'accord": in French it accepts the request), a change of mind "Je corrige.", a plea "Je
+comprends."; nothing after a yes, on a goodbye, or two turns in a row. `VOICE_ACK=smart|greeting|off` in `.env`.
+Sources are in the research report (ask lane A): they belong in `DECISIONS.md`.
+
+**New tool:** `order_history` (ordered vs weighed per line): "pareil que samedi", "il manquait un kilo".
+
+**Results on lane A's copy:** `make calls` 6/6. J1 to J12 replayed through `WS /voice` and read one by one: 11 as
+the juror expected. **J10 differs on purpose:** matured ribs asked 4 days ahead are ACCEPTED when the ageing room
+covers the request, and the agent says the one-week rule aloud. Reason: 692 rib lines in 12 months were all ordered
+1 to 3 days ahead. To make the rule strict, set `LEAD_DAYS_BY_PRODUCT`-style behaviour in `tools/desk.py`
+(`RESERVE_DAYS_WHEN_SHORT`). **Team decision needed.**
+
+**Lane D:** please wire `evals/jury_calls.json` into the runner (the `expected` lists are written to be checked).
+
 ## 2026-11-23 22:12 · Alexander's session (lane A) · not yet committed
 **Baseline on Alexander's Mac (`7208081`, Sonnet 5.5):** `make calls` 6/6, médiane 2855 ms, pire 6165 ms.
 

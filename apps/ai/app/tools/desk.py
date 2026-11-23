@@ -63,49 +63,91 @@ def lev(a: str, b: str) -> int:
 
 
 def same_word(said: str, ref: str) -> bool:
-    """Exact, or one typo on a word of 5+ letters ("peyronet" = "peyronnet"). "leroy" is not "leroux"."""
+    """Exact, or ONE missing/extra letter on a word of 5+ letters ("peyronet" = "peyronnet").
+    A changed letter is another word: "leroy" is not "leroux", "julien" is not "junien"."""
     if said == ref:
         return True
-    if min(len(said), len(ref)) < 5 or abs(len(said) - len(ref)) > 1:
+    if min(len(said), len(ref)) < 5 or abs(len(said) - len(ref)) != 1:
         return False
-    return lev(said, ref) <= 1 and said[0] == ref[0] and said[-1] == ref[-1]
+    short, long = sorted((said, ref), key=len)
+    if long.startswith(short):
+        return True  # a silent last letter the transcriber dropped or added: "bistro" = "bistrot"
+    return lev(said, ref) == 1 and said[0] == ref[0] and said[-1] == ref[-1]
 
 
 # ───────────────────────── client directory (cached) ─────────────────────────
 
-_dir: tuple[float, list[dict], dict[str, float]] | None = None
+_dir: tuple[float, list[dict], dict] | None = None
 _dir_lock = asyncio.Lock()
 DIR_TTL_S = 120
+# Words of a client's name that say nothing about who is calling when heard alone: places and street words.
+# Product words ("viande", "bœuf", "agneau"…) are added from the catalogue when the directory is built.
+GENERIC = set("place rue avenue boulevard route chemin impasse halles marche centre ville".split())
 
 
-async def directory(erp: ErpClient) -> tuple[list[dict], dict[str, float]]:
-    """All clients with their name tokens, contact names and city, plus how rare each name token is."""
+# The ERP's client types, in the words callers use for their own trade ("fishmonger" is the kit's generic word for
+# the retail shop: here, the butcher's shop).
+TRADE = {
+    "fishmonger": ("boucherie", "boucher", "bouchere", "charcuterie", "charcutier"),
+    "restaurant": ("restaurant", "resto", "restaurateur", "chef"),
+    "brasserie": ("brasserie", "routier", "bistrot", "bistro"),
+    "supermarket": ("supermarche", "magasin", "superette", "hyper", "grande", "surface", "rayon"),
+    "canteen": ("cantine", "cuisine", "collectivite", "ehpad", "residence", "hopital", "hospitalier", "scolaire"),
+    "caterer": ("traiteur",),
+    "hotel": ("hotel", "auberge", "hostellerie", "gite", "gites", "relais"),
+}
+TRADE_LABEL = {
+    "fishmonger": "boucherie (commerce de détail)", "restaurant": "restaurant", "brasserie": "brasserie", "supermarket": "grande surface",
+    "canteen": "restauration collective", "caterer": "traiteur", "hotel": "hôtel / auberge",
+}  # fmt: skip
+
+
+def build_directory(rows: list[dict], products: list[dict]) -> tuple[list[dict], dict]:
+    """Clients with their name words, contact names, town and street words; plus how rare each name word is and
+    which name words belong to ONE client only (and are not everyday or product words)."""
+    generic = set(GENERIC)
+    for p in products:
+        for text in [p.get("name", ""), *(p.get("aliases") or [])]:
+            generic.update(tokens(text))
+    clients = []
+    for c in rows:
+        contacts = [k.get("name", "") for k in c.get("contacts") or []]
+        street = [t for t in tokens(re.sub(r"\d+", " ", c.get("address", "").split(",")[0])) if t not in generic]
+        clients.append(
+            {
+                **pick(c, "id", "code", "name", "city", "status"),
+                "kind": TRADE_LABEL.get(c.get("type"), c.get("type")),
+                "contacts": contacts,
+                "_trade": TRADE.get(c.get("type"), ()),
+                "_name": tokens(c["name"]),
+                "_first": [t for n in contacts for t in tokens(n.split()[0] if n.split() else "")],  # "Jean-Louis" → jean, louis
+                "_last": [t for n in contacts for t in tokens(" ".join(n.split()[1:]))],
+                "_city": tokens(c.get("city", "")),
+                "_street": street,
+                "_code": norm(c.get("code", "")),
+            }
+        )
+    df: dict[str, int] = {}
+    for c in clients:
+        for t in set(c["_name"]):
+            df[t] = df.get(t, 0) + 1
+    idf = {t: 1 + math.log(len(clients) / n) for t, n in df.items()}  # "peyronnet" ≈ 5.5, "boucherie" ≈ 2.2
+    firsts = {t for c in clients for t in c["_first"]}
+    towns = {t for c in clients for t in c["_city"]}  # "la boucherie à Couzeix": a town is not a proof of identity
+    unique = {t for t, n in df.items() if n == 1 and t not in generic and t not in firsts and t not in towns}
+    rare = {t for t, n in df.items() if n <= 3 and t not in generic and t not in firsts and t not in towns}
+    return clients, {"idf": idf, "unique": unique, "rare": rare}
+
+
+async def directory(erp: ErpClient) -> tuple[list[dict], dict]:
     global _dir
     async with _dir_lock:
         if _dir and time.monotonic() - _dir[0] < DIR_TTL_S:
             return _dir[1], _dir[2]
-        rows = await erp.get("/api/clients", {"limit": 500})
-        clients = []
-        for c in rows:
-            contacts = [k.get("name", "") for k in c.get("contacts") or []]
-            clients.append(
-                {
-                    **pick(c, "id", "code", "name", "city", "status"),
-                    "contacts": contacts,
-                    "_name": tokens(c["name"]),
-                    "_first": [t for n in contacts for t in tokens(n)[:1]],
-                    "_last": [t for n in contacts for t in tokens(n)[1:]],
-                    "_city": tokens(c.get("city", "")),
-                    "_code": norm(c.get("code", "")),
-                }
-            )
-        df: dict[str, int] = {}
-        for c in clients:
-            for t in set(c["_name"]):
-                df[t] = df.get(t, 0) + 1
-        idf = {t: 1 + math.log(len(clients) / n) for t, n in df.items()}  # "peyronnet" ≈ 5.5, "boucherie" ≈ 2.2
-        _dir = (time.monotonic(), clients, idf)
-        return clients, idf
+        rows, products = await asyncio.gather(erp.get("/api/clients", {"limit": 500}), erp.get("/api/products", {"limit": 500}))
+        clients, stats = build_directory(rows, products)
+        _dir = (time.monotonic(), clients, stats)
+        return clients, stats
 
 
 def reset_directory() -> None:
@@ -113,43 +155,70 @@ def reset_directory() -> None:
     _dir = None
 
 
-def score_client(said: list[str], c: dict, idf: dict[str, float]) -> tuple[float, bool]:
-    """(score, whole name said). Name words count by rarity; a contact's name or the town add to it."""
-    name_hit = [t for t in c["_name"] if any(same_word(s, t) for s in said)]
-    score = sum(idf.get(t, 1.0) for t in set(name_hit))
-    if any(same_word(s, t) for s in said for t in c["_last"]):
-        score += 3.0
-    if any(s == t for s in said for t in c["_first"]):
-        score += 2.5
-    if c["_code"] and c["_code"] in said:
-        score += 10
-    city_only = [t for t in c["_city"] if t not in c["_name"]]
-    if city_only and all(any(same_word(s, t) for s in said) for t in city_only):
-        score += 2.0
-    return score, bool(c["_name"]) and len(set(name_hit)) == len(set(c["_name"]))
+def explain(said: list[str], c: dict, stats: dict) -> dict:
+    """How well a client accounts for what was said: a score, which said words it explains, and whether the
+    evidence is strong enough to name it without asking (whole name, a name word only it has, a contact's surname)."""
+    idf, unique = stats["idf"], stats["unique"]
+    covered: set[str] = set()
+    name_hit: set[str] = set()
+    for t in set(c["_name"]):
+        for w in said:
+            if same_word(w, t):
+                name_hit.add(t)
+                covered.add(w)
+    surname = {w for w in said for t in c["_last"] if same_word(w, t)}
+    first = {w for w in said for t in c["_first"] if w == t}
+    town_words = [t for t in c["_city"] if t not in c["_name"]]
+    town = {w for w in said for t in town_words if same_word(w, t)}
+    if len(town) < len(set(town_words)):
+        town = set()  # the whole town or nothing ("saint" alone is not Saint-Junien)
+    street = {w for w in said for t in c["_street"] if same_word(w, t)}
+    code = {w for w in said if c["_code"] and w == c["_code"]}
+    trade = {w for w in said if w in c.get("_trade", ()) and w not in covered}  # "le boucher à Limoges"
+    score = sum(idf.get(t, 1.0) for t in name_hit) + (3.0 if surname else 0) + (2.5 if first else 0)
+    score += (2.0 if town else 0) + (1.5 if street else 0) + (10 if code else 0) + (1.0 if trade else 0)
+    full = bool(c["_name"]) and name_hit == set(c["_name"])
+    return {
+        "client": c,
+        "score": score,
+        "covered": covered | surname | first | town | street | code | trade,
+        "people": surname | first,
+        "name_hit": name_hit,
+        # proof that belongs to this client only: a name word nobody else has, a contact's surname, its code
+        "proof": bool(name_hit & unique) or bool(surname) or bool(code),
+        # …or the whole name, or a contact's first name together with a rare word of the name ("Julien, Hyper Frais")
+        "strong": full or bool(name_hit & unique) or bool(surname) or bool(code) or (bool(first) and bool(name_hit & stats["rare"])),
+    }
 
 
-def match_clients(said_text: str, clients: list[dict], idf: dict[str, float]) -> tuple[dict | None, list[dict]]:
-    """→ (the one client, []) when there is no doubt, else (None, candidates best first). Never guesses:
-    two clients as plausible as each other ("Hyper Frais Limoges" / "… Corgnac") are returned as candidates."""
+def match_clients(said_text: str, clients: list[dict], stats: dict) -> tuple[dict | None, list[dict]]:
+    """→ (the one client, []) when there is no doubt, else (None, candidates best first). It never guesses:
+      - a first name alone, a town alone or a trade word alone names nobody: candidates, and the agent asks;
+      - if another client explains every word the best one explains ("Hyper Frais Limoges" / "… Corgnac",
+        "Peyrat" the chef / Peyrat Traiteur), both are returned and the agent asks which."""
     said = tokens(said_text)
-    scored = []
-    for c in clients:
-        s, full = score_client(said, c, idf)
-        if s >= 2.4:  # at least one fairly distinctive word, a contact's name, or the town with something else
-            scored.append((s, full, c))
+    scored = [e for e in (explain(said, c, stats) for c in clients) if e["score"] >= 2.4]
     if not scored:
         return None, []
-    scored.sort(key=lambda x: (-x[0], x[2]["name"]))
-    top, top_full, best = scored[0]
-    rivals = [x for x in scored[1:] if x[0] >= top - 1.5]
-    if top_full:  # the whole name was said: a rival that only shares part of it and scores lower is not a rival
-        rivals = [x for x in rivals if x[1] or x[0] >= top - 1e-9]
-    # A longer name that contains everything the caller said scores the same: as plausible as the short one → ask.
-    distinctive = top >= 4.0
-    if not rivals and distinctive:
-        return best, []
-    return None, [x[2] for x in scored[:5] if x[0] >= top - 3.0]
+    scored.sort(key=lambda e: (-e["score"], e["client"]["name"]))
+    best = scored[0]
+    rivals = [e for e in scored[1:] if e["covered"] >= best["covered"] or e["score"] >= best["score"] - 1e-9]
+    # Same family of names ("Charcuterie-Traiteur Esposito" / "Hostellerie Esposito") and the other one explains a word
+    # the best one does not ("pour la charcuterie… non pardon, l'hostellerie") → both are in play: the agent settles it
+    # from the whole sentence, or asks.
+    rivals += [e for e in scored[1:] if (e["name_hit"] & best["name_hit"] & stats["rare"]) and (e["covered"] - best["covered"])]
+    if not best["proof"]:
+        # Named only by everyday words ("la boucherie à Couzeix" = La Boucherie de Couzeix?): if the caller also gave
+        # a person's name that belongs to ANOTHER client, that client is just as plausible → ask.
+        rivals += [e for e in scored[1:] if e["people"] - best["covered"]]
+    if best["strong"] and not rivals:
+        return best["client"], []
+    out, seen = [], set()
+    for e in [best, *rivals, *(e for e in scored if e["score"] >= best["score"] - 3.0)]:
+        if e["client"]["id"] not in seen:
+            seen.add(e["client"]["id"])
+            out.append(e["client"])
+    return None, out[:5]
 
 
 # ───────────────────────── identify_caller ─────────────────────────
@@ -165,6 +234,15 @@ def next_delivery_dates(today_iso: str, delivery_days: list[str], n: int = 4) ->
             if len(out) == n:
                 break
     return out
+
+
+def first_delivery_from(earliest: date, delivery_days: list[str]) -> dict:
+    """The first day, from `earliest` on, on which this client is delivered."""
+    for i in range(0, 15):
+        d = earliest + timedelta(days=i)
+        if WEEKDAYS[d.weekday()] in (delivery_days or WEEKDAYS[:6]):
+            return {"date": d.isoformat(), "jour": f"{JOURS[d.weekday()]} {d.day}"}
+    return {"date": earliest.isoformat(), "jour": f"{JOURS[earliest.weekday()]} {earliest.day}"}
 
 
 def jour(iso: str) -> str:
@@ -235,10 +313,25 @@ async def identify_caller(
     panier habituel, problèmes ouverts, façon de lui parler). Remplace search + get_client + get_context.
     Si plusieurs clients sont plausibles, renvoie `candidates` : demande alors lequel (ville, nom du patron), ne devine jamais.
     """
+    clients, stats = await directory(ctx.erp)
     if client_id:
+        # The model chose among the candidates: allowed only if what the caller said really singles this client out.
+        # "Karim, le boucher, à Limoges" fits two butchers named Karim in Limoges: ask again rather than pick one.
+        chosen = next((c for c in clients if c["id"] == client_id), None)
+        if chosen:
+            words = tokens(said)
+            mine = explain(words, chosen, stats)
+            if not mine["strong"]:
+                twins = [e["client"] for e in (explain(words, c, stats) for c in clients if c["id"] != client_id) if e["score"] >= 2.4 and e["covered"] >= mine["covered"]]
+                if twins:
+                    return {
+                        "status": "ambiguous",
+                        "instruction": "Ce que l'appelant a dit correspond encore à plusieurs clients : ne choisis pas. Demande le nom du commerce "
+                        "ou son nom de famille, puis rappelle identify_caller avec ce qu'il répond.",
+                        "candidates": [pick(c, "id", "name", "kind", "city", "status", "contacts") for c in [chosen, *twins][:5]],
+                    }
         return {"status": "found", "client": await client_card(ctx.erp, client_id)}
-    clients, idf = await directory(ctx.erp)
-    best, candidates = match_clients(said, clients, idf)
+    best, candidates = match_clients(said, clients, stats)
     if best:
         return {"status": "found", "client": await client_card(ctx.erp, best["id"])}
     if candidates:
@@ -246,7 +339,7 @@ async def identify_caller(
             "status": "ambiguous",
             "instruction": "Plusieurs clients possibles : demande lequel en citant ce qui les distingue (ville, nom du contact). "
             "Puis rappelle identify_caller avec clientId.",
-            "candidates": [pick(c, "id", "name", "city", "status", "contacts") for c in candidates],
+            "candidates": [pick(c, "id", "name", "kind", "city", "status", "contacts") for c in candidates],
         }
     return {"status": "unknown", "instruction": "Client non reconnu : demande le nom du commerce et la ville. N'invente rien."}
 
@@ -256,18 +349,32 @@ async def identify_caller(
 # House lead times (data/context/02-journee-type.md): carcasses and quarters are ordered 2 days ahead (slaughter on
 # Monday and Thursday), 21-day matured ribs a week ahead, everything else the day before.
 LEAD_DAYS_BY_CATEGORY = {"carcasses": 2}
-LEAD_DAYS_BY_PRODUCT = {"prd_0011": 7}
+# Canteens, hospitals and care homes order 3 days ahead (same file; every canteen order in the history does).
+LEAD_DAYS_BY_CLIENT_TYPE = {"canteen": 3}
+# 21-day matured ribs: "réservation une semaine à l'avance". The history shows them sold 1 to 3 days ahead when some
+# are in the ageing room, so the week applies only when the stock at the date does not cover the request.
+RESERVE_DAYS_WHEN_SHORT = {"prd_0011": 7}
 PIECE = re.compile(r"(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*(kg|g)\b")
+PACK = re.compile(r"(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(kg|g)\b")
+ONE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(kg|g)\b")
 
 
 def piece_kg(caliber: str | None) -> tuple[float, float] | None:
-    """"quartier 90-110 kg" → (90, 110); "pièce 300-350 g" → (0.3, 0.35); "carré 6 côtes" → None."""
-    m = PIECE.search(caliber or "")
-    if not m:
-        return None
-    lo, hi = (float(x.replace(",", ".")) for x in m.group(1, 2))
-    k = 0.001 if m.group(3) == "g" else 1
-    return lo * k, hi * k
+    """Weight of one piece or pack, in kilos, as (lightest, heaviest):
+    "quartier 90-110 kg" → (90, 110); "pièce 300-350 g" → (0.3, 0.35); "carton 50 x 100 g" → (5, 5);
+    "sachet 2,5 kg" → (2.5, 2.5); "carré 6 côtes" → None (no weight: ask for kilos)."""
+    text = caliber or ""
+    num = lambda x: float(x.replace(",", "."))  # noqa: E731
+    if m := PIECE.search(text):
+        k = 1000 if m.group(3) == "g" else 1
+        return round(num(m.group(1)) / k, 4), round(num(m.group(2)) / k, 4)
+    if m := PACK.search(text):
+        w = round(int(m.group(1)) * num(m.group(2)) / (1000 if m.group(3) == "g" else 1), 4)
+        return w, w
+    if m := ONE.search(text):
+        w = round(num(m.group(1)) / (1000 if m.group(2) == "g" else 1), 4)
+        return w, w
+    return None
 
 
 class Item(ToolArgs):
@@ -289,17 +396,23 @@ async def check_items(erp: ErpClient, client_id: str, delivery_date: str, items:
     )
     product = {p["id"]: p for p in products}
     level = {r["productId"]: r for r in levels}
+    days = client.get("deliveryDays") or []
 
     async def one(it: Item) -> dict:
         p = product[it.product_id]
-        row: dict = {"productId": p["id"], "name": p["name"], "unit": p["unit"]}
+        row: dict = {"productId": p["id"], "name": p["name"], "unit": p["unit"], **({"packaging": p["caliber"]} if p.get("caliber") else {})}
         qty = it.qty
-        rng = piece_kg(p.get("caliber"))
+        rng = piece_kg(p.get("caliber")) if p["unit"] == "kg" else None
         if qty is None and it.pieces and rng:
             qty = round(it.pieces * (rng[0] + rng[1]) / 2, 1)
-            row["estimatedFromPieces"] = f"{fmt(it.pieces)} pièce(s) ≈ {fmt(qty)} kg (pièce de {fmt(rng[0])} à {fmt(rng[1])} kg, facturé au poids réel)"
+            if rng[0] == rng[1]:
+                row["estimatedFromPieces"] = f"{fmt(it.pieces)} × {fmt(rng[0])} kg = {fmt(qty)} kg"
+            else:
+                row["estimatedFromPieces"] = f"{fmt(it.pieces)} pièce(s) ≈ {fmt(qty)} kg (pièce de {fmt(rng[0])} à {fmt(rng[1])} kg, facturé au poids réel)"
+        elif qty is None and it.pieces and p["unit"] != "kg":
+            row["needQty"] = f"Ce produit se vend par « {p['unit']} » ({p.get('caliber') or 'voir le nom'}) : convertis toi-même ce que dit le client en nombre de {p['unit']} et passe-le dans qty."
         elif qty is None:
-            row["needQty"] = "Quantité inconnue (pas de poids par pièce pour ce produit) : demande la quantité en kilos."
+            row["needQty"] = "Pas de poids par pièce connu pour ce produit : demande la quantité en kilos, n'invente pas un poids."
         if qty is not None:
             row["qty"] = qty
             price = await erp.get("/api/prices/resolve", {"clientId": client_id, "productId": p["id"], "qty": fmt(qty)})
@@ -318,13 +431,18 @@ async def check_items(erp: ErpClient, client_id: str, delivery_date: str, items:
                 row["nextArrival"] = "aucun arrivage confirmé"
             alts = await erp.get(f"/api/products/{enc(p['id'])}/alternatives")
             row["alternatives"] = [pick(a, "id", "name") for a in alts[:3]]
-        lead = LEAD_DAYS_BY_PRODUCT.get(p["id"], LEAD_DAYS_BY_CATEGORY.get(p.get("category"), 1))
+        lead = max(LEAD_DAYS_BY_CATEGORY.get(p.get("category"), 1), LEAD_DAYS_BY_CLIENT_TYPE.get(client.get("type"), 1))
+        why = f"ce produit se commande {lead} jours avant" if lead == LEAD_DAYS_BY_CATEGORY.get(p.get("category"), 1) else f"ce client commande {lead} jours avant"
+        if row["stock"] != "ok" and p["id"] in RESERVE_DAYS_WHEN_SHORT:
+            lead = RESERVE_DAYS_WHEN_SHORT[p["id"]]
+            why = "ce produit se réserve une semaine à l'avance quand il n'y en a pas assez en maturation"
         if (day - today).days < lead:
-            earliest = today + timedelta(days=lead)
-            row["leadTime"] = f"Trop tard pour cette date : ce produit se commande {lead} jours avant. Au plus tôt le {earliest.isoformat()}."
+            first = first_delivery_from(today + timedelta(days=lead), days)
+            row["leadTime"] = f"Trop tard pour cette date : {why}. Première livraison possible : {first['jour']} ({first['date']})."
+        elif p["id"] in RESERVE_DAYS_WHEN_SHORT and (day - today).days < RESERVE_DAYS_WHEN_SHORT[p["id"]]:
+            row["say"] = "Ce produit se réserve normalement une semaine à l'avance ; il y en a assez en maturation pour cette date, donc c'est possible : dis-le ainsi."
         return row
 
-    days = client.get("deliveryDays") or []
     result: dict = {"deliveryDate": delivery_date, "jour": jour(delivery_date), "items": list(await asyncio.gather(*(one(it) for it in items)))}
     if day <= today:
         result["deliveryDay"] = "Date passée ou aujourd'hui : les camions sont partis. Propose un des prochains jours."
@@ -379,11 +497,38 @@ async def prefetch_identify(said_text: str, erp: ErpClient) -> tuple[str, dict] 
     """What identify_caller would return for this utterance, when exactly ONE client matches it; else None (the model
     then calls the tool itself and asks). Used by the agent loop to skip a model round-trip at the start of a call."""
     try:
-        clients, idf = await asyncio.wait_for(directory(erp), 1.5)
-        best, _ = match_clients(said_text, clients, idf)
+        clients, stats = await asyncio.wait_for(directory(erp), 1.5)
+        best, _ = match_clients(said_text, clients, stats)
         if not best:
             return None
         card = await asyncio.wait_for(client_card(erp, best["id"]), 2.0)
     except Exception:  # ERP slow or down: let the model use the tool and report the problem
         return None
     return best["name"], {"status": "found", "client": card}
+
+
+@tool
+async def order_history(
+    ctx: ToolContext,
+    client_id: str,
+    delivery_date: str | None = Field(None, description="YYYY-MM-DD : la livraison dont parle le client (« ma livraison de mardi dernier »). Sans date : ses dernières commandes"),
+    limit: int | None = Field(None, description="Nombre de commandes (défaut 3, max 6)"),
+) -> list[dict]:
+    """
+    Commandes passées d'un client avec, pour chaque ligne, la quantité COMMANDÉE et la quantité réellement PESÉE au départ (c'est le poids
+    pesé qui est facturé). À utiliser quand le client parle d'une livraison passée : « pareil que samedi », « il manquait un kilo »,
+    « c'était quoi la dernière fois ». Ne donne que ces chiffres : n'en invente aucun, et ne promets ni avoir ni remise.
+    """
+    query = {"clientId": client_id, "date": delivery_date, "status": "prepared,delivered,invoiced", "limit": min(limit or 3, 6)}
+    orders = await ctx.erp.get("/api/orders", query)
+    details = await asyncio.gather(*(ctx.erp.get(f"/api/orders/{enc(o['id'])}") for o in orders[: min(limit or 3, 6)]))
+    out = []
+    for o in details:
+        lines = []
+        for l in o["lines"]:
+            row = {**pick(l, "productId", "productName", "unit"), "ordered": l["qty"]}
+            if l.get("preparedQty") is not None:
+                row["weighed"] = l["preparedQty"]
+            lines.append(row)
+        out.append({**pick(o, "id", "number", "status", "deliveryDate"), "jour": jour(o["deliveryDate"]), "lines": lines})
+    return out

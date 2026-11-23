@@ -8,7 +8,7 @@ The tools the model can call, grouped by domain. Each one wraps ERP API endpoint
     history.py   get_client_history, log_client_event, get_supplier_history, log_supplier_event
     orders.py    create_draft_order, add_order_line, update_order_line, remove_order_line, update_order, cancel_order,
                  confirm_order, get_order
-    desk.py      identify_caller, check_products (composite: one call per turn)
+    desk.py      identify_caller, check_products, order_history (composite: one call per turn)
 
 A new file needs one more line: import it below so its @tool functions get registered.
 """
