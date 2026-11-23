@@ -1,9 +1,9 @@
 """
 What the voice session does in CODE around the model, to cut dead air and model round-trips:
 
-    choose_ack        a one- or two-word acknowledgement spoken the instant the caller stops ("Bonjour Christian.",
-                      "Alors…"), from the live transcript: no model, no tool. It is only a courtesy
-                      sound: it never states a fact, so it cannot be wrong about the order.
+    choose_ack        what a person at the order desk says the instant the caller stops ("Bonjour Christian.",
+                      "Je regarde.", "Je corrige.", or nothing), chosen from the live transcript: no model, no tool.
+                      It never states a fact, so it cannot be wrong about the order.
     (The caller is also identified in code before the model runs: that lives in the agent loop, agent/loop.py,
     with tools/desk.py prefetch_identify, so the text chat and the test runner get it too.)
 
@@ -11,26 +11,59 @@ Best effort: any doubt (two plausible clients, ERP slow) → say a plain "Bonjou
 """
 
 import asyncio
+import os
 import re
 
 from app.tools import ErpClient
 from app.tools import desk
 
 GREETED = re.compile(r"\b(bonjour|bonsoir|salut|allo|allô|coucou)\b", re.I)
-CLOSING = re.compile(r"\b(au revoir|bonne journée|bonne soirée|à bientôt|à demain|merci beaucoup|c'est tout)\b", re.I)
 
+# What kind of thing did the caller just say? Checked in this order; the first that matches wins.
+CLOSING = re.compile(r"\b(au revoir|bonne journée|bonne soirée|bon week-?end|à bientôt|à demain|à plus|merci beaucoup|c'est tout|ce sera tout|ça ira)\b", re.I)
+PLEA = re.compile(r"\b(tu vas pas|vous (n')?allez pas|sois sympa|soyez sympa|juste un|juste une|promis|allez,? (un|une|juste|quoi|s'il))\b", re.I)
+COMPLAINT = re.compile(
+    r"\b(pas normal|inadmissible|n'importe quoi|encore une fois|toujours pareil|jamais reçu|pas reçu|il manqu\w+|pas content\w*|"
+    r"(?<!pas de )(?<!aucun )problème|réclamation|rembours\w+|un avoir|pas ce qui était prévu)\b",
+    re.I,
+)
+# A change of mind needs a word that changes something: a bare "non" or "attendez" is often a protest or a correction of us.
+CHANGE = re.compile(r"\b(finalement|plutôt|enlève|enlevez|retire|retirez|laisse tomber|laissez tomber|annule|annulez|au lieu|à la place|change|changez|passe-le|passez-le|décale|décalez)\b", re.I)
+HABIT = re.compile(r"\b(comme d'hab\w*|la même chose|pareil que|comme (mardi|mercredi|jeudi|vendredi|samedi|lundi|la dernière fois)|dernière commande|où en est)\b", re.I)
+LOOKUP = re.compile(r"\?|\b(est-ce que|combien|quand|c'est quoi|quel prix|quelle date|il (vous|te|t'en) reste|vous avez|tu as|avez-vous|as-tu)\b", re.I)
+YES = re.compile(r"\b(oui|ouais|ok|okay|vas-y|allez-y|c'est bon|ça marche|parfait|d'accord|exact|valide|validez|confirme|confirmez|impeccable)\b", re.I)
+ORDER = re.compile(
+    r"\d|\b(kilos?|kg|pièces?|mets|mettez|rajoute|rajoutez|ajoute|ajoutez|il me faut|il me faudrait|je voudrais|je prends|"
+    r"je vais prendre|commande|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|quinze|vingt|trente|demi)\b",
+    re.I,
+)
 
-# Neutral on purpose: "D'accord." before "je ne peux pas" would sound like a yes (blocked account, stockout).
-FILLERS = ("Alors…", "Voyons…")
+# What a person at a French order desk says while looking something up. Chosen from what conversation research and
+# call-centre practice say (sources and reasoning: DECISIONS.md, "Les mots d'attente"):
+#   - a request gets a word that ANNOUNCES THE LOOKUP, never "d'accord / ça marche / parfait / entendu": in French those
+#     accept the request, and the stockout or the lead time may come right after;
+#   - "alors", "voyons", "euh" before an answer are heard as trouble coming: not used;
+#   - nothing after a "oui" (the answer itself starts with "Très bien"), nothing on a goodbye, nothing when unsure;
+#   - never on two turns in a row and never the same words again within a few turns: a fixed filler sounds mechanical.
+TOKENS = {
+    "lookup": ("Je regarde.", "Un instant.", "Je vérifie.", "Je regarde ça.", "Deux secondes."),  # request, question, short answer
+    "change": ("Je corrige.", "Je modifie ça."),  # change of mind
+    "complaint": ("Je regarde ça tout de suite.",),  # neutral and prompt, never cheerful
+    "plea": ("Je comprends.",),  # the only sound that fits before a refusal
+}
+POOL = {"order": "lookup", "lookup": "lookup", "short": "lookup", "change": "change", "complaint": "complaint", "plea": "plea"}
+
+# VOICE_ACK in .env: smart (default) | greeting (only "Bonjour …" on the first turn) | off
+MODE = (os.environ.get("VOICE_ACK") or "smart").strip().lower()
 
 
 async def find_caller(text: str, erp: ErpClient) -> tuple[dict | None, str | None]:
     """→ (client, first name said) when exactly one client matches what was said, else (None, None)."""
     try:
-        clients, idf = await asyncio.wait_for(desk.directory(erp), 1.5)
+        clients, stats = await asyncio.wait_for(desk.directory(erp), 1.5)
     except Exception:
         return None, None
-    best, _ = desk.match_clients(text, clients, idf)
+    best, _ = desk.match_clients(text, clients, stats)
     if not best:
         return None, None
     said = set(desk.tokens(text))
@@ -38,17 +71,50 @@ async def find_caller(text: str, erp: ErpClient) -> tuple[dict | None, str | Non
     return best, first
 
 
-async def choose_ack(text: str, first_turn: bool, erp: ErpClient) -> str:
-    """The instant acknowledgement for this turn ("" = say nothing). `text` may be a partial transcript."""
+def kind_of(text: str) -> str:
+    """closing | complaint | plea | change | yes | lookup | order | short | other — what the caller's turn mostly is."""
     words = desk.norm(text).split()
+    if not words:
+        return "other"
+    if CLOSING.search(text):
+        return "closing"
+    if COMPLAINT.search(text):
+        return "complaint"
+    if PLEA.search(text):
+        return "plea"
+    if CHANGE.search(text):
+        return "change"
+    if YES.search(text) and len(words) <= 6 and not ORDER.search(YES.sub("", text)):
+        return "yes"
+    if HABIT.search(text) or (LOOKUP.search(text) and not ORDER.search(LOOKUP.sub("", text))):
+        return "lookup"  # "comme d'habitude" has to be looked up; a question that carries no order is a question
+    if ORDER.search(text):
+        return "order"
+    return "short" if len(words) <= 8 else "other"  # a short answer to our question ("Corgnac.", "Celui de la place.")
+
+
+async def choose_ack(text: str, first_turn: bool, erp: ErpClient | None, recent: list[str] | None = None, blocked: bool = False) -> str:
+    """The words spoken the instant the caller stops ("" = nothing). `text` may be a partial transcript.
+    `recent` = what was said at the start of the previous turns of this call ("" when nothing), oldest first."""
+    if MODE == "off":
+        return ""
     if first_turn:
-        _, first = await find_caller(text, erp)
+        _, first = await find_caller(text, erp) if erp else (None, None)
         if first:
             return f"Bonjour {first}."
-        return "Bonjour." if GREETED.search(text) or len(words) >= 3 else ""
-    if not words or CLOSING.search(text):
-        return ""  # "merci, au revoir": a filler would sound odd
-    return FILLERS[len(words) % len(FILLERS)]  # varies from turn to turn, so it does not sound like a recording
+        return "Bonjour." if GREETED.search(text) or len(desk.norm(text).split()) >= 3 else ""
+    if MODE != "smart":
+        return ""
+    recent = recent or []
+    pool = POOL.get(kind_of(text))
+    if not pool:
+        return ""  # a yes, a goodbye, or something we cannot place: say nothing, the answer speaks
+    if blocked and pool != "plea":
+        return ""  # blocked account: no "je regarde" that could sound like the order is being taken
+    if recent and recent[-1] and not recent[-1].startswith("Bonjour"):
+        return ""  # never on two turns in a row (the greeting does not count)
+    used = set(recent[-4:])
+    return next((t for t in TOKENS[pool] if t not in used), "")
 
 
 def ack_note(ack: str) -> str:
@@ -56,5 +122,5 @@ def ack_note(ack: str) -> str:
     return (
         f"[Système : tu viens déjà de dire « {ack} » à voix haute. Enchaîne directement avec la suite, comme si tu "
         "continuais ta phrase : ne salue pas de nouveau, ne redis pas son prénom, et ne commence pas par une autre formule "
-        "d'accord ou d'attente (« d'accord », « très bien », « entendu », « c'est noté », « je regarde »).]"
+        "d'accord ou d'attente (« d'accord », « très bien », « entendu », « un instant », « je regarde », « je vérifie »).]"
     )
