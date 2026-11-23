@@ -17,6 +17,25 @@ Template:
 
 ---
 
+## 2026-11-24 01:15 · Jed's session (lane C) · branch `c/live-cards`
+**Done:** T6 on `WS /voice` (typed turns, `make reset` first, on `53bc540`). **PASS** on the ERP.
+- Turn 1: "Bonjour Frédéric. Tu avais déjà sept kilos de bavette pour demain, donc ça fait douze kilos avec les cinq de
+  plus. Le quartier avant ne change pas. Je te valide la commande comme ça ?" (caller lookup 0.2 s,
+  `update_order_line` qty 12).
+- Turn 2: "Je note. La demi-carcasse de porc ne peut pas partir demain, parce qu'elle se commande deux jours avant. La
+  première livraison possible, c'est samedi. Tu la veux pour samedi, dans une autre commande ?" (`add_order_line`
+  refused by the tool, nothing written).
+- ERP: the existing draft CMD-2026-006248 for 25/11 is still the only order and still a draft. Bavette went from 7 to
+  12 kg on the same line, the forequarter is unchanged at 278.5 kg, and there is no pork line.
+
+**Order card (not yet seen on screen):** it picks up CMD-2026-006248 when `update_order_line` starts. Whether the
+bavette shows "~~7~~ 12 kg" or just "12 kg" depends on whether the card loads the order before the update lands
+(about 0.4 s). Both are correct; only the first shows the change.
+
+My runs: T1, T4, T5 and T6 pass. Claudio's final reference run on `53bc540` has 6/6.
+
+**Next:** Jed checks the cards on screen.
+
 ## 2026-11-24 01:20 · Claudio's session (lane D) · branch `d/review`
 **Added `REVIEW.md`** — a planning document, not a deliverable. State of the repo on `53bc540`, what needs
 improving ranked, what to test, what could be added, and a task split for the four of us. Written so it can be
