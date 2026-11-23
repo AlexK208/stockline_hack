@@ -55,7 +55,12 @@ from app.schemas import (
 from app.schemas.base import WireModel
 from app.tools import ErpClient, all_tools
 
-from .call_prep import ack_note, choose_ack
+from app.clients.mock_speech import silent_wav
+from app.schemas import MOCK_TTS_MIME
+
+from .call_prep import ack_note, choose_ack, kind_of
+from .call_report import write_report
+from .warmup import WARM_EVERY_S, Warmer, warm_prompt_cache
 from .utterance import Utterance
 from .vocabulary import stt_hint
 
@@ -66,6 +71,9 @@ client_message = TypeAdapter(VoiceClientMessage)
 CALL_MEMORY = 200
 # Longest text spoken before a tool call ("Je regarde ça tout de suite.").
 MAX_WAIT_WORDS = 5
+# After a TTS failure the provider is left alone for this long and the browser's voice speaks instead.
+TTS_RETRY_AFTER_S = 60
+TTS_HEALTH = {"down_until": 0.0}  # time.monotonic() until which the provider is considered down
 # A live transcript shorter than this is not trusted to choose the instant words (see run_turn).
 MIN_PARTIAL_WORDS = 4
 
@@ -76,6 +84,7 @@ class Conversation:
     actor_name: str | None = None
     history: list[ChatMessage] = field(default_factory=list)
     acks: list[str] = field(default_factory=list)  # the opening word of each turn so far ("" = none), oldest first
+    reported: int = 0  # length of `history` when the last call report was written (services/call_report.py)
 
 
 # In memory: a reconnect with the same sessionId continues the conversation.
@@ -91,6 +100,8 @@ class VoiceConnection:
         self.recording: Utterance | None = None  # while the key is down
         self.last_partial = ""  # live transcript of the recording in progress (for the instant acknowledgement)
         self.turn: asyncio.Task | None = None
+        self.warmer = Warmer()
+        self.warming: asyncio.Task | None = None  # keeps the model's prompt cache warm while the page is connected
         self.warm_up: asyncio.Task | None = None
         self._send_lock = asyncio.Lock()
 
@@ -112,8 +123,26 @@ class VoiceConnection:
 
     # ── receiving ──
 
+    async def keep_warm(self) -> None:
+        """While this page is connected: touch the model's prompt cache now, then after every 4 minutes without a
+        turn, so the first answer of a call never pays for a cold cache (services/warmup.py)."""
+        for _ in range(30):  # the page sends "start" right after connecting: wait for it (who is calling shapes the prompt)
+            if self.conversation:
+                break
+            await asyncio.sleep(0.1)
+        while not self.warmer.idle():
+            if self.warmer.due():
+                await warm_prompt_cache(self.conversation.actor_name if self.conversation else None)
+                self.warmer.model_used_at = time.monotonic()
+            await asyncio.sleep(WARM_EVERY_S / 8)
+
+    def start_warming(self) -> None:
+        if self.warming is None or self.warming.done():
+            self.warming = asyncio.create_task(self.keep_warm())
+
     async def serve(self) -> None:
         await self.ws.accept()
+        self.start_warming()
         try:
             while True:
                 frame = await self.ws.receive()
@@ -127,7 +156,20 @@ class VoiceConnection:
         except WebSocketDisconnect:
             pass
         finally:
+            if self.warming:
+                self.warming.cancel()
             await self.interrupt()
+            await self.report_call()  # the caller hung up
+
+    async def report_call(self) -> None:
+        """Write the call report to the client's history (once per call; again only if the call went on after it).
+        Best effort: a report that cannot be written must never break a call."""
+        conv = self.conversation
+        if not conv or len(conv.history) <= conv.reported:
+            return
+        start, conv.reported = conv.reported, len(conv.history)
+        with suppress(Exception):
+            await asyncio.wait_for(write_report(ErpClient("voice_agent", conv.actor_name), conv.history, start), 4)
 
     async def handle_text(self, raw: str) -> None:
         try:
@@ -141,6 +183,8 @@ class VoiceConnection:
         match msg:
             case StartMessage(session_id=session_id, actor_name=actor_name):
                 await self.interrupt()
+                if self.conversation and session_id != self.conversation.id:
+                    await self.report_call()  # a new call starts: close the previous one
                 await self.open(session_id, actor_name)
             case AudioStartMessage(mime=mime, hint=hint):
                 await self.interrupt()  # barge-in
@@ -155,8 +199,10 @@ class VoiceConnection:
                 self.start_turn(text=text)
             case ResetMessage():
                 await self.interrupt()
+                await self.report_call()  # "Nouvelle session": the call is over
                 self.conversation.history = []
                 self.conversation.acks = []
+                self.conversation.reported = 0
                 await self.open(self.conversation.id)
 
     async def send_partial(self, update: STTUpdate) -> None:
@@ -176,6 +222,8 @@ class VoiceConnection:
         self.warm_up = self.warm_up or asyncio.create_task(stt_hint(get_stt_client().name, None))
 
     def start_turn(self, **turn_input) -> None:
+        self.warmer.used()
+        self.start_warming()  # (it stops by itself after a long silence: a new turn starts it again)
         self.turn = asyncio.create_task(self.run_turn(self.conversation, **turn_input))
 
     async def interrupt(self) -> None:
@@ -299,6 +347,8 @@ class VoiceConnection:
             if speaker.first_byte_at:
                 timings.total_ms = int((speaker.first_byte_at - t0) * 1000 + 0.5)
             await self.send(AgentDoneMessage(text=spoken.strip(), timings=timings))
+            if kind_of(heard) == "closing":  # "merci, au revoir": the report is in the ERP before he has hung up
+                await self.report_call()
 
         except asyncio.CancelledError:
             # Interrupted: keep what was heard, the tool rounds already done (an order the agent created must stay
@@ -340,6 +390,7 @@ class Speaker:
         self.sentences: asyncio.Queue[str | None] = asyncio.Queue()
         self.worker: asyncio.Task | None = None  # speaks the queued sentences one after the other
         self.started = False
+        self.fallback = False  # this turn is spoken by the browser's voice (the provider failed)
         self.first_byte_at: float | None = None
         self.tts_first_byte_ms: int | None = None
 
@@ -387,8 +438,23 @@ class Speaker:
         if self.started:
             await self.send(AgentAudioEndMessage())
 
+    async def _browser_voice(self) -> None:
+        """Hand this turn to the browser's own French voice: the page speaks the whole answer when the turn ends
+        (the path the mock TTS already uses). Slower to start than the real voice, but never silent."""
+        if not self.started:
+            self.started = True
+            await self.send(AgentAudioStartMessage(mime=MOCK_TTS_MIME))
+            self.first_byte_at = time.perf_counter()
+            await self.send_bytes(silent_wav(0.1))
+
     async def _speak_queued(self) -> None:
         while (sentence := await self.sentences.get()) is not None:
+            if time.monotonic() < TTS_HEALTH["down_until"]:
+                if self.started and not self.fallback:
+                    continue  # real audio already went out this turn: the rest of it stays text only
+                self.fallback = True
+                await self._browser_voice()
+                continue
             tts_start = time.perf_counter()
             try:
                 result = await self.tts.synthesize(sentence, settings.tts.voice or None)
@@ -402,7 +468,13 @@ class Speaker:
                             self.tts_first_byte_ms = ms_since(tts_start)
                         await self.send_bytes(chunk)
             except Exception as e:
-                await self.send(VoiceErrorMessage(message=f"TTS : {e}"))
+                # The voice provider is down (key refused, quota used up, network). Do not try it again for a
+                # minute, say so once, and let the browser speak instead: a demo must never go silent.
+                TTS_HEALTH["down_until"] = time.monotonic() + TTS_RETRY_AFTER_S
+                await self.send(VoiceErrorMessage(message=f"TTS indisponible, voix de secours du navigateur. ({str(e)[:160]})"))
+                if not self.started:
+                    self.fallback = True
+                    await self._browser_voice()
 
 
 def trim(history: list[ChatMessage], max_messages: int = 40) -> list[ChatMessage]:
