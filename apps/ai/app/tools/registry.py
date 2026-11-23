@@ -35,6 +35,10 @@ from .erp import Actor, ErpClient
 class ToolContext:
     erp: ErpClient  # HTTP client for the ERP API, already tagged with x-actor
     actor: Actor  # "ai_chat" (web chat) or "voice_agent" (phone / voice commands)
+    # Phone calls only (set by the agent loop, see agent/loop.py). One call = one client:
+    on_call: bool = False  # True while a client is on the phone (voice mode)
+    caller: str | None = None  # id of the client identified in this call, None until identify_caller found one
+    heard: str = ""  # the caller's own last sentence, as transcribed (not the model's wording of it)
 
 
 class ToolArgs(BaseModel):

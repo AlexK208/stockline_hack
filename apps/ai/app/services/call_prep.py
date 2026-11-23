@@ -28,7 +28,7 @@ COMPLAINT = re.compile(
     re.I,
 )
 # A change of mind needs a word that changes something: a bare "non" or "attendez" is often a protest or a correction of us.
-CHANGE = re.compile(r"\b(finalement|plutôt|enlève|enlevez|retire|retirez|laisse tomber|laissez tomber|annule|annulez|au lieu|à la place|change|changez|passe-le|passez-le|décale|décalez)\b", re.I)
+CHANGE = re.compile(r"\b(finalement|plutôt|enlève|enlevez|retire|retirez|laisse tomber|laissez tomber|au lieu|à la place|change|changez|passe-le|passez-le|décale|décalez)\b", re.I)
 HABIT = re.compile(r"\b(comme d'hab\w*|la même chose|pareil que|comme (mardi|mercredi|jeudi|vendredi|samedi|lundi|la dernière fois)|dernière commande|où en est)\b", re.I)
 LOOKUP = re.compile(r"\?|\b(est-ce que|combien|quand|c'est quoi|quel prix|quelle date|il (vous|te|t'en) reste|vous avez|tu as|avez-vous|as-tu)\b", re.I)
 YES = re.compile(r"\b(oui|ouais|ok|okay|vas-y|allez-y|c'est bon|ça marche|parfait|d'accord|exact|valide|validez|confirme|confirmez|impeccable)\b", re.I)

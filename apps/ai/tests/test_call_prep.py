@@ -48,7 +48,7 @@ async def test_opening_words_vary_and_pause():
 
 def test_caller_known_once_identify_caller_found_a_client():
     assert not caller_known([ChatMessage(role="user", content="bonjour")])
-    found = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"found","client":{}}')
+    found = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"found","client":{"id":"cli_0001"}}')
     assert caller_known([found])
     asked = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"ambiguous"}')
     assert not caller_known([asked])
