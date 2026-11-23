@@ -17,6 +17,26 @@ Template:
 
 ---
 
+## 2026-11-23 22:12 · Alexander's session (lane A) · not yet committed
+**Baseline on Alexander's Mac (`7208081`, Sonnet 5.5):** `make calls` 6/6, médiane 2855 ms, pire 6165 ms.
+
+**Haiku 5.5 tried on lane A's copy (`LLM_MODEL=claude-haiku-5-5`, same code):** 6/6 on one full run, then 4/4 and
+4/4 on repeats of T1/T3/T4/T6. First word: median about 1.3 to 1.9 s, worst about 3 s (Sonnet: 2.9 s and 6.2 s).
+But in T6 it once answered "je peux la rajouter pour mercredi" for a demi-porc WITHOUT calling a tool, which is
+false (2-day lead time). The hard checks did not catch it because nothing was written. It also asks more
+clarifying questions (porc standard ou cul noir ?).
+
+**Done after that:**
+- `prompts.py`: the agent may not say a product, quantity or date is possible or impossible from memory, only from
+  a tool result of the current turn. Internal information (credit, margin, lot dates) is not said to the client.
+- `tools/orders.py`: `expiring_soon` and `price_below_cost` warnings are no longer passed to the model (Haiku read
+  a lot expiry date to the caller).
+- With the rule, Haiku stopped making the claim in 2 more T6 runs. Not enough runs to trust it yet.
+
+**Decision for now:** Sonnet stays the default. **Lane D, a request:** add a check on what the agent SAYS, not
+only on the ERP: in T6, the answer to "et une demi-carcasse de porc" must not accept Wednesday. Then
+`make calls ARGS="--repeat 3"` on Haiku tells us whether we can switch.
+
 ## 2026-11-23 22:03 · Alexander's session (lane A) · not yet committed
 **Done (after the first `make calls` run: 5/6, médiane 2859 ms, pire 7567 ms):**
 - `tools/orders.py`: `create_draft_order`, `add_order_line` and `update_order_line` now run the checks themselves

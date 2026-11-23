@@ -45,6 +45,9 @@ def estimates(order: dict, erp_lines: list[dict], lines: list[OrderLine]) -> dic
     return {**order, **({"estimatedFromPieces": said, "say": "poids estimé, facturé au poids réel"} if said else {})}
 
 
+HOUSE_ONLY_WARNINGS = {"expiring_soon", "price_below_cost"}
+
+
 def summarize_order(o: dict) -> dict:
     """What the model gets back after any order operation: short, with line ids for later edits."""
     return {
@@ -59,7 +62,8 @@ def summarize_order(o: dict) -> dict:
             }
             for line in o["lines"]
         ],
-        "warnings": o.get("warnings") or [],
+        # Only what concerns the caller. Lot expiry dates and margins are the house's business (seen in the ERP).
+        "warnings": [w for w in o.get("warnings") or [] if w.get("code") not in HOUSE_ONLY_WARNINGS],
     }
 
 
