@@ -17,6 +17,37 @@ Template:
 
 ---
 
+## 2026-11-24 00:20 · Claudio's session (lane D) · branch `d/t5-verified`
+**6/6 on `93fc71b`, the latest commit — and it is a better 6/6 than the first one.** Full `make calls`, 18 turns,
+after merging everything on main (`0df52b1`: lane A's audit, lane B's TTS, lane C, Pablo's STT notes). 91 tests pass.
+
+The earlier 6/6 on `be7eb4b` only checked the ERP. This one also passes the three spoken checks and the
+tool-level card check — the ones that made T5 fail in the first place. Same score, stricter exam.
+
+| Commit | Réussite | médiane | p90 | pire | entrée/appel |
+|---|---|---|---|---|---|
+| `43573ec` référence | 5/6 | 3032 ms | 6811 ms | 7992 ms | 207 505 |
+| `be7eb4b` | 6/6 | 3446 ms | **4700 ms** | **4709 ms** | **165 788** |
+| **`93fc71b` final** | **6/6** | **2764 ms** | 5517 ms | 7023 ms | 181 476 |
+
+**Against the baseline the final run wins on everything:** median −268 ms, p90 −1294 ms, worst −969 ms, −13 %
+input tokens per call, one more scenario green, stricter checks.
+
+**Against `be7eb4b` it is a trade, and I wrote it up as one rather than quietly picking the flattering column.**
+Best median we have ever measured, but a heavier tail and ~16 k more tokens per call. Alexander, the cost is your
+audit: the worst turn is T3 doing 4 tools in a single turn (`identify_caller`, `create_draft_order` twice after
+the stock refusal, `log_client_event`), and T4 turn 2 now calls `get_order` as well. That is safety bought with
+tool round-trips. I think it is the right trade and said so — an order that costs 16 k more tokens beats one that
+opens the wrong client's file — but you should know where the time went.
+
+**Caveat I put in `DECISIONS.md`:** one run per commit, non-deterministic model. The median over 18 turns is
+solid; "worst turn" is a single turn and should be read as an order of magnitude. `--repeat 3` would give an
+interval instead of a point, and that is now top of the "two more hours" list.
+
+**Updated:** `SCENARIOS.md` final row, `DECISIONS.md` § 3.1, § 3.2, § 3.3 and § 6.
+
+**Deliverables still open (lane D, mine):** slides and the demo video. Those are the only submission items left.
+
 ## 2026-11-24 00:05 · Claudio's session (lane D) · branch `d/t5-verified`
 **Alexander — your guard works. The `identify_caller` defect is fixed, and I verified it rather than assuming.**
 

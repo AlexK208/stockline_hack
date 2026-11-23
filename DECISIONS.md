@@ -189,24 +189,41 @@ le nombre de termes abandonnés (une fois par changement, pas à chaque tour).
 | 22:07 | `7166485` | **3/3** sur T3 | Outils auto-vérifiants + règle d'enregistrement. T3 corrigé, confirmé sur 3 passages. |
 | 22:12 | `be7eb4b` | **6/6** | Premier passage complet au vert. |
 | 22:25 | `2c052d5` | **T5 ✗, T6 ✓** | Les contrôles sur la parole entrent en service. T5 échoue — voir § 5.1. |
+| 22:59 | `38633a7` | **3/3** sur T5 | Garde-fou `identify_caller`. Défaut § 5.1 corrigé, confirmé sur 3 passages. |
+| 23:04 | `93fc71b` | **6/6** | **Passage de référence final**, tous contrôles actifs. |
 
 Le passage de 6/6 à T5 en échec n'est **pas une régression** : c'est un défaut présent depuis le début que les
-contrôles ERP ne voyaient pas. Détail complet dans [`SCENARIOS.md`](SCENARIOS.md) et `evals/results/`.
+contrôles ERP ne voyaient pas. Il a été corrigé, puis revérifié (§ 5.1).
+
+**Le 6/6 final compte plus que le premier : il est obtenu avec davantage de contrôles.** Le 6/6 de `be7eb4b`
+ne vérifiait que l'ERP. Celui de `93fc71b` passe en plus les trois contrôles sur la parole et le contrôle sur
+les outils appelés — c'est-à-dire exactement les contrôles qui avaient fait tomber T5. Détail complet dans
+[`SCENARIOS.md`](SCENARIOS.md) et `evals/results/`.
 
 ### 3.2 Latence
 
 **Mode texte** (même boucle agent que la voix, sans STT ni TTS), 18 tours par passage complet. C'est la part
 « modèle + outils » de ce que le client attend ; la page Voix ajoute la transcription et la synthèse par-dessus.
 
-| Commit | min | médiane | p90 | pire | étendue |
-|---|---|---|---|---|---|
-| `43573ec` (référence) | 563 ms | 3032 ms | 6811 ms | 7992 ms | 7429 ms |
-| `99842b2` | 1182 ms | 3022 ms | 7052 ms | 7890 ms | 6708 ms |
-| `be7eb4b` | 676 ms | **3445 ms** | **4700 ms** | **4709 ms** | **4033 ms** |
+| Commit | Réussite | min | médiane | p90 | pire | étendue |
+|---|---|---|---|---|---|---|
+| `43573ec` (référence) | 5/6 | 563 ms | 3032 ms | 6811 ms | 7992 ms | 7429 ms |
+| `99842b2` | 5/6 | 1182 ms | 3022 ms | 7052 ms | 7890 ms | 6708 ms |
+| `be7eb4b` | 6/6 | 676 ms | 3446 ms | **4700 ms** | **4709 ms** | **4033 ms** |
+| **`93fc71b` (final)** | **6/6** | 1091 ms | **2764 ms** | 5517 ms | 7023 ms | 5932 ms |
 
-**La médiane a empiré de ~400 ms, et c'est quand même un gain.** Ce qui fait raccrocher un client au téléphone,
-ce n'est pas le tour moyen, c'est le tour où la ligne a l'air morte : le p90 perd 2352 ms et le pire tour 3181 ms.
-L'étendue est presque divisée par deux. On a optimisé la queue de distribution, pas le centre, et c'est délibéré.
+Par rapport à la référence, le passage final gagne sur tout : **médiane −268 ms, p90 −1294 ms, pire tour −969 ms**,
+avec un scénario de plus au vert et des contrôles plus stricts.
+
+**Mais il faut lire la ligne du milieu honnêtement.** `be7eb4b` avait la meilleure queue de distribution jamais
+mesurée (pire tour 4709 ms). Le passage final a une bien meilleure médiane mais une queue plus lourde : l'audit de
+sécurité ajouté entre les deux (garde-fous d'identification, relecture de commande) coûte des allers-retours
+d'outils sur certains tours — le pire tour du passage final est un T3 à 4 outils dans le même tour. Nous avons
+échangé de la latence de queue contre de la sûreté, en connaissance de cause.
+
+**Réserve de méthode :** ces chiffres viennent d'**un** passage par commit, et le modèle n'est pas déterministe.
+La médiane sur 18 tours est robuste ; le « pire tour » est un seul tour et doit être lu comme un ordre de
+grandeur, pas comme une mesure fine.
 
 **Mode vocal** (page Voix, fin de parole → premier son, premier tour Peyronnet) :
 
@@ -224,16 +241,22 @@ la vraie réponse arrive. Les 2 à 5 s restantes sont le temps du modèle, pas d
 
 Mesuré sur un passage complet des six scénarios, 18 tours :
 
-| Commit | Entrée totale | dont lu en cache | Entrée **non** cachée | Sortie | Taux de cache |
-|---|---|---|---|---|---|
-| `43573ec` (référence) | 1 245 032 | 1 095 659 | 149 373 | 4 621 | 88,0 % |
-| `be7eb4b` | **994 729** | 835 406 | **159 323** | 4 086 | 84,0 % |
+| Commit | Entrée totale | dont lu en cache | Entrée **non** cachée | Sortie | Taux de cache | Entrée / appel |
+|---|---|---|---|---|---|---|
+| `43573ec` (référence) | 1 245 032 | 1 095 659 | 149 373 | 4 621 | 88,0 % | 207 505 |
+| `be7eb4b` | 994 729 | 835 406 | 159 323 | 4 086 | 84,0 % | **165 788** |
+| **`93fc71b` (final)** | 1 088 854 | 951 643 | 137 211 | 3 984 | 87,4 % | 181 476 |
 
-**Par appel réussi** (`be7eb4b`, 6 appels) : ~165 800 jetons d'entrée, dont ~139 200 lus en cache et **~26 550
-réellement facturés au plein tarif d'entrée**, plus ~680 jetons de sortie.
+**Par appel réussi** (passage final, 6 appels) : ~181 500 jetons d'entrée, dont ~158 600 lus en cache et
+**~22 900 réellement facturés au plein tarif d'entrée**, plus ~660 jetons de sortie.
 
-Soit **−20 % de jetons d'entrée par appel** par rapport à la référence, en ayant *ajouté* des fonctionnalités. Le
-gain vient de la suppression de l'étape `check_products` avant chaque écriture (§ 2.2), pas d'un élagage de prompt.
+Soit **−13 % de jetons d'entrée par appel** par rapport à la référence, et **−8 % d'entrée non cachée** — en ayant
+ajouté des fonctionnalités et des garde-fous. Le gain vient de la suppression de l'étape `check_products` avant
+chaque écriture (§ 2.2), pas d'un élagage de prompt.
+
+Là encore, honnêtement : le passage `be7eb4b` était **moins cher** (165 800 par appel). L'audit de sécurité ajouté
+ensuite coûte des appels d'outils supplémentaires sur certains tours. C'est le même arbitrage que pour la latence
+de queue, et nous le gardons : un appel un peu plus cher vaut mieux qu'un appel qui ouvre la fiche du mauvais client.
 
 **Le cache de prompt fait l'essentiel du travail : 84 à 88 % de l'entrée est servie depuis le cache.** C'est la
 raison pour laquelle un prompt système volumineux et une liste d'outils stable sont un bon investissement ici : ils
@@ -329,14 +352,14 @@ sans rien dire.
 
 | | |
 |---|---|
-| Scénarios | 6/6 sur `be7eb4b` ; T5 est retombé en échec quand les contrôles sur les outils sont arrivés, puis **corrigé et revérifié 3/3** sur `38633a7` (§ 5.1) |
-| Latence texte | médiane 3445 ms, p90 4700 ms, pire 4709 ms |
+| Scénarios | **6/6 sur `93fc71b`**, le commit final, tous contrôles actifs (ERP + parole + outils appelés) |
+| Latence texte | médiane **2764 ms**, p90 5517 ms, pire 7023 ms (18 tours) |
 | Latence voix | 0,09 s jusqu'au premier son, 8,7 s au départ |
-| Coût | ~165 800 jetons d'entrée par appel, dont ~26 550 hors cache |
+| Coût | ~181 500 jetons d'entrée par appel, dont ~22 900 hors cache (87,4 % servi par le cache) |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |
 
-**Ce que nous ferions avec deux heures de plus, dans l'ordre :** un passage complet `make calls` sur le dernier
-commit pour reconfirmer les 6/6, demander une clé Gradium pour une vraie voix française (§ 2.9), re-mesurer Haiku
-avec les nouveaux contrôles, puis le ticket de pesée.
+**Ce que nous ferions avec deux heures de plus, dans l'ordre :** demander une clé Gradium pour une vraie voix
+française (§ 2.9), re-mesurer Haiku avec les nouveaux contrôles, rejouer T1–T6 en `--repeat 3` pour donner un
+intervalle plutôt qu'un point sur la latence, puis le ticket de pesée.
