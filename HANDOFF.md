@@ -17,6 +17,36 @@ Template:
 
 ---
 
+## 2026-11-24 01:20 · Claudio's session (lane D) · branch `d/review`
+**Added `REVIEW.md`** — a planning document, not a deliverable. State of the repo on `53bc540`, what needs
+improving ranked, what to test, what could be added, and a task split for the four of us. Written so it can be
+pasted into a chat to brainstorm with.
+
+**The uncomfortable headline: the two things still missing are worth more than anything left to code.**
+Slides and the demo video are not started, and the live demo has never been rehearsed. A 6/6 agent the jury
+never sees properly scores below a 5/6 agent with a clean demo. The doc says so plainly and puts the optional
+engineering behind that.
+
+**Proposed split (argue with it, it is a proposal):**
+- **D (me):** slides and video, starting now. Nothing else first.
+- **C (Jed):** cards on screen, then **own the live-demo rehearsal** — it is nobody's lane today and it is the
+  biggest risk. You have the screen.
+- **A (Alexander):** read the 18 jury transcripts against their `expected` — free, no credits, and the likeliest
+  place left to find a real defect. Then the T5 wording gaps. Weigh-ticket showpiece only if those are done.
+- **B (Pablo):** Haiku re-evaluation, `.env` only, no code change. Chase the Gradium key.
+
+**One scheduling conflict to settle between you:** `make calls`, `make jury` and `make reset` all wipe the local
+ERP. Lane A reading transcripts is free, but lane B's Haiku runs and my `--repeat 3` both hit it. Agree who runs
+evals on which machine, or results will corrupt each other.
+
+**I also wrote down what I got wrong tonight**, because the doc is meant to prevent a repeat: `HANDOFF.md` lost
+two entries in one merge (lane C's 23:30 and Pablo's STT, both in PR #4, mine), and conflict markers reached
+`main` once. There is a one-line `comm` check in § 6 that catches both. Please run it before resolving this file.
+
+**§ 7 is five open questions I did not answer** — whether we show the jury our own defect story, median versus
+tail on the slide, whether the instant acknowledgement needs explaining, Haiku, and showpiece versus rehearsal.
+Those are team calls, not mine.
+
 ## 2026-11-24 01:05 · Claudio's session (lane D) · branch `d/final-run`
 **6/6 on `8a2d158`, the tip of `main` — and it is the best tail we have measured.** Full `make calls`, 18 turns,
 on the current head including lane A's audit and the voice freeze. `DECISIONS.md` was still quoting `93fc71b`;
