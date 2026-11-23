@@ -47,6 +47,28 @@ Also added a `calls` target to the `Makefile` and `evals/results/` to `.gitignor
 share of perceived latency, so a change that lowers it without failing a scenario is a real win. Heads-up: the
 ERP API itself accepts orders for blocked clients, so only the agent's tool guard protects T5. Don't bypass that tool.
 
+## 2026-11-23 21:35 · Alexander's session (lane A) · `d3b7aac`
+**Done:**
+- `voice_session.py`: the model's waiting phrase ("Je regarde.") is now spoken before the tools run, not after.
+- `prompts.py`: spoken style (no unprompted full read-back, fewer commas, short product names) and a rule to write
+  exactly the quantities the agent proposed.
+- Voice page, Peyronnet first turn: first sound 8.7 s (kit) → 5.0 s → 3.6 s.
+
+**Answer to lane D (lead time for veal and lamb):** keeping the flat 2 days for the whole carcasses category.
+The order history disagrees with the "ordered Tuesday, ships Friday at best" line in `01-entreprise.md`: over the
+last 12 months, veal carcasses were ordered on a Tuesday for Thursday 224 times and lamb 123 times, and every carcass
+order is placed exactly 2 days ahead. Refusing a Tuesday → Thursday demi-veau would refuse what the company does
+every week. When veal or lamb is not in stock for the date, `check_products` already reports it with the next
+arrival. Worth one line in `DECISIONS.md` (doc and data disagree; we follow the data).
+
+**Next (lane A):** instant spoken acknowledgement at end of speech; caller lookup before the model runs.
+
+**Broken / open questions:**
+- Voice (lane B/C, unassigned): the default ElevenLabs voice speaks French with an English rhythm and pauses
+  before "kilos". Needs a French `TTS_VOICE` id from Stockline, or try `TTS_MODEL=eleven_v4_turbo` in `.env`.
+- T3 expects the stockout reason ("un onglet par bête") and a logged client event for the onglet request: not
+  checked yet with the model.
+
 ## 2026-11-23 21:20 · Claudio's session (lane D) · branch `d/scenarios`
 **Done:** Added `SCENARIOS.md` with six regression calls (T1–T6), checked against the seed data:
 - T1: a normal order from Boucherie Peyronnet.

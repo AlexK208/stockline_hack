@@ -215,6 +215,10 @@ class VoiceConnection:
                         await self.send(AgentTextMessage(delta=delta))
                         speaker.push(delta)
                     case ToolCallEvent(call=call):
+                        # Speak what was said before the tool ("Je regarde.") now, not when the tool comes back:
+                        # the sentence splitter waits for a space after the full stop, which only arrives with
+                        # the text of the next step, i.e. after the whole tool round-trip.
+                        speaker.flush()
                         await self.send(AgentToolMessage(name=call.name, args=call.arguments))
                     case ToolResultEvent(name=name, ok=ok, ms=ms):
                         step_text = ""
@@ -279,6 +283,12 @@ class Speaker:
         if self.worker is None:
             self.worker = asyncio.create_task(self._speak_queued())
         self.sentences.put_nowait(sentence)
+
+    def flush(self) -> None:
+        """Speak whatever is buffered right away (used when the model pauses to call a tool)."""
+        if self.buffer.strip():
+            self.speak(self.buffer)
+        self.buffer = ""
 
     async def finish(self) -> None:
         """Speak what is left in the buffer, wait for all the audio, close the segment."""
