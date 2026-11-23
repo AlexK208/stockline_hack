@@ -1,0 +1,42 @@
+{
+  "slug": "chevillard-du-limousin",
+  "name": "Chevillard du Limousin",
+  "trade": "viande en gros",
+  "region": "Limoges et Haute-Vienne",
+  "city": "Limoges",
+  "employees": 30,
+  "clients": 92,
+  "products": 63,
+  "suppliers": 10,
+  "orders": 20820,
+  "stockoutPct": 0.8,
+  "worstStockouts": [
+    "BOE-QAR:94",
+    "PRC-DEM:65",
+    "BOE-QAV:62",
+    "VEA-DEM:58",
+    "AGN-CAR:53"
+  ],
+  "seedMB": 62.4,
+  "generationSeconds": 6.7,
+  "counts": {
+    "products": 63,
+    "clients": 92,
+    "clientPrices": 88,
+    "suppliers": 10,
+    "supplierPrices": 74,
+    "lots": 19191,
+    "stockMovements": 117413,
+    "orders": 20820,
+    "purchaseOrders": 4943,
+    "invoices": 12126,
+    "payments": 8700,
+    "routes": 5,
+    "routeRuns": 2766,
+    "clientEvents": 4102,
+    "supplierEvents": 797,
+    "tags": 32,
+    "priceRules": 8,
+    "contextEntries": 1084
+  }
+}
