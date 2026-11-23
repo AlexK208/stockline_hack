@@ -17,6 +17,13 @@ Template:
 
 ---
 
+## 2026-11-23 22:33 · Pablo's session (lane B) · branch `b/stt-check`
+**Done:** STT check with Soniox on the Voix page, results in `STT-TEST.md`. 14/14 correct in a quiet room;
+occasional misses on "onglet" and "BL".
+**Next:** nothing planned. STT is not a priority.
+**Broken / open questions:** the STT vocabulary list is close to its 6,000-character cap (~5,922 used), so
+adding many products or aliases could silently drop some.
+
 ## 2026-11-23 23:15 · Claudio's session (lane D) · branch `d/decisions`
 **Done:** Wrote **`DECISIONS.md`**. It did not exist, and it is a required deliverable in `BRIEF.md` — "le jury le
 lira". Lane D owns it. It is in French, like `BRIEF.md` and `SCENARIOS.md`.
