@@ -185,7 +185,10 @@ export function useVoiceSession() {
       case "error":
         setLastError(m.message);
         if (id != null) patchTurn(id, (t) => ({ ...t, caller: { ...t.caller, status: "final" }, agent: { ...t.agent, done: true, error: m.message } }));
-        currentTurn.current = undefined;
+        // Keep the turn current: some errors are warnings and the turn goes on (the TTS fails → the server switches
+        // to the browser's voice and still streams the text, the tool results and agent_done). Detaching here would
+        // drop the rest of the turn from the timeline and the call cards. After a fatal error nothing else comes,
+        // and the next turn replaces it anyway.
         setActivity((a) => (a === "thinking" ? "idle" : a));
         break;
     }
