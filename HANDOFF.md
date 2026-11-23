@@ -17,6 +17,42 @@ Template:
 
 ---
 
+## 2026-11-24 00:56 (real clock, `date`) · Pablo's session (lane B) · branch `b/soniox-close`
+**Alexander — found and fixed the STT second. It was neither Soniox nor the vocabulary: we were waiting for the
+socket to close.**
+
+**Your two checks first:** both ruled out (24 runs, same production start request, browser-like WebM):
+- With the real vocabulary (6 000 characters of `context.terms`) and without it: finalize → final words still
+  **0,1–0,45 s**.
+- Audio cut right at the last word (my earlier files had 0,4–0,5 s of trailing silence, you were right to ask)
+  vs. not cut: same. Soniox is 2–4 words behind at the release, as in your logs, but it catches up in a few
+  hundred ms.
+
+**Then the same WebM file through our own `WS /voice` on my machine:** 1 250–1 640 ms, and the `[ai] stt timing:`
+lines matched yours exactly. So it was in our server, after Soniox had answered. Cause: `open_ws` in `clients/ws.py`
+ended with `await ws.close()`, and the final transcript only reaches `Utterance` once that block has exited.
+**Soniox takes 1,1–1,3 s to acknowledge a close** (measured alone: finalize → `<fin>` 110–356 ms, then
+`ws.close()` 1 092–1 290 ms, total 1 202–1 646 ms, which matches your 1 254–1 811).
+
+**Fix (lane B, `clients/ws.py`):** the socket is closed in the background (`close_later`: a task kept referenced
+until it finishes, its error swallowed). Nothing else changes: same messages, same transcript, and barge-in and
+errors still close the socket. It also applies to Deepgram live, which uses the same helper.
+
+| Same audio through `WS /voice` | audio_end → final transcript |
+|---|---|
+| before (`d058009`) | 1 250 – 1 640 ms (6 runs) |
+| **after** | **146 – 595 ms** (6 runs) |
+
+That is **about 1,1 s off every spoken turn**. It should also help the instant word: the final transcript now
+comes about as fast as the live one, so short sentences ("Oui.") get their word ~1 s earlier.
+
+**Tests:** new `tests/test_ws_close.py` (leaving `open_ws` does not wait for a slow close, and the close still
+happens; a failing close is swallowed). Both fail without the fix. The full suite was run inside the `ai` container:
+104 pass, 1 fails, and **that failure is already on `main` without my change**:
+`test_one_client_per_call.py::test_identify_caller_does_not_switch_client_on_a_guess` → `KeyError: 'idf'` in
+`tools/desk.py:161`. Lane A, please look.
+**Not done:** a spoken call through a real browser after the fix. Alexander, your next voice call will show it in the
+`stt timing` line ("final … ms after the end").
 ## 2026-11-24 00:56 (real clock, `date`) · Alexander's session (lane A) · arena verdict for Claudio
 **Claudio — the arena has answered. Start the slides and the video NOW. All three judges said so, unprompted, in
 almost the same words: nothing below changes the story, and the video must never wait on code.**

@@ -10,11 +10,27 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedError, Inval
 
 from .http import provider_error
 
+# Sockets being closed in the background (a reference keeps each close task alive until it is done).
+_closing: set[asyncio.Task] = set()
+
+
+def close_later(ws: Any) -> None:
+    """Close a socket without waiting for the provider's answer to the close.
+
+    Measured on Soniox: the final words arrive 0,1–0,35 s after `finalize`, but the close handshake then takes
+    another 1,1–1,3 s. Awaiting it held the final transcript back by that much on every spoken turn: the caller's
+    words were known, and the agent waited for a goodbye between our socket and Soniox."""
+    task = asyncio.create_task(ws.close())
+    _closing.add(task)
+    task.add_done_callback(_closing.discard)
+    task.add_done_callback(lambda t: t.cancelled() or t.exception())  # a failed close is not worth a log line
+
 
 @asynccontextmanager
 async def open_ws(url: str, headers: dict[str, str], who: str) -> AsyncIterator[ClientConnection]:
     """Connect (auth in the handshake headers); a refused handshake (401, 429…) becomes a ProviderError.
-    Leaving the block (normally, on error or on cancellation = barge-in) closes the socket."""
+    Leaving the block (normally, on error or on cancellation = barge-in) closes the socket, in the background:
+    the caller gets its result without waiting for the provider to acknowledge the close (see close_later)."""
     try:
         ws = await connect(url, additional_headers=headers, max_size=None, open_timeout=10)
     except InvalidStatus as e:
@@ -26,7 +42,7 @@ async def open_ws(url: str, headers: dict[str, str], who: str) -> AsyncIterator[
         rcvd = e.rcvd
         raise provider_error(who, f"ws {rcvd.code if rcvd else 1006}", (rcvd.reason if rcvd else "") or "connection lost") from None
     finally:
-        await ws.close()
+        close_later(ws)
 
 
 def chunked(data: bytes, size: int = 256 * 1024) -> list[bytes]:
