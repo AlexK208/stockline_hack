@@ -53,8 +53,9 @@ from app.schemas import (
     VoiceErrorMessage,
 )
 from app.schemas.base import WireModel
-from app.tools import all_tools
+from app.tools import ErpClient, all_tools
 
+from .call_prep import ack_note, caller_known, choose_ack, prefetch_caller
 from .utterance import Utterance
 from .vocabulary import stt_hint
 
@@ -79,6 +80,7 @@ class VoiceConnection:
         self.ws = ws
         self.conversation: Conversation | None = None
         self.recording: Utterance | None = None  # while the key is down
+        self.last_partial = ""  # live transcript of the recording in progress (for the instant acknowledgement)
         self.turn: asyncio.Task | None = None
         self.warm_up: asyncio.Task | None = None
         self._send_lock = asyncio.Lock()
@@ -133,11 +135,12 @@ class VoiceConnection:
                 await self.open(session_id, actor_name)
             case AudioStartMessage(mime=mime, hint=hint):
                 await self.interrupt()  # barge-in
+                self.last_partial = ""
                 self.recording = Utterance(get_stt_client(), mime, hint, on_partial=self.send_partial)
             case AudioEndMessage():
                 if self.recording:
                     utterance, self.recording = self.recording, None
-                    self.start_turn(utterance=utterance)
+                    self.start_turn(utterance=utterance, partial=self.last_partial)
             case TextMessage(text=text):
                 await self.interrupt()
                 self.start_turn(text=text)
@@ -147,6 +150,7 @@ class VoiceConnection:
                 await self.open(self.conversation.id)
 
     async def send_partial(self, update: STTUpdate) -> None:
+        self.last_partial = update.text
         await self.send(TranscriptMessage(text=update.text, final=False, stable=update.stable))
 
     async def open(self, session_id: str | None = None, actor_name: str | None = None) -> None:
@@ -182,6 +186,7 @@ class VoiceConnection:
         conv: Conversation,
         text: str | None = None,
         utterance: Utterance | None = None,  # spoken: already being transcribed since audio_start
+        partial: str = "",  # spoken: the live transcript at the moment the key was released
     ) -> None:
         t0 = time.perf_counter()  # end of caller speech
         timings = TurnTimings()
@@ -191,19 +196,41 @@ class VoiceConnection:
         committed = False
         speaker: Speaker | None = None
         try:
+            # 0. Instant acknowledgement ("Bonjour Christian.", "D'accord.") from the live transcript: spoken while
+            #    the STT finalizes and the model thinks. Chosen in code (services/call_prep.py), never a fact.
+            heard = (text or "").strip()  # a typed turn is known at once (kept if the turn is interrupted early)
+            speaker = Speaker(get_tts_client(), self.send, self.send_bytes)
+            erp = ErpClient("voice_agent", conv.actor_name)
+            ack = ""
+            with suppress(Exception):
+                ack = await choose_ack(text or partial, not conv.history, erp)
+            if ack:
+                spoken += f"{ack} "
+                await self.send(AgentTextMessage(delta=f"{ack} "))
+                speaker.speak(ack)
+
             # 1. Speech → text: with a streaming STT only the last words are left to finalize
             if utterance is not None:
                 text = await utterance.text()
                 timings.stt_ms = ms_since(t0)  # end of speech → final transcript
             heard = (text or "").strip()
             if not heard:
+                await speaker.finish()
                 await self.send(VoiceErrorMessage(message="Rien entendu — réessayez."))
                 return
             await self.send(TranscriptMessage(text=heard, final=True))
 
-            # 2. Agent, on a working copy of the history (committed at the end)
-            working = [*conv.history, ChatMessage(role="user", content=heard)]
-            speaker = Speaker(get_tts_client(), self.send, self.send_bytes)
+            # 2. Agent, on a working copy of the history (committed at the end). Until the caller is known, try to
+            #    identify them in code and give the model their card with the turn: one model step instead of two.
+            notes: list[str] = []
+            if not caller_known(conv.history):
+                with suppress(Exception):
+                    found = await prefetch_caller(heard, erp)
+                    if found:
+                        notes.append(found[1])
+            if ack:
+                notes.append(ack_note(ack))
+            working = [*conv.history, ChatMessage(role="user", content="\n\n".join([heard, *notes]))]
             llm_start = time.perf_counter()
             async for ev in run_agent(working, llm=get_llm_client(), tools=all_tools(), mode="voice", actor_name=conv.actor_name):
                 match ev:
