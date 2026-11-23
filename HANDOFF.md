@@ -17,6 +17,12 @@ Template:
 
 ---
 
+## 2026-11-23 22:33 · Pablo's session (lane B) · branch `b/stt-check`
+**Done:** STT check with Soniox on the Voix page, results in `STT-TEST.md`. 14/14 correct in a quiet room;
+occasional misses on "onglet" and "BL".
+**Next:** nothing planned. STT is not a priority.
+**Broken / open questions:** the STT vocabulary list is close to its 6,000-character cap (~5,922 used), so
+adding many products or aliases could silently drop some.
 ## 2026-11-23 23:30 · Jed's session (lane C) · branch `c/live-cards`
 **Done:** Pulled `a85646c` (lane A) and `DECISIONS.md` (lane D), with no conflicts. 91/91 AI tests pass on the
 current code. The ai container only mounts `app/`, so its `tests/` folder is stale: a plain `pytest` inside the
