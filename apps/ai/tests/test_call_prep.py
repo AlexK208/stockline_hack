@@ -22,6 +22,16 @@ async def test_opening_words_fit_what_the_caller_said():
     assert kind_of("Corgnac.") == "short"
     assert kind_of("Celui de la place Denis-Dussoubs.") == "short"
     assert kind_of("C'est tout, merci, bonne journée") == "closing"
+    # seen live: these two got no word at all and the caller waited 3 and 5 seconds
+    assert kind_of("C'est tout.") == "done"  # not a goodbye: the read-back follows
+    assert await choose_ack("C'est tout.", False, None, ["Je note."]) == "Très bien."
+    assert kind_of("Oui, valide. Merci, au revoir.") == "yes"  # a yes that needs a tool, whatever is said around it
+    assert await choose_ack("Oui, valide. Merci, au revoir.", False, None, ["Très bien."]) == "Entendu."
+    assert kind_of("Oui c'est bon, tu peux valider. C'est tout, merci.") == "yes"
+    assert kind_of("Non attends, valide pas, enlève le paleron") == "change"
+    from app.services.call_prep import said_goodbye
+
+    assert said_goodbye("Oui, valide. Merci, au revoir.") and not said_goodbye("C'est tout.")
     assert kind_of("Euh, tu me relis ?") == "reread"  # no tool needed: the answer comes at once, no waiting words
     assert await choose_ack("Euh, tu me relis ?", False, None, ["Je note."]) == ""
     # a request is never met with a word that accepts it: the stockout may come right after

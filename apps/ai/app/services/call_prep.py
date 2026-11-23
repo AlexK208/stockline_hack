@@ -20,7 +20,12 @@ from app.tools import desk
 GREETED = re.compile(r"\b(bonjour|bonsoir|salut|allo|allô|coucou)\b", re.I)
 
 # What kind of thing did the caller just say? Checked in this order; the first that matches wins.
-CLOSING = re.compile(r"\b(au revoir|bonne journée|bonne soirée|bon week-?end|à bientôt|à demain|à plus|merci beaucoup|c'est tout|ce sera tout|ça ira)\b", re.I)
+# A goodbye ends the call. "C'est tout" does not: it ends the list, and the read-back follows. And "oui, valide,
+# merci, au revoir" is first of all a yes that needs a tool (seen live: 5 s of silence, because it was filed as a
+# goodbye and got no word at all).
+GOODBYE = re.compile(r"\b(au revoir|bonne journée|bonne soirée|bon week-?end|à bientôt|à demain|à plus|merci beaucoup)\b", re.I)
+DONE = re.compile(r"\b(c'est tout|ce sera tout|ça ira|rien d'autre|c'est bon comme ça)\b", re.I)
+VALIDATE = re.compile(r"\b(valide|validez|valider|confirme|confirmez|confirmer|vas-y|allez-y|envoie|envoyez)\b", re.I)
 PLEA = re.compile(r"\b(tu vas pas|vous (n')?allez pas|sois sympa|soyez sympa|juste un|juste une|promis|allez,? (un|une|juste|quoi|s'il))\b", re.I)
 COMPLAINT = re.compile(
     r"\b(pas normal|inadmissible|n'importe quoi|encore une fois|toujours pareil|jamais reçu|pas reçu|il manqu\w+|pas content\w*|"
@@ -56,7 +61,7 @@ TOKENS = {
     "complaint": ("Je regarde ça tout de suite.",),  # neutral and prompt, never cheerful
     "plea": ("Je comprends.",),  # the only sound that fits before a refusal
 }
-POOL = {"order": "order", "lookup": "lookup", "short": "lookup", "yes": "yes", "change": "change", "complaint": "complaint", "plea": "plea"}
+POOL = {"order": "order", "lookup": "lookup", "short": "lookup", "yes": "yes", "done": "yes", "change": "change", "complaint": "complaint", "plea": "plea"}
 
 # VOICE_ACK in .env: smart (default) | sparse (never on two turns in a row, nothing after a yes) | greeting (only
 # "Bonjour …" on the first turn) | off
@@ -81,12 +86,16 @@ REREAD = re.compile(r"\b(relis|relisez|relire|récap\w*|recap\w*|répète|répé
 
 
 def kind_of(text: str) -> str:
-    """closing | reread | complaint | plea | change | yes | lookup | order | short | other — what the caller's turn mostly is."""
+    """closing | done | reread | complaint | plea | change | yes | lookup | order | short | other — what the caller's turn mostly is."""
     words = desk.norm(text).split()
     if not words:
         return "other"
-    if CLOSING.search(text):
+    if VALIDATE.search(text) and len(words) <= 12 and not CHANGE.search(text) and not ORDER.search(VALIDATE.sub("", YES.sub("", text))):
+        return "yes"  # "oui, valide. Merci, au revoir." : the confirmation comes first, whatever is said around it
+    if GOODBYE.search(text):
         return "closing"
+    if DONE.search(text):
+        return "done"  # the list is finished: the read-back comes next
     if REREAD.search(text):
         return "reread"  # "tu me relis ?": the answer needs no tool, it comes at once
     if COMPLAINT.search(text):
@@ -127,6 +136,11 @@ async def choose_ack(text: str, first_turn: bool, erp: ErpClient | None, recent:
     words = TOKENS[pool]
     used = set(recent[-max(1, min(4, len(words) - 1)) :])  # not the words of the last turns (at least: not twice in a row)
     return next((t for t in words if t not in used), "")
+
+
+def said_goodbye(text: str) -> bool:
+    """The caller is leaving ("merci, au revoir"): the moment to write the call report."""
+    return bool(GOODBYE.search(text or ""))
 
 
 def ack_note(ack: str) -> str:

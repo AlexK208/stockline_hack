@@ -58,7 +58,7 @@ from app.tools import ErpClient, all_tools
 from app.clients.mock_speech import silent_wav
 from app.schemas import MOCK_TTS_MIME
 
-from .call_prep import ack_note, choose_ack, kind_of
+from .call_prep import ack_note, choose_ack, said_goodbye
 from .call_report import write_report
 from .warmup import WARM_EVERY_S, Warmer, warm_prompt_cache
 from .utterance import Utterance
@@ -367,7 +367,7 @@ class VoiceConnection:
             if speaker.first_byte_at:
                 timings.total_ms = int((speaker.first_byte_at - t0) * 1000 + 0.5)
             await self.send(AgentDoneMessage(text=spoken.strip(), timings=timings))
-            if kind_of(heard) == "closing":  # "merci, au revoir": the report is in the ERP before he has hung up
+            if said_goodbye(heard):  # "merci, au revoir": the report is in the ERP before he has hung up
                 await self.report_call()
 
         except asyncio.CancelledError:
