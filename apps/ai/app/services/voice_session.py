@@ -193,6 +193,7 @@ class VoiceConnection:
             case AudioEndMessage():
                 if self.recording:
                     utterance, self.recording = self.recording, None
+                    utterance.end()  # the STT finalizes from this instant, not after the turn has been set up
                     self.start_turn(utterance=utterance, partial=self.last_partial)
             case TextMessage(text=text):
                 await self.interrupt()
@@ -288,6 +289,8 @@ class VoiceConnection:
             if utterance is not None:
                 text = await utterance.text()
                 timings.stt_ms = ms_since(t0)  # end of speech → final transcript
+                with suppress(Exception):
+                    print(utterance.timing(partial, text or ""), flush=True)
             heard = (text or "").strip()
             if not heard:
                 await speaker.finish()

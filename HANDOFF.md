@@ -17,6 +17,135 @@ Template:
 
 ---
 
+## 2026-11-24 02:50 · Pablo's session (lane B) · branch `b/cost-per-call`
+**Claudio — the cost per call in money, for `DECISIONS.md` § 3.3 and the "le moins cher" slide.** § 3.3 says the
+euro was left out because `claude-sonnet-5-5` was not on a price list we could verify. **It is now:** Anthropic's
+pricing page (https://platform.claude.com/docs/en/about-claude/pricing) lists **Claude Sonnet 5.5: input $2,
+5-min cache write $2.50, cache hit $0.10, output $10 per million tokens** (cache hits are 0.05× input on this model,
+not the usual 0.1×). Public list prices, in USD; the kit's own keys may be billed differently.
+
+Applied to your final measured run (`8a2d158`: 150 938 cache-read + 26 484 uncached input + ~610 output per call):
+
+| Part | Basis | $ per call |
+|---|---|---|
+| Model, cache reads | 150 938 × $0.10/M | 0.015 |
+| Model, uncached input | 26 484 × $2/M (× $2.50 if all of it is cache *writes*: the run does not split them) | 0.053 – 0.066 |
+| Model, output | 610 × $10/M | 0.006 |
+| **Model total** | | **0.074 – 0.087** |
+| Voice, ElevenLabs v4 Turbo | $0.04 per 1 000 characters (https://elevenlabs.io/pricing/api) × **500–1 500 spoken characters per call (estimate**: Jed's T6 turns are ~210 characters each) | 0.02 – 0.06 |
+| Speech-to-text, Soniox real-time | $0.12 per hour of stream (https://soniox.com/pricing) × 30–120 s of caller speech | 0.001 – 0.004 |
+| **Total per successful call** | | **≈ $0.10 – 0.15** |
+
+**What it says:**
+- The model is about **60–80 %** of the cost, the voice most of the rest, and speech-to-text is negligible.
+- Without the prompt cache the same 150 938 tokens at full input price would add ~$0.29 per call: the cache
+  makes the model part roughly **4–5× cheaper**. That is the strongest cost argument we have.
+- Alexander's prompt-cache warm-up (`53d7600`) costs one ~28 000-token cache read per 4 minutes of idle page,
+  **≈ $0.003 each**, at most ≈ $0.03 before it stops after 45 min idle.
+- **For whoever is testing Haiku (Alexander, Jed):** at Haiku 5.5's list price (prompts under 100 000 tokens:
+  $0.10 input, $0.01 cache hit, $0.50 output) the same tokens cost **≈ $0.005 per call** for the model, about
+  15× less. The voice then becomes most of the bill (≈ $0.03–0.07 per call in total). Only if Haiku passes, of course.
+
+**Not measured:** spoken characters per call (estimated above), the split between cache writes and plain input,
+and the euro rate (convert at the day's rate rather than quoting one here).
+**Next:** nothing pending in lane B beyond the Gradium key.
+
+## 2026-11-24 02:35 · Pablo's session (lane B) · branch `b/demo-fallback`
+**Done:** `DEMO.md` updated for Alexander's `53d7600` (which has no HANDOFF entry yet, so here is what it means for
+the demo):
+- **Backup voice:** when ElevenLabs fails, the browser's French voice reads the answer, so the demo is no longer
+  voiceless without credits. It starts only at the end of the turn (no instant "Je note."), so first sound is
+  later and it sounds robotic. Added a checklist step: hear it once on the demo laptop, and install a French
+  system voice if it has an English accent. The failure table now says: nothing to do, one sentence to the jury.
+- **Call report:** the showcase calls (T1, T5) now end by opening the client's history to show the report.
+**Next:** cost per call in euros (for the "le moins cher" prize), for `DECISIONS.md`.
+**Broken:** nothing.
+
+## 2026-11-24 00:30 (real clock) · Alexander's session (lane A) · not yet committed
+**Review of everything pushed by lanes B, C and D since `a85646c`.** Alexander asked for it, bluntly. Good work
+first, then four things that are wrong and need fixing by their owners today.
+
+**Right, and thank you:**
+- Claudio, `keepalive_expiry` in `clients/http.py`: the cause is real (httpx drops idle connections after 5 s) and
+  the fair comparison supports it: `31400b7` 3191 / 6451 ms against `608a233` 2756 / 4157 and 2696 / 3513, same
+  agent code. (The "six earlier runs" in your entry are different code, so they prove nothing; the adjacent pair
+  does.) The prompt-cache warm-up I added uses the same pool, so it also keeps that connection open.
+- Pablo, the Soniox measurement: it sent me back to my own code, correctly. See "Lane A" below.
+- Jed: T1/T4/T5/T6 over the socket, and correcting `REVIEW.md` instead of leaving the 0,09 s headline.
+
+**Wrong:**
+1. **Your clocks are about 1 h 45 fast, all three of you.** The keep-alive runs are stamped 00:16 and 00:18 by the
+   runner (`SCENARIOS.md`), and the HANDOFF entry about them says 02:05. `REVIEW.md` says "written ~01:10, about 12
+   hours left"; it was 23:50. On a deadline day, planning on invented time is how a freeze gets missed. From now on:
+   run `date` and write what it says. Newest-first order in this file is by position, not by stamp.
+2. **`DECISIONS.md` is the file the jury reads, and three statements in it are no longer true** (Claudio, yours):
+   - l. 70: the instant words are given as « Alors… », « Voyons… ». They were removed hours ago because a tester
+     found them irritating. Today: « Je note. », « Je regarde. », « Un instant. », « Très bien. » after a yes,
+     « Je comprends. » on a blocked account, nothing on a goodbye or a re-read.
+   - l. 306, 355, 429: "0,09 s to first sound" as a flat fact. True on a full sentence. On a short one ("Oui.") the
+     live transcript is too short to choose the word, so it comes with the final transcript: 1,2–1,7 s tonight.
+     Write the range, or the jury's stopwatch will contradict the document.
+   - l. 147–151, 432: `eleven_v4_turbo` "wins on both axes, 26 ms earlier". 137 against 163 ms over three draws is
+     inside the 123–160 ms band your own entry calls noise for voices. And shorter audio means it speaks faster, not
+     that it has fewer gaps. The honest reason we keep it: a tester's ear, which is why the voice is frozen.
+3. **Claudio: you changed the team's default TTS model, in Pablo's lane, without Pablo, on that 26 ms.** You said so
+   openly, which is why this is point 3 and not point 1, and the outcome is fine. But you are the one who wrote that
+   single runs are noise. Same standard for your own changes, and the owner decides in his lane.
+4. **Nobody knows what used 194 583 ElevenLabs credits.** At 0,5 credit per character (the error message asks 4
+   credits for « Bonjour. ») that is about 389 000 characters, several hours of speech. Our calls do not add up to
+   that. Before a refill is burnt the same way: Pablo, ask Stockline whether the key is shared between teams, and
+   everyone, check for anything replaying spoken turns in a loop (socket replays speak every answer through the
+   real TTS even when nobody listens: use `TTS_PROVIDER=mock` for those).
+
+**`DEMO.md` (Pablo, Jed):** the "TTS out of credit" row can be better now: since `53d7600` the page speaks with the
+browser's French voice when the provider fails. Typed turns are no longer the first fallback.
+
+**Lane A, answering Pablo's 00:15 entry.** You were right to look at our side. Two changes, 102 tests pass:
+- End of audio now reaches the STT stream the instant `audio_end` arrives (`Utterance.end()`, called in the message
+  handler), before the turn is set up and before any instant word is chosen. I touched `services/utterance.py`
+  (nobody's lane): one method and timing fields, no behaviour change otherwise.
+- The log you asked for, one line per spoken turn in the `ai` logs, starting with `[ai] stt timing:`. It gives the
+  audio length and frame count, the longest gap between frames, how many frames arrived in the last 300 ms before
+  the release, how old and how long the live transcript was at the release, and when the final words came. If
+  frames bunch up at the end, the second is in the browser's recorder; if the live transcript is old and short, the
+  provider had fallen behind; if neither, it is the socket. Alexander will paste a few lines here after a call.
+
+## 2026-11-24 00:45 · Alexander's session (lane A) · `53d7600`
+**Done — three additions, all plain code (no model step, no prompt change), 102 unit tests pass:**
+- **Fallback voice.** When the TTS provider fails (key refused, quota used up, network), `Speaker` in
+  `voice_session.py` now hands the turn to the browser's own French voice, through the path the mock TTS already uses
+  (`AgentAudioStartMessage(mime=MOCK_TTS_MIME)`, the page speaks the text at `agent_done`). The error is shown once,
+  the provider is left alone for 60 s, then tried again. It starts later than the real voice (end of the turn, not
+  first sentence) but **a dead key no longer gives a silent demo**. Jed: no change needed on the page; please check
+  on screen that the red error line appears once and the browser speaks.
+- **Call report.** New `services/call_report.py`: when a call ends (goodbye, "Nouvelle session", new session id,
+  disconnect) a client event of type `call` is written from the tool log: the orders as they ended up, what was
+  refused and why, what was logged for the team, an attempt to reach another client's data. A draft left without the
+  caller's yes is flagged **open, "à rappeler pour valider"**; a confirmed order is written **resolved**. Tags
+  `compte-rendu`, `agent-vocal`. Only over `WS /voice`: `make calls` and `make jury` use `POST /chat`, so their
+  event checks are unaffected.
+- **Prompt cache kept warm** (new `services/warmup.py`). While a Voix page is connected, the service touches the
+  model's prompt cache at connection and after every 4 minutes without a turn, with Anthropic's documented warm-up
+  request (real tools and system prompt, `max_tokens: 0`, no output). Checked against the API from my side: accepted,
+  0 output tokens, second request reads all 28 495 prompt tokens from cache; the bare prompt took 1.09 s cold
+  (partly) and 0.67 s warm, one measurement. It stops by itself after 45 minutes with no caller. `VOICE_WARM=off`
+  in `.env` disables it. Pablo: it reads `build_body`, `api_key`, `base_url` and `http` from your Anthropic client
+  and changes nothing in it; if you rename those, the warm-up just goes quiet.
+
+**Jed — a page worth 2 hours, front end only:** a "À rappeler" board. The data is already in the ERP:
+`GET /api/client-events?status=open` filtered on channel `voice_agent` gives the unserved requests
+(`special_request`), complaints, blocked accounts that called and the call reports with a draft to validate;
+prospects and supplier messages are context entries titled "Prospect à rappeler" / "Message à transmettre". One list,
+newest first, with a "traité" button (`PATCH /api/client-events/{id}` status `resolved`). Three role-played judges
+(juror, engineer, sales rep) all ranked this as the feature a wholesaler would pay for. Good material for the video.
+
+**Latency, after reading two voice calls turn by turn and the provider docs:** per turn we spend 1.2–1.7 s in STT
+finalisation, about 0.7–1 s per model step (two steps on any turn that writes), 0.15–0.3 s to first audio. Nothing
+left is free: every further cut trades something (details given to Alexander). Pablo: Soniox documents no setting
+that speeds up `finalize`; their own advice is ~200 ms of silence before it, for accuracy.
+
+**Not verified:** not replayed with the model, not heard. Whoever has credits: one `make calls`.
+
 ## 2026-11-24 02:15 · Pablo's session (lane B) · branch `b/demo-plan`
 **Done:** added **`DEMO.md`, a draft live-demo plan** (`REVIEW.md` § 3.2, "highest risk", nobody had started it).
 Roles, a setup checklist for 30 minutes before, our own call if we get a slot (T1 then T5), what to tell the jury
@@ -119,6 +248,7 @@ poor test. Real voices passed 14/14 earlier. I will check it in the native-speak
 `STT-TEST.md`), not change anything now.
 
 **Next:** native-speaker noise test. **Broken:** nothing in lane B.
+
 ## 2026-11-24 01:35 · Jed's session (lane C) · branch `c/review-fixes`
 **Done (with Claudio's OK):** three corrections in `REVIEW.md`.
 1. **0,09 s is not the voice latency.** It is one turn of T1, typed (no speech-to-text) and measured in the server

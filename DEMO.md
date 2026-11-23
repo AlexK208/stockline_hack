@@ -29,8 +29,14 @@ and recover cleanly if something breaks.
 - [ ] `.env`: STT = Soniox, TTS = ElevenLabs as frozen (`eleven_v4_turbo`, voice `JBFqnCBsd6RMkjVDRZzb`, `fr`),
       LLM = the model the team agreed on. Do not edit anything else.
 - [ ] Keys have credit left (one short typed turn proves the LLM key; one spoken turn proves STT and TTS).
-      ⚠️ **ElevenLabs has been out of credits since 23:43 on 23/11** (HANDOFF). Until Stockline tops it up, the
-      demo has **no voice**. Confirm the top-up the morning of the demo, and keep TTS tests short: the quota is shared.
+      ⚠️ **ElevenLabs has been out of credits since 23:43 on 23/11** (HANDOFF). Since `53d7600` the agent is never
+      silent: when ElevenLabs fails, the **browser's own French voice** reads the answer instead. But it reads the
+      whole answer only once the turn ends (no instant "Je note.", later first sound, robotic). Confirm the top-up
+      the morning of the demo, and keep TTS tests short: the quota is shared.
+- [ ] **Hear the backup voice once on the demo laptop and browser** (unplug the network for one turn, or try it
+      while credits are out): it uses the first French voice installed on the system. If it speaks with an
+      English accent or not at all, install a French system voice (macOS: Settings → Accessibility → Spoken
+      content → System voice → Manage voices → French) and reload the page.
 - [ ] **Headset with mic** plugged in and selected in the browser. Speakers loud enough for the room.
 - [ ] Laptop on power, notifications off, other tabs closed.
 - [ ] Network: venue wifi **and** a phone hotspot ready.
@@ -46,13 +52,15 @@ and recover cleanly if something breaks.
   > « Bonjour, c'est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, tu me mets deux arrières et un avant,
   > la génisse de chez Dumontet comme d'habitude. » … « C'est bon, vas-y. »
 
-  Driver: show the client card, then the new order for 26/11 in the ERP.
+  Driver: show the client card, then the new order for 26/11 in the ERP. After the goodbye, open the client's
+  history: the **call report** (`53d7600`) is there, written in code from what the agent did, for the salesperson.
 - **T5, Boucherie Lacour (~30 s): "smart" and safe.** Blocked account: no order, polite and firm, holds when
   pushed, message noted for accounting.
   > « C'est Gérard, Lacour à Tulle. Livre-moi juste un quartier arrière pour samedi, le virement part vendredi,
   > promis. » … « Allez, un seul quartier, tu vas pas me laisser sans viande pour le week-end ! »
 
-  Driver: show that no order was created.
+  Driver: show that no order was created, and the call report in the client's history (what was refused, and
+  the message left for accounting).
 
 `make reset` before the jury takes over.
 
@@ -77,10 +85,10 @@ next one (ask the presenter first, it takes a few seconds).
 | Agent asks "lequel ?" between two clients | That is the feature (T2). Presenter can say so in one sentence | Presenter |
 | Wrong item in the read-back | The caller corrects it before saying yes. The read-back exists for this | Caller |
 | Page error or WebSocket disconnect | Reload the Voix page, start a new call, carry on | Driver |
-| STT or TTS provider down / out of credit | Switch to typed turns: the Voix page has a text box ("Ou tapez la phrase de l'appelant…"). Say so plainly to the jury | Driver, presenter |
-| TTS out of credit (no agent voice) | Same typed/text view: the page still shows the agent's answers. Say so plainly. Last resort: the video | Driver, presenter |
+| STT provider down / out of credit (caller not transcribed) | Switch to typed turns: the Voix page has a text box ("Ou tapez la phrase de l'appelant…"). Say so plainly to the jury | Driver, presenter |
+| TTS fails: the page shows "TTS indisponible, voix de secours du navigateur" | Nothing to do: the browser voice takes over by itself and ElevenLabs is retried after 60 s. Presenter, one sentence: "the voice provider failed, the agent switched to a backup voice instead of going silent". It answers later and sounds robotic: let the caller wait for the end of the answer | Presenter |
 | LLM down / out of credit, or network gone | Hotspot first. If still down: play the 2-min video, then show the `make calls` / `make jury` results | Backstop, presenter |
-| Noisy room, many mishearings | Caller moves the headset mic closer and speaks a bit slower. (Native-speaker noise test result: `STT-TEST.md`) | Caller |
+| Noisy room, many mishearings | Caller moves the headset mic closer and speaks a bit slower. (see the team's noise test results) | Caller |
 
 Rule for everyone: **never touch `.env` or the code during the demo.** Reload and reset are the only actions.
 
