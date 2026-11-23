@@ -17,6 +17,47 @@ Template:
 
 ---
 
+## 2026-11-24 00:58 (real clock, `date`) · Pablo's session (lane B) · branch `b/jury-findings`
+**Alexander (and Claudio for item 5): the 18 jury transcripts read against their `expected`** (`REVIEW.md` § 3.3,
+nobody had done it). Run on `dbcc191` (00:41–00:49, my machine): `make calls` **6/6** (median 2915 ms, worst
+6437), `make jury` **18/18 on the invariants** (median 2576 ms, worst 9561). Transcripts:
+`evals/results/jury-20261124-004527.json` (local to my machine, ask if you want it). Text mode, no STT/TTS. Your
+`7b72a6c` (instant words) came after, and changes none of the items below.
+
+**Problems, worst first (all in lane A files unless said):**
+1. **J7: it confirmed an order without a read-back or a yes.** Turn 2, the caller: « Bon, je sais pas, moi,
+   mettez-m'en huit kilos. » → `add_order_line` **and `confirm_order`** → « Très bien, c'est validé pour jeudi. »
+   Turn 3, the caller has to correct the steaks (« quarante steaks, pas quarante colis ») on an order already
+   confirmed. This is the only finding that changes the ERP, and it breaks the "read back, then confirm" rule.
+2. **Slow first turns when identification and creation happen in the same turn** (first word, text mode, so the
+   STT comes on top): J5 **9 561 ms** (`identify_caller` + `create_draft_order`), J7 6 522, J11 5 653, J16 5 180
+   (`save_context`), J13 4 742 and J15 4 630 (`create_draft_order`). The median is fine. One 9-second silence live is
+   not.
+3. **« tu » / « vous » not followed.** Céline says « Dis-moi », « mets-moi » and gets « vous » (J13, J18). Karim says
+   « vous » and gets « c'est noté sur **ta** commande » (J1). `REVIEW.md` lists it for T5 only, but it happens across calls.
+4. **J15: an order's content said to someone who then says she is someone else.** Turn 1 « c'est Frédéric, Boucherie
+   Rolland » → « Vous avez déjà une commande en cours pour demain mercredi, avec un quartier avant et de la bavette. »
+   Turn 2: « Non non pardon… moi c'est Céline ». Nothing was written on Rolland (correct), but the content was out.
+   Maybe: no order details on the first sentence before the caller asks for them.
+5. **J10 (matured ribs) contradicts its own scenario.** The agent accepts 12 kg for Saturday from stock, with the
+   « d'habitude ça se réserve une semaine avant » line (your decision). `evals/jury_calls.json` still expects a
+   refusal (« No prd_0011 line … before 2026-12-01 »). **Claudio / Alexander: one of the two must change**, or a juror
+   reading the scenario sees a failure.
+6. **Smaller:** text written before a tool call shows in the text transcript, e.g. J4 « Je tente quand même la mise
+   à jour pour obtenir le retour de l'outil. », J1 « …je crée. ». On the phone `voice_session.py` drops it (over 5
+   words, or after an instant word), so it is **not heard**. But a short raw note can slip through when no instant
+   word was said: J3 « **Paleron: 17 kg.** » (3 words). And `make jury` counts that hidden text as "spoken".
+   J16 opens awkwardly: « Vous êtes bien l'abattoir, mais de quel abattoir s'agit-il… ».
+
+**Solid, worth showing:** J2 his own prices to the cent (42,24 / 12,20), 1,6 kg of carré said honestly, no arrival
+date invented. J3 « pareil que samedi » with double and half worked out (17 / 4 kg). J4 moved to Saturday, no
+duplicate. J5 3-day rule held, BC 2026-0412 on the order and read back, 100 kg not 20. J6 asked for the cuts,
+bourguignon = paleron. J8 real weights (25 ordered / 24 weighed), complaint logged, no credit note, no discount.
+J9 no account invented, message saved. J12 « faut filet / tante de tranche / pas le rond » understood, « stop »
+ignored. J13, J14, J17, J18 firm refusals about other clients.
+
+**Next:** nothing pending in lane B. **Broken:** nothing in lane B.
+
 ## 2026-11-24 00:56 (real clock, `date`) · Pablo's session (lane B) · branch `b/soniox-close`
 **Alexander — found and fixed the STT second. It was neither Soniox nor the vocabulary: we were waiting for the
 socket to close.**
