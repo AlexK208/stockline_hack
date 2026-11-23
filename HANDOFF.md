@@ -17,6 +17,45 @@ Template:
 
 ---
 
+## 2026-11-24 00:35 · Claudio's session (lane D) · branch `d/decisions-corrections`
+**Alexander — your four points. You are right on all of them, including the one about me. Fixed.**
+This entry's time is `date`, not an estimate.
+
+**1. The clocks.** You are right and the cause is dumber than a wrong clock: I was *incrementing* my own
+timestamps instead of re-reading one. The runner stamped 00:16 and 00:18; I wrote 02:05. It is 00:34 now, so the
+freeze is 12,5 h away, not 10,5. I will run `date` every time.
+
+**2. `DECISIONS.md`, three statements no longer true. All three corrected:**
+- The instant words now read « Je note. » / « Un instant. » on an order, « Je regarde. » on a question,
+  « Très bien. » after a yes, « Je comprends. » on a blocked account, nothing on a goodbye or a re-read. I kept
+  « D'accord. » and « Alors… » / « Voyons… » as *abandoned* attempts, with the tester's reason, because why we
+  dropped them is the useful part.
+- The 0,09 s is now a range everywhere (3 places): 0,09–0,61 s on a request, 1,2–1,7 s on a short sentence,
+  2,5–3,5 s after a yes where the agent is deliberately silent. Your point about the jury's stopwatch is the
+  right test for that kind of claim.
+- The `eleven_v4_turbo` paragraph is rewritten as a **correction of ourselves**: 137 vs 163 ms over three draws
+  sits inside the 123–160 ms band my own voice measurement called noise, and shorter audio means it speaks
+  faster, not that it has fewer gaps. The honest reason we keep it is the tester's ear, which is why it is
+  frozen. I left the mistake visible in the document rather than quietly rewriting it.
+
+**3. The TTS default, in Pablo's lane, on 26 ms I would have called noise elsewhere. That is a fair hit and I
+accept it.** Saying it openly at the time is not the same as being entitled to do it: the standard I was applying
+to everyone else's numbers should have applied to mine, and the owner decides in his lane. The outcome stands
+only because a human then listened to it. Pablo, noted — I will ask before touching `clients/` again.
+
+**4. ElevenLabs credits.** Nothing of mine replays spoken turns: `make calls` and `make jury` both go through
+`POST /chat`, no TTS. My TTS spend tonight was the voice benchmark, 8 voices × ~130 characters plus a few probes,
+well under 2 000 characters.
+
+**Pablo — cost in money is in `DECISIONS.md` § 3.3 now, thank you for the pricing page.** I recomputed it on the
+final run rather than `8a2d158`, and one number is worth your attention: the two consecutive runs cost
+**$0,076–0,090 and $0,031–0,033** per call. The second reused the first's cache (4 130 uncached tokens instead of
+28 133). So cost is driven by **cache freshness, not call length** — in a real switchboard, with calls back to
+back, we sit near the cheap figure and the first call of the day costs double. That is a better line for the
+"le moins cher" slide than a single average.
+
+**Not done:** slides and video, still the only missing deliverables, and I am down as presenter.
+
 ## 2026-11-24 00:32 (real clock, `date`) · Jed's session (lane C) · branch `c/tts-fallback-turn`
 **Done (lane C):** the Voix page no longer drops the rest of a turn after an error message. Since `53d7600` the server
 sends "TTS indisponible, voix de secours du navigateur" mid-turn, then keeps streaming text, tool results and

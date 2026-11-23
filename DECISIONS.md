@@ -67,9 +67,11 @@ Le silence entre la fin de la phrase du client et le premier son est ce qui fait
 émis dès que l'appelant se tait (`services/call_prep.py`), choisi **dans le code** à partir du transcript, jamais
 par le modèle — donc jamais une invention.
 
-Il est **neutre volontairement** (« Alors… », « Voyons… », ou « Bonjour Christian. » au premier tour). On a essayé
-« D'accord. » : avant un refus, ça s'entend comme un oui. C'est une erreur qu'on ne pouvait pas voir dans l'ERP,
-seulement à l'oreille.
+Les mots ont changé plusieurs fois à l'oreille. Aujourd'hui ils collent au tour : « Je note. » ou « Un instant. »
+sur une commande, « Je regarde. » sur une question, « Très bien. » après un oui, « Je comprends. » sur un compte
+bloqué, et **rien du tout** sur un au revoir ou une demande de relecture. Deux essais abandonnés : « D'accord. »,
+qui avant un refus s'entend comme un oui ; puis « Alors… » et « Voyons… », qu'un testeur a trouvés agaçants. Ce
+sont des erreurs invisibles dans l'ERP : elles ne s'entendent qu'à l'oreille.
 
 ### 2.5 Interdire d'affirmer sans outil
 
@@ -148,9 +150,15 @@ Mesures faites le 23/11 sur notre compte, même phrase française, 3 tirages, vo
 | `eleven_turbo_v2_5` | 198 ms | 8,54 s |
 | `eleven_multilingual_v2` | 520 ms | 7,89 s |
 
-`eleven_v4_turbo` gagne **sur les deux axes** : il commence à parler 26 ms plus tôt et dit le même texte en 0,3 s
-de moins — donc moins de blancs, ce qui correspond à ce qu'Alexander entendait. Le commentaire du kit annonçait
-« same latency, more expressive » : c'était vrai, et même un peu mieux que ça.
+**Correction, faite après coup et elle nous concerne.** Nous avons d'abord écrit que `eleven_v4_turbo` gagnait
+« sur les deux axes », 26 ms plus tôt et 0,3 s d'audio en moins. Les 26 ms (137 contre 163) sont **à l'intérieur
+de la bande 123–160 ms que notre propre mesure sur huit voix appelle du bruit** : sur trois tirages, cet écart ne
+prouve rien. Et un audio plus court veut dire qu'il parle plus vite, pas qu'il laisse moins de blancs.
+
+**La vraie raison de garder `eleven_v4_turbo` est une oreille humaine** : le testeur de l'équipe, qui ne
+comprenait pas le français de l'agent une heure plus tôt, a jugé cette voix bonne. C'est pour cela qu'elle est
+gelée (§ 2.9 plus bas). Nous laissons l'erreur visible parce que c'est exactement le travers que nous reprochons
+ailleurs dans ce document : lire un écart d'un seul tirage comme une preuve.
 
 `eleven_multilingual_v2` est écarté : 3,8× plus lent au premier octet, rédhibitoire pour du téléphone.
 
@@ -303,7 +311,7 @@ chaque commit.
 | Kit de départ | 8,7 s |
 | Après le filler avant outils | 5,0 s |
 | Après l'accusé de réception parlé | 3,6 s |
-| Mesure lane C sur `WS /voice`, T1 | **0,09 s** (premier mot), 5,4 s pour le tour complet |
+| Mesure lane C sur `WS /voice` (tours tapés, mesuré côté serveur, sans STT) | **0,09 à 0,61 s** jusqu'au premier son sur une demande ; **2,5 à 3,5 s** sur un tour après un « oui », où l'agent se tait volontairement |
 
 L'accusé de réception immédiat est ce qui transforme l'expérience : le client entend une voix tout de suite, puis
 la vraie réponse arrive. Les 2 à 5 s restantes sont le temps du modèle, pas du silence perçu.
@@ -335,12 +343,31 @@ raison pour laquelle un prompt système volumineux et une liste d'outils stable 
 sont écrits une fois par appel et relus à prix réduit à chaque tour. Nous n'avons donc **pas** cherché à raccourcir
 le prompt système, contrairement à notre intuition de départ.
 
-> **Honnêteté sur l'euro.** Nous donnons le coût en **jetons**, parce que c'est ce que nous avons mesuré. Les
-> identifiants provisionnés par le kit (`claude-sonnet-5-5`, `claude-haiku-5-5`) ne figurent pas sur une grille
-> tarifaire publique que nous ayons pu vérifier pendant le hackathon, et les lectures de cache sont facturées à un
-> tarif réduit distinct. Convertir en euros demanderait d'inventer deux chiffres : nous ne l'avons pas fait. Les
-> jetons ci-dessus sont comparables entre équipes ; la conversion est une multiplication que le jury peut appliquer
-> avec la vraie grille.
+### Coût en argent
+
+Nous avions d'abord refusé de convertir en dollars faute de grille vérifiable. Pablo a trouvé la page de tarifs
+d'Anthropic : **Sonnet 5.5, $2 /M en entrée, $0,10 /M pour une lecture de cache, $2,50 /M pour une écriture de
+cache, $10 /M en sortie** (prix publics catalogue, en USD ; la clé fournie par Stockline peut être facturée
+autrement). Pour la voix, ElevenLabs v4 Turbo est à $0,04 pour 1 000 caractères.
+
+Appliqué à nos deux passages finaux, **par appel réussi** :
+
+| | lectures de cache | entrée non cachée | sortie | **modèle** |
+|---|---|---|---|---|
+| Passage 1 | 147 268 | 28 133 | 543 | **$0,076 – 0,090** |
+| Passage 2 | 171 288 | 4 130 | 555 | **$0,031 – 0,033** |
+
+La fourchette vient de ce que notre instrumentation ne sépare pas une *écriture* de cache ($2,50) d'une entrée
+fraîche ($2) : nous donnons les deux bornes plutôt que d'en choisir une.
+
+**L'écart entre les deux passages est le chiffre intéressant, et il n'est pas du bruit.** Le second passage a
+tourné une minute et demie après le premier et a réutilisé son cache : 4 130 jetons non cachés au lieu de 28 133,
+soit **moitié moins cher**. Autrement dit, le coût d'un appel dépend surtout de la *fraîcheur du cache*, pas de la
+longueur de l'appel. Dans un vrai standard téléphonique, où les appels s'enchaînent, on serait près du passage 2 ;
+le premier appel de la journée coûte le double.
+
+**Avec la voix** : +$0,02 à $0,06 par appel (500 à 1 500 caractères parlés, estimation d'après les tours mesurés
+par Jed). Soit **$0,05 à $0,15 l'appel complet**, de la reconnaissance à la réponse parlée.
 
 ---
 
@@ -352,8 +379,10 @@ le prompt système, contrairement à notre intuition de départ.
   règle dans le code ne s'oublie pas.
 - **Optimiser la queue de latence plutôt que la médiane.** Contre-intuitif sur un tableau de chiffres, évident au
   téléphone.
-- **L'accusé de réception choisi par du code.** 8,7 s → 0,09 s de premier son. Aucun risque d'invention puisque le
-  modèle n'écrit pas cette phrase.
+- **L'accusé de réception choisi par du code.** Sur une demande, le premier son tombe à **0,09–0,61 s** contre
+  8,7 s au départ. Aucun risque d'invention puisque le modèle n'écrit pas cette phrase. À nuancer : sur une phrase
+  courte (« Oui. ») le transcript en direct est trop court pour choisir le mot, qui part alors avec le transcript
+  final — 1,2 à 1,7 s.
 - **Tester les contrôles eux-mêmes** (`make calls-test`). Nous a évité au moins un contrôle qui passait au vert
   pour une mauvaise raison.
 - **Un journal de passation partagé** (`HANDOFF.md`) entre quatre sessions d'agents de code sur quatre lanes. Tous
@@ -426,7 +455,7 @@ sans rien dire.
 |---|---|
 | Scénarios | **6/6 sur `608a233`**, deux passages, tous contrôles actifs (ERP + parole + outils appelés) · **18/18** sur les invariants des appels jury |
 | Latence texte | médiane **2696–2756 ms**, p90 3498–3777 ms, **pire 3513–4157 ms** (2 × 18 tours) — pire tour 8,0 s → 3,5 s depuis la référence |
-| Latence voix | 0,09 s jusqu'au premier son, 8,7 s au départ |
+| Latence voix | **0,09 à 0,61 s** jusqu'au premier son sur une demande (8,7 s au départ) ; 1,2 à 1,7 s sur une phrase courte, 2,5 à 3,5 s après un « oui » (silence volontaire) |
 | Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
