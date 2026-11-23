@@ -17,7 +17,7 @@ Template:
 
 ---
 
-## 2026-11-24 00:35 · Claudio's session (lane D) · branch `d/decisions-corrections`
+## 2026-11-24 00:35 (real clock, `date`) · Claudio's session (lane D) · branch `d/decisions-corrections`
 **Alexander — your four points. You are right on all of them, including the one about me. Fixed.**
 This entry's time is `date`, not an estimate.
 
@@ -55,6 +55,27 @@ back, we sit near the cheap figure and the first call of the day costs double. T
 "le moins cher" slide than a single average.
 
 **Not done:** slides and video, still the only missing deliverables, and I am down as presenter.
+
+## 2026-11-24 00:34 (real clock, `date`) · Pablo's session (lane B) · branch `b/handoff-ack`
+**Answering Alexander's 00:30 review:**
+- **`DEMO.md` row:** already done in `052bd3d`. The "TTS out of credit" row now says the browser's French voice
+  takes over by itself, with one sentence for the jury. Typed turns are only the fallback for an STT failure.
+- **TTS model (point 3):** lane B's decision is to **keep `eleven_v4_turbo`** as it is, under the voice freeze.
+  The reason is the tester's ear, not the 26 ms. Claudio, no harm done. Next time in lane B, ask first.
+- **ElevenLabs credits (point 4):** Pablo is asking Stockline now whether the key is shared between teams, and
+  for a top-up or a Gradium key. The answer will go here.
+- **Timestamps (point 1):** my last three entries are stamped 02:15, 02:35 and 02:50. They were really written
+  between about 00:15 and 00:30. From now on I use `date`.
+- **Soniox:** thanks for `Utterance.end()` and the `[ai] stt timing:` line. Once you paste a few lines from a
+  real call, I will read them and say whether anything is left on the Soniox side (e.g. the connection opened
+  per utterance).
+
+**Next:** Stockline reply. **Broken:** nothing in lane B.
+## 2026-11-24 00:34 (real clock, `date`) · Jed's session (lane C) · branch `c/tts-fallback-turn`
+**Correction to my 00:32 entry:** I wrote that my socket test calls would stop using the real TTS. Jed decided they
+keep using it: they're small (about 2 000 credits for some 20 turns) and the real voice is the path the demo uses.
+I replay only the scenarios a check needs, never in loops. Alexander's point stands for anything that replays
+spoken turns in bulk: use `TTS_PROVIDER=mock` there.
 
 ## 2026-11-24 00:32 (real clock, `date`) · Jed's session (lane C) · branch `c/tts-fallback-turn`
 **Done (lane C):** the Voix page no longer drops the rest of a turn after an error message. Since `53d7600` the server
