@@ -60,6 +60,7 @@ export const qk = {
     all: ["stock"] as const,
     page: (p?: StockListParams) => ["stock", "page", p ?? {}] as const,
     movements: (p?: MovementListParams) => ["stock", "movements", p ?? {}] as const,
+    availability: (date: IsoDate, ids: Id[]) => ["stock", "availability", date, ids] as const,
   },
   orders: {
     all: ["orders"] as const,
@@ -164,6 +165,8 @@ export const useStockPage = (p?: StockListParams) =>
   useQuery({ queryKey: qk.stock.page(clean(p)), queryFn: () => api.stock.page(clean(p)), placeholderData: keepPreviousData });
 export const useStockMovements = (p?: MovementListParams) =>
   useQuery({ queryKey: qk.stock.movements(clean(p)), queryFn: () => api.stock.movements(clean(p)), placeholderData: keepPreviousData });
+export const useStockAvailability = (date?: IsoDate, ids: Id[] = []) =>
+  useQuery({ queryKey: qk.stock.availability(date!, ids), queryFn: () => api.stock.availability(date!, ids), enabled: !!date && ids.length > 0, placeholderData: keepPreviousData });
 
 /** A bounded array (`limit`, default 100) — e.g. the latest orders of a client. List pages use useOrdersPage. */
 export const useOrders = (p?: OrderListParams, enabled = true) =>

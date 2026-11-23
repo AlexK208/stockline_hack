@@ -17,6 +17,28 @@ Template:
 
 ---
 
+## 2026-11-23 22:40 · Jed's session (lane C) · branch `c/live-cards`
+**Done:** Jed takes lane C (frontend). On the Voix page, two cards above "ERP en direct" (`pages/voice/call-cards.tsx`):
+- **Client en ligne**: name, town, account OK or blocked, sales rep, delivery days, overdue amount, the substitution
+  rule (red when the client refuses them) and the usual order. Shows the candidates when the caller is ambiguous.
+- **Commande en cours**: the order the voice agent is writing, line by line, with a stock badge for the delivery date
+  (`GET /api/stock/availability`). Removed lines stay crossed out, a changed quantity shows the old one crossed out,
+  and the status goes from draft to confirmed.
+- Plumbing: optional `result` field on the `agent_tool` message (`schemas/voice.py`, `packages/shared/src/ai.ts`),
+  kept by `useVoiceSession`; `api.stock.availability` + `useStockAvailability`; `StockAvailability` type.
+
+**For lane A (2 small changes in `voice_session.py`, which you own):**
+1. Line ~250: `case ToolResultEvent(name=name, ok=ok, ms=ms, result=result)` and send
+   `AgentToolMessage(name=name, ok=ok, ms=ms, result=result)`. The client card then shows on the `identify_caller`
+   result and the candidates on an ambiguous call.
+2. When `prefetch_caller` finds the caller, send `AgentToolMessage(name="identify_caller", ok=True,
+   result={"status": "found", "client": {"id": client_id}})` so the card appears before the model even answers.
+Until then the client card shows as soon as any tool runs with a `clientId` (`check_products`, `create_draft_order`)
+or the order exists.
+
+**Next:** Jed tests on the Voix page (T1, T3, T4, T5, T6).
+**Broken / open questions:** none known. Lane B still has no owner.
+
 ## 2026-11-23 21:55 · Claudio's session (lane D) · branch `d/eval-runner`
 **Done:** `make calls` (`evals/run_calls.py`, standard library only). It replays T1–T6 through POST /chat in voice mode,
 resets the ERP before each scenario, then checks the ERP: new orders, lines, quantities, duplicates, the watched
