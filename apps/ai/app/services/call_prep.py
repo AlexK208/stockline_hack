@@ -77,13 +77,18 @@ async def find_caller(text: str, erp: ErpClient) -> tuple[dict | None, str | Non
     return best, first
 
 
+REREAD = re.compile(r"\b(relis|relisez|relire|récap\w*|recap\w*|répète|répétez|redis|redites)\b", re.I)
+
+
 def kind_of(text: str) -> str:
-    """closing | complaint | plea | change | yes | lookup | order | short | other — what the caller's turn mostly is."""
+    """closing | reread | complaint | plea | change | yes | lookup | order | short | other — what the caller's turn mostly is."""
     words = desk.norm(text).split()
     if not words:
         return "other"
     if CLOSING.search(text):
         return "closing"
+    if REREAD.search(text):
+        return "reread"  # "tu me relis ?": the answer needs no tool, it comes at once
     if COMPLAINT.search(text):
         return "complaint"
     if PLEA.search(text):

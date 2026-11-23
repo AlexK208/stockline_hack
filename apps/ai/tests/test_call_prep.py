@@ -22,6 +22,8 @@ async def test_opening_words_fit_what_the_caller_said():
     assert kind_of("Corgnac.") == "short"
     assert kind_of("Celui de la place Denis-Dussoubs.") == "short"
     assert kind_of("C'est tout, merci, bonne journée") == "closing"
+    assert kind_of("Euh, tu me relis ?") == "reread"  # no tool needed: the answer comes at once, no waiting words
+    assert await choose_ack("Euh, tu me relis ?", False, None, ["Je note."]) == ""
     # a request is never met with a word that accepts it: the stockout may come right after
     for said in ("Mets-moi dix kilos de bavette", "Il vous reste de l'onglet ?", "Corgnac."):
         ack = await choose_ack(said, False, None)

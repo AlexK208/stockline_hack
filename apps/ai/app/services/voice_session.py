@@ -66,6 +66,8 @@ client_message = TypeAdapter(VoiceClientMessage)
 CALL_MEMORY = 200
 # Longest text spoken before a tool call ("Je regarde ça tout de suite.").
 MAX_WAIT_WORDS = 5
+# A live transcript shorter than this is not trusted to choose the instant words (see run_turn).
+MIN_PARTIAL_WORDS = 4
 
 
 @dataclass
@@ -220,11 +222,16 @@ class VoiceConnection:
                     await self.send(AgentTextMessage(delta=f"{sentence} "))
 
             erp = ErpClient("voice_agent", conv.actor_name)
+            blocked = any(m.role == "tool" and m.name == "identify_caller" and '"BLOCKED"' in (m.content or "") for m in conv.history)
+            # The live transcript often lags a few words behind the voice. On a short one ("Ou", "Attends, attends")
+            # the words were chosen for the wrong kind of turn ("Je vérifie." after a yes) or not at all, and the
+            # caller then waited the whole STT + model time in silence. So: a typed turn or a live transcript of a
+            # few words is trusted at once; otherwise we choose again below, on the final transcript.
+            early = text or (partial if len(partial.split()) >= MIN_PARTIAL_WORDS else "")
             ack = ""
-            with suppress(Exception):
-                blocked = any(m.role == "tool" and m.name == "identify_caller" and '"BLOCKED"' in (m.content or "") for m in conv.history)
-                ack = await choose_ack(text or partial, not conv.history, erp, conv.acks, blocked)
-            conv.acks.append(ack)
+            if early:
+                with suppress(Exception):
+                    ack = await choose_ack(early, not conv.history, erp, conv.acks, blocked)
             if ack:
                 speaker.speak(ack)
                 await show()
@@ -239,6 +246,13 @@ class VoiceConnection:
                 await self.send(VoiceErrorMessage(message="Rien entendu — réessayez."))
                 return
             await self.send(TranscriptMessage(text=heard, final=True))
+            if not ack and utterance is not None:  # second chance, on the full sentence, while the model starts
+                with suppress(Exception):
+                    ack = await choose_ack(heard, not conv.history, erp, conv.acks, blocked)
+                if ack:
+                    speaker.speak(ack)
+                    await show()
+            conv.acks.append(ack)
 
             # 2. Agent, on a working copy of the history (committed at the end). The model is told what was already
             #    said aloud. (The agent loop identifies the caller in code before the first model step.)
