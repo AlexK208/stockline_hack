@@ -321,7 +321,9 @@ async def test_elevenlabs_request_and_error():
     req = seen[0]
     assert req.url.path == "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb/stream" and req.url.params["output_format"] == "mp3_44100_128"
     assert req.headers["xi-api-key"] == "xi"
-    assert json.loads(req.content) == {"text": "Bonjour", "model_id": "eleven_flash_v2_5", "language_code": "fr"}
+    # Default model: eleven_v4_turbo since 23/11 (measured faster to first byte and less dead air than
+    # eleven_flash_v2_5 — DECISIONS.md § 2.9). language_code is accepted by v4_turbo; only multilingual_v2 refuses it.
+    assert json.loads(req.content) == {"text": "Bonjour", "model_id": "eleven_v4_turbo", "language_code": "fr"}
 
     http, _ = recorder(lambda _: httpx.Response(429, text="quota"))
     try:
