@@ -26,7 +26,11 @@ DEFAULT_MODELS = {"openai": "gpt-4.1-mini", "anthropic": "claude-sonnet-5-5", "g
 DEFAULT_STT_MODELS = {"openai": "gpt-4o-mini-transcribe", "deepgram": "nova-3", "soniox": "stt-rt-v6", "gradium": "default"}
 DEFAULT_TTS = {  # provider → (model, voice)
     "openai": ("gpt-4o-mini-tts", "alloy"),
-    "elevenlabs": ("eleven_flash_v2_5", "JBFqnCBsd6RMkjVDRZzb"),  # premade multilingual voice
+    # v4_turbo plutôt que flash_v2_5 : mesuré 137 ms vs 163 ms jusqu'au 1er octet, et 7,89 s vs 8,18 s d'audio
+    # pour la même phrase française — plus tôt ET moins de blancs (DECISIONS.md § 2.9).
+    # La voix reste « premade » multilingue : accent anglais sur « kilos ». Voix FR native = Gradium (Armand),
+    # qui demande une clé Gradium dans TTS_API_KEY.
+    "elevenlabs": ("eleven_v4_turbo", "JBFqnCBsd6RMkjVDRZzb"),
     "gradium": ("default", "F7Iib4MAyHIRed0x"),  # Armand, flagship fr-FR voice
 }
 

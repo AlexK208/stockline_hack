@@ -118,6 +118,64 @@ Refuser un demi-veau mardi pour jeudi, ce serait refuser ce que l'entreprise fai
 délai plat de 2 jours** sur la catégorie carcasses. Quand le veau ou l'agneau n'est pas en stock pour la date,
 `check_products` le dit déjà avec le prochain arrivage.
 
+### 2.9 Voix de synthèse : modèle changé, voix encore à trouver (lane B)
+
+Lane A a signalé deux fois que la voix par défaut « parle français avec un rythme anglais et marque une pause
+avant *kilos* ». C'est un défaut qui compte directement pour le prix « le plus naturel » et pour la démo live.
+Mesures faites le 23/11 sur notre compte, même phrase française, 3 tirages, voix par défaut :
+
+| Modèle | 1er octet (médiane) | Durée audio, texte identique |
+|---|---|---|
+| `eleven_flash_v2_5` *(ancien défaut)* | 163 ms | 8,18 s |
+| **`eleven_v4_turbo`** *(nouveau défaut)* | **137 ms** | **7,89 s** |
+| `eleven_turbo_v2_5` | 198 ms | 8,54 s |
+| `eleven_multilingual_v2` | 520 ms | 7,89 s |
+
+`eleven_v4_turbo` gagne **sur les deux axes** : il commence à parler 26 ms plus tôt et dit le même texte en 0,3 s
+de moins — donc moins de blancs, ce qui correspond à ce qu'Alexander entendait. Le commentaire du kit annonçait
+« same latency, more expressive » : c'était vrai, et même un peu mieux que ça.
+
+`eleven_multilingual_v2` est écarté : 3,8× plus lent au premier octet, rédhibitoire pour du téléphone.
+
+**Changé dans le code, pas dans `.env`.** `.env` est ignoré par git et propre à chaque poste : un réglage local
+n'aurait profité qu'à une machine. Le défaut est donc dans `clients/factory.py` (`DEFAULT_TTS`) et dans
+`clients/elevenlabs.py`. `TTS_MODEL` dans `.env` continue de primer pour qui veut essayer autre chose.
+
+**La voix, elle, n'est pas réglée.** La voix par défaut reste une voix *premade* multilingue, pas une voix
+française native : c'est elle qui porte l'accent, pas le modèle. Deux impasses rencontrées :
+
+- **On ne peut pas lister la bibliothèque de voix.** La clé ElevenLabs fournie n'a pas la permission
+  `voices_read` (`401 missing_permissions`). Impossible de chercher une voix FR par API.
+- **Les voix testables sont anglophones.** Huit voix *premade* accessibles par identifiant ont été essayées :
+  toutes répondent, et **le choix de la voix ne change pas la latence** (123–160 ms, dans le bruit de mesure).
+  C'est donc un choix purement auditif. Les échantillons sont générés et écoutables (même phrase, modèle
+  `eleven_v4_turbo`) — il faut une oreille humaine pour trancher, pas une mesure.
+
+**Le vrai correctif est déjà dans le kit, il manque une clé.** Le provider **Gradium** est implémenté
+(`clients/gradium.py`) et son défaut est **Armand, voix phare fr-FR native**. Il lit la même variable
+`TTS_API_KEY`, donc il suffirait d'une clé Gradium pour basculer :
+
+```
+TTS_PROVIDER=gradium
+TTS_API_KEY=<clé Gradium>      # remplace la clé ElevenLabs
+TTS_VOICE=F7Iib4MAyHIRed0x     # Armand (défaut), inutile de l'écrire
+```
+
+Aucune clé Gradium ne nous a été fournie. **C'est la demande à faire à Stockline**, et c'est la seule voie vers
+une voix réellement française : les voix *premade* d'ElevenLabs resteront des voix anglophones qui parlent
+français.
+
+### 2.10 Reconnaissance vocale : vérifiée, et le silence du dépassement corrigé
+
+Soniox a été testé sur la page Voix, 14 phrases avec vocabulaire métier et noms de clients : **14/14 en pièce
+calme**, ratés occasionnels sur « onglet » (entendu « l'anglais ») et « BL ». Conclusion : la STT n'est pas le
+goulot, la liste de vocabulaire d'entreprise fait son travail.
+
+Un défaut latent a été trouvé en même temps : la liste approche son plafond (~5 922 caractères sur 6 000) et les
+termes en trop étaient **supprimés en silence**. Un produit ajouté à l'ERP pouvait donc cesser d'être reconnu sans
+que personne le sache, et le symptôme ressemble à une erreur du modèle. `clients/soniox.py` journalise maintenant
+le nombre de termes abandonnés (une fois par changement, pas à chaque tour).
+
 ---
 
 ## 3. Mesures
@@ -236,7 +294,7 @@ refuse, soit il demande une confirmation explicite.
 | « D'accord. » comme accusé de réception | Avant un refus, s'entend comme un accord. Remplacé par des formules neutres. |
 | Faire vérifier le stock par le modèle avant d'écrire | Une étape modèle de plus par tour, et une règle que le modèle pouvait sauter. Déplacé dans les outils. |
 | Raccourcir le prompt système pour réduire le coût | Mauvaise cible : 84–88 % de l'entrée est lue en cache. Le gain réel était dans le nombre d'étapes modèle. |
-| La voix ElevenLabs par défaut | Rythme anglais sur du français, pause avant « kilos ». Il nous manque un identifiant de voix française. |
+| La voix ElevenLabs par défaut | Rythme anglais sur du français, pause avant « kilos ». Le **modèle** est corrigé (§ 2.9) ; la **voix** reste anglophone, et la clé fournie ne peut pas lister la bibliothèque. Correctif connu : une clé Gradium. |
 
 ### 5.3 Limites connues de nos mesures
 
@@ -260,7 +318,9 @@ refuse, soit il demande une confirmation explicite.
 | Latence voix | 0,09 s jusqu'au premier son, 8,7 s au départ |
 | Coût | ~165 800 jetons d'entrée par appel, dont ~26 550 hors cache |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
+| Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |
 
-**Ce que nous ferions avec deux heures de plus, dans l'ordre :** le garde-fou de `identify_caller` (§ 5.1), puis
-re-mesurer Haiku avec les nouveaux contrôles, puis le ticket de pesée.
+**Ce que nous ferions avec deux heures de plus, dans l'ordre :** le garde-fou de `identify_caller` (§ 5.1),
+demander une clé Gradium pour une vraie voix française (§ 2.9), re-mesurer Haiku avec les nouveaux contrôles,
+puis le ticket de pesée.

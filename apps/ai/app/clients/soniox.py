@@ -30,6 +30,22 @@ URL = "wss://stt-rt.soniox.com/transcribe-websocket"
 FINALIZE = json.dumps({"type": "finalize"})
 MAX_TERMS_CHARS = 6000  # context terms budget, first terms first (Soniox limits the whole context's size)
 
+_last_dropped = -1
+
+
+def _warn_dropped(dropped: int, size: int) -> None:
+    """Say it out loud when the vocabulary no longer fits: terms are dropped silently otherwise, and a product
+    the STT then mishears looks like a model problem. Logged only when the number changes, not on every turn."""
+    global _last_dropped
+    if dropped != _last_dropped:
+        _last_dropped = dropped
+        if dropped:
+            print(
+                f"[ai] STT vocabulary: {dropped} term(s) dropped, {size}/{MAX_TERMS_CHARS} chars used. "
+                "Shorten the list (services/vocabulary.py) or those names will be misheard.",
+                flush=True,
+            )
+
 
 class SonioxSTT(STTClient):
     name = "soniox"
@@ -45,11 +61,16 @@ class SonioxSTT(STTClient):
             "language_hints": [self.language],
             "enable_endpoint_detection": True,  # final words at each pause, not only at the end
         }
-        terms, size = [], 0
+        terms, size, dropped = [], 0, 0
         for t in (t.strip() for t in (hint or "").split(",")):
-            if t and size + len(t) <= MAX_TERMS_CHARS:
+            if not t:
+                continue
+            if size + len(t) <= MAX_TERMS_CHARS:
                 terms.append(t)
                 size += len(t)
+            else:
+                dropped += 1
+        _warn_dropped(dropped, size)
         if terms:
             req["context"] = {"terms": terms}  # names the model would otherwise mishear ("Lemoine", "loup")
         return req
