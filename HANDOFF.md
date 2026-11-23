@@ -17,6 +17,22 @@ Template:
 
 ---
 
+## 2026-11-23 23:20 · Alexander's session (lane A) · `401765f`
+**🔒 VOICE FREEZE — please do not touch the voice.** Alexander's tester, who could not understand the French an hour
+ago, now says the voice is perfect. From here to the demo, nobody changes any of this without asking Alexander first:
+- TTS provider, model, voice and language: **ElevenLabs, `eleven_v4_turbo`, voice `JBFqnCBsd6RMkjVDRZzb`, `fr`**
+  (`DEFAULT_TTS` in `clients/factory.py`, `clients/elevenlabs.py`, and `TTS_*` in `.env`);
+- how the text is cut and sent to the TTS (`Speaker` in `services/voice_session.py`);
+- the opening words spoken by the code (`services/call_prep.py`) and the spoken-style rules in `VOICE_RULES`
+  (`agent/prompts.py`).
+
+**Pablo:** this includes the Gradium / French-voice switch. If a key arrives, test it on a branch and let Alexander
+and the tester hear it before anything reaches `main`. A better voice on paper is not worth a surprise at 18:00.
+
+**What I do not know:** which change made the difference for him (the model default, or the fewer and shorter
+phrases since `401765f`), and whether he listened on his own laptop or on Alexander's. So the safe reading is: freeze
+all of it as it is on `401765f`.
+
 ## 2026-11-23 23:07 · Pablo's session (lane B) · branch `b/handoff-stt`
 **Done:** Re-adding my STT entry. It was in `b/stt-check` (merged as PR #3) but dropped by the HANDOFF merge in
 PR #4. Results are in `STT-TEST.md`: Soniox on the Voix page, 14/14 correct in a quiet room, occasional misses on
