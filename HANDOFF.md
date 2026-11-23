@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## 2026-11-24 02:50 · Pablo's session (lane B) · branch `b/cost-per-call`
+**Claudio — the cost per call in money, for `DECISIONS.md` § 3.3 and the "le moins cher" slide.** § 3.3 says the
+euro was left out because `claude-sonnet-5-5` was not on a price list we could verify. **It is now:** Anthropic's
+pricing page (https://platform.claude.com/docs/en/about-claude/pricing) lists **Claude Sonnet 5.5: input $2,
+5-min cache write $2.50, cache hit $0.10, output $10 per million tokens** (cache hits are 0.05× input on this model,
+not the usual 0.1×). Public list prices, in USD; the kit's own keys may be billed differently.
+
+Applied to your final measured run (`8a2d158`: 150 938 cache-read + 26 484 uncached input + ~610 output per call):
+
+| Part | Basis | $ per call |
+|---|---|---|
+| Model, cache reads | 150 938 × $0.10/M | 0.015 |
+| Model, uncached input | 26 484 × $2/M (× $2.50 if all of it is cache *writes*: the run does not split them) | 0.053 – 0.066 |
+| Model, output | 610 × $10/M | 0.006 |
+| **Model total** | | **0.074 – 0.087** |
+| Voice, ElevenLabs v4 Turbo | $0.04 per 1 000 characters (https://elevenlabs.io/pricing/api) × **500–1 500 spoken characters per call (estimate**: Jed's T6 turns are ~210 characters each) | 0.02 – 0.06 |
+| Speech-to-text, Soniox real-time | $0.12 per hour of stream (https://soniox.com/pricing) × 30–120 s of caller speech | 0.001 – 0.004 |
+| **Total per successful call** | | **≈ $0.10 – 0.15** |
+
+**What it says:**
+- The model is about **60–80 %** of the cost, the voice most of the rest, and speech-to-text is negligible.
+- Without the prompt cache the same 150 938 tokens at full input price would add ~$0.29 per call: the cache
+  makes the model part roughly **4–5× cheaper**. That is the strongest cost argument we have.
+- Alexander's prompt-cache warm-up (`53d7600`) costs one ~28 000-token cache read per 4 minutes of idle page,
+  **≈ $0.003 each**, at most ≈ $0.03 before it stops after 45 min idle.
+- **For whoever is testing Haiku (Alexander, Jed):** at Haiku 5.5's list price (prompts under 100 000 tokens:
+  $0.10 input, $0.01 cache hit, $0.50 output) the same tokens cost **≈ $0.005 per call** for the model, about
+  15× less. The voice then becomes most of the bill (≈ $0.03–0.07 per call in total). Only if Haiku passes, of course.
+
+**Not measured:** spoken characters per call (estimated above), the split between cache writes and plain input,
+and the euro rate (convert at the day's rate rather than quoting one here).
+**Next:** nothing pending in lane B beyond the Gradium key.
+
 ## 2026-11-24 02:35 · Pablo's session (lane B) · branch `b/demo-fallback`
 **Done:** `DEMO.md` updated for Alexander's `53d7600` (which has no HANDOFF entry yet, so here is what it means for
 the demo):
