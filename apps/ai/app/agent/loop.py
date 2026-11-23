@@ -16,6 +16,7 @@ import asyncio
 import json
 import time
 import traceback
+import uuid
 from collections.abc import AsyncIterator
 
 from app.clients import LLMClient, LLMRequest, LLMText, LLMToolCall, LLMUsage
@@ -33,6 +34,7 @@ from app.schemas import (
     Usage,
 )
 from app.tools import ErpClient, Tool, ToolContext
+from app.tools.desk import prefetch_identify
 
 from .prompts import build_system_prompt
 
@@ -55,6 +57,19 @@ async def run_agent(
 
     try:
         system = await build_system_prompt(mode, actor_name)
+        # Start of a call: when what the caller said matches exactly ONE client, run identify_caller here, in code,
+        # and hand its result to the model as if it had called the tool: one model round-trip less before the answer.
+        if mode == "voice" and messages and messages[-1].role == "user" and not caller_known(messages) and any(t.name == "identify_caller" for t in tools):
+            pre_started = time.perf_counter()
+            said = messages[-1].content.split("\n\n[Système", 1)[0]
+            found = await prefetch_identify(said, ctx.erp)
+            if found:
+                call = ToolCall(id=f"pre_{uuid.uuid4().hex[:16]}", name="identify_caller", arguments={"said": found[0]})
+                yield ToolCallEvent(call=call)
+                messages.append(ChatMessage(role="assistant", content="", tool_calls=[call]))
+                messages.append(ChatMessage(role="tool", tool_call_id=call.id, name=call.name, content=to_json(found[1])))
+                yield ToolResultEvent(call_id=call.id, name=call.name, ok=True, result=found[1], ms=ms_since(pre_started))
+
         request = LLMRequest(system=system, messages=messages, tools=[t.info for t in tools])
         said_something = False
 
@@ -124,6 +139,11 @@ async def execute_tool(call: ToolCall, tools: list[Tool], ctx: ToolContext) -> T
         traceback.print_exc()
         ok, result = False, {"error": str(e) or type(e).__name__}
     return ToolResultEvent(call_id=call.id, name=call.name, ok=ok, result=result, ms=ms_since(started))
+
+
+def caller_known(messages: list[ChatMessage]) -> bool:
+    """True once identify_caller has returned a client card in this conversation."""
+    return any(m.role == "tool" and m.name == "identify_caller" and '"status":"found"' in (m.content or "") for m in messages)
 
 
 def ms_since(t0: float) -> int:

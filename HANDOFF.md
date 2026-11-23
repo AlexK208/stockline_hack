@@ -17,6 +17,23 @@ Template:
 
 ---
 
+## 2026-11-23 22:03 · Alexander's session (lane A) · not yet committed
+**Done (after the first `make calls` run: 5/6, médiane 2859 ms, pire 7567 ms):**
+- `tools/orders.py`: `create_draft_order`, `add_order_line` and `update_order_line` now run the checks themselves
+  (stock at the delivery date, lead time, delivery day, pieces → kilos). On a problem they write nothing and return
+  `problems`. The model no longer calls `check_products` before writing: one model step less per order turn.
+  `check_products` stays for questions ("il vous reste de l'onglet ?").
+- `agent/loop.py`: when the caller's first words match exactly one client, `identify_caller` is run in code before
+  the model (it shows as a normal tool row, about 50 ms). Works for `/chat` and `make calls` too.
+- `prompts.py`: a product asked for but not served (stockout, no substitute) is logged with `log_client_event`
+  (`special_request`). This was the T3 failure.
+
+**`make calls` on lane A's copy, same commit of the runner:** 6/6. T1 first turn 7.0 s → 3.3 s; worst turn
+7.6 s → 5.9 s; input tokens per call about 216k → 165k. Median first word about 3.0 s (was 2.9 s): the floor is now
+two model calls on any turn that writes. Lane D: please rerun `make calls` after pulling and paste the row.
+
+**Next (lane A):** try `LLM_MODEL=claude-haiku-5-5` against `make calls`; keep it only at 6/6.
+
 ## 2026-11-23 21:55 · Claudio's session (lane D) · branch `d/eval-runner`
 **Done:** `make calls` (`evals/run_calls.py`, standard library only). It replays T1–T6 through POST /chat in voice mode,
 resets the ERP before each scenario, then checks the ERP: new orders, lines, quantities, duplicates, the watched
