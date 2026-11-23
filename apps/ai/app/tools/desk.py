@@ -263,6 +263,9 @@ CONTEXT_TITLES = ("Les personnes et leur façon de parler", "Comment leur parler
 
 
 async def client_card(erp: ErpClient, client_id: str) -> dict:
+    """Everything the agent needs to serve this client, in one object. No credit figures (limit, outstanding,
+    overdue): the agent on the phone never needs them, and what it does not hold it cannot read out to a caller who
+    claims to be the boss. A blocked account is the BLOCKED line, without numbers."""
     c, ctx_rows, meta, open_events = await asyncio.gather(
         erp.get(f"/api/clients/{enc(client_id)}"),
         erp.get("/api/context/for", {"entityType": "client", "id": client_id}),
@@ -288,7 +291,6 @@ async def client_card(erp: ErpClient, client_id: str) -> dict:
         "lastOrders": [order_card(by_id[i], False) for i in past_ids],
         "usual": [f"{u['productId']} {u['productName']} : en moyenne {fmt(round(u['avgQty'], 1))} {u.get('unit', '')}" for u in (c.get("usual") or [])[:8]],
         "openIssues": [f"{e['type']} : {e['title']}" for e in (open_events or [])[:4]],
-        "credit": pick(c, "creditLimit", "outstanding", "overdue"),
         "howToTalk": how,
     }
     if blocked:
@@ -301,11 +303,21 @@ async def client_card(erp: ErpClient, client_id: str) -> dict:
     return card
 
 
+def ambiguous(candidates: list[dict]) -> dict:
+    return {
+        "status": "ambiguous",
+        "instruction": "Plusieurs clients possibles : demande lequel en citant ce qui les distingue (ville, nom du contact). "
+        "Puis rappelle identify_caller avec clientId.",
+        "candidates": [pick(c, "id", "name", "kind", "city", "status", "contacts") for c in candidates],
+    }
+
+
 @tool
 async def identify_caller(
     ctx: ToolContext,
     said: str = Field(description="Ce que l'appelant a dit pour se présenter, tel quel : nom du commerce, prénom, ville. Ex. « Christian de la Boucherie Peyronnet »"),
     client_id: str | None = Field(None, description="Seulement après que l'appelant a choisi parmi les candidats proposés : l'id retenu"),
+    wrong_person: bool = Field(False, description="true UNIQUEMENT si l'appelant vient de dire qu'il n'est PAS le client déjà identifié (erreur de personne). Jamais pour consulter un autre client."),
 ) -> dict:
     """
     PREMIER outil d'un appel : identifie le client qui appelle et renvoie EN UN SEUL APPEL sa fiche complète (statut, compte bloqué,
@@ -314,6 +326,27 @@ async def identify_caller(
     Si plusieurs clients sont plausibles, renvoie `candidates` : demande alors lequel (ville, nom du patron), ne devine jamais.
     """
     clients, stats = await directory(ctx.erp)
+    if ctx.caller:
+        # The caller is already identified. The call stays on that client unless the CALLER says we got the wrong
+        # person and names, in his own words, one other client without doubt. The model's wording (`said`) does not
+        # count, and naming another client is not enough ("pareil que la Boucherie Peyronnet" must not open
+        # Peyronnet's card). Seen in a replay: a blocked butcher says "j'ai besoin de
+        # viande", the model calls identify_caller("Le Comptoir de la Viande") and opens a stranger's card.
+        heard_best, _ = match_clients(ctx.heard, clients, stats)
+        target = client_id or (match_clients(said, clients, stats)[0] or {}).get("id")
+        if target != ctx.caller:
+            if wrong_person and heard_best and heard_best["id"] != ctx.caller and (not client_id or client_id == heard_best["id"]):
+                return {"status": "found", "client": await client_card(ctx.erp, heard_best["id"])}
+            else:
+                me = next((c for c in clients if c["id"] == ctx.caller), {})
+                return {
+                    "status": "already_identified",
+                    "callerId": ctx.caller,
+                    "callerName": me.get("name"),
+                    "instruction": f"L'appelant est déjà identifié ({me.get('name')}) : tu restes sur ce client pour tout l'appel et tu "
+                    "n'ouvres la fiche d'aucun autre. Un mot de sa phrase (« viande », « boucherie ») n'est pas un nom de client. "
+                    "Seulement s'il dit lui-même qu'il n'est pas ce client : demande le nom exact de son commerce et sa ville.",
+                }
     if client_id:
         # The model chose among the candidates: allowed only if what the caller said really singles this client out.
         # "Karim, le boucher, à Limoges" fits two butchers named Karim in Limoges: ask again rather than pick one.
@@ -335,12 +368,7 @@ async def identify_caller(
     if best:
         return {"status": "found", "client": await client_card(ctx.erp, best["id"])}
     if candidates:
-        return {
-            "status": "ambiguous",
-            "instruction": "Plusieurs clients possibles : demande lequel en citant ce qui les distingue (ville, nom du contact). "
-            "Puis rappelle identify_caller avec clientId.",
-            "candidates": [pick(c, "id", "name", "kind", "city", "status", "contacts") for c in candidates],
-        }
+        return ambiguous(candidates)
     return {"status": "unknown", "instruction": "Client non reconnu : demande le nom du commerce et la ville. N'invente rien."}
 
 
@@ -493,6 +521,12 @@ def fmt(n: float) -> str:
     return str(int(n)) if float(n).is_integer() else str(n)
 
 
+AUTO = (
+    "Reconnu automatiquement d'après les noms cités dans sa phrase. S'il parle de ce client sans dire qu'il en fait "
+    "partie (« donne-moi l'encours de… », « je cherche… »), il n'est PAS identifié : ne dis rien de cette fiche et demande qui il est."
+)
+
+
 async def prefetch_identify(said_text: str, erp: ErpClient) -> tuple[str, dict] | None:
     """What identify_caller would return for this utterance, when exactly ONE client matches it; else None (the model
     then calls the tool itself and asks). Used by the agent loop to skip a model round-trip at the start of a call."""
@@ -504,7 +538,7 @@ async def prefetch_identify(said_text: str, erp: ErpClient) -> tuple[str, dict] 
         card = await asyncio.wait_for(client_card(erp, best["id"]), 2.0)
     except Exception:  # ERP slow or down: let the model use the tool and report the problem
         return None
-    return best["name"], {"status": "found", "client": card}
+    return best["name"], {"status": "found", "client": card, "how": AUTO}
 
 
 @tool

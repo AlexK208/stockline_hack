@@ -22,7 +22,24 @@ async def search(
     Fuzzy search for clients/products/suppliers/orders. Returns ids to use with the other tools.
     """
     results = await ctx.erp.get("/api/search", {"q": query, "types": ",".join(types) if types else None})
-    return [pick(r, "type", "id", "label", "sublabel") for r in results[:8]]
+    results = results[:8]
+    if ctx.on_call:
+        # On the phone the search only shows the caller's own client file and orders (products and suppliers stay).
+        # Clients are identified by identify_caller, and another client's order number must not give its content.
+        mine = []
+        for r in results:
+            if r.get("type") == "client" and r.get("id") != ctx.caller:
+                continue
+            if r.get("type") == "order":
+                try:
+                    order = await ctx.erp.get(f"/api/orders/{enc(r['id'])}")
+                except Exception:
+                    continue
+                if not ctx.caller or (order.get("clientId") or (order.get("client") or {}).get("id")) != ctx.caller:
+                    continue
+            mine.append(r)
+        results = mine
+    return [pick(r, "type", "id", "label", "sublabel") for r in results]
 
 
 CLIENT_FIELDS = ("id", "name", "type", "status", "city", "deliveryDays", "paymentTermsDays", "creditLimit", "outstanding", "overdue", "contacts", "preferences")  # fmt: skip
@@ -37,8 +54,10 @@ async def get_client(ctx: ToolContext, client_id: str = Field(description="ex. c
     """
     c = await ctx.erp.get(f"/api/clients/{enc(client_id)}")
     stats = c.get("eventStats")
+    # On the phone: no credit figures (see desk.client_card).
+    fields = [f for f in CLIENT_FIELDS if not (ctx.on_call and f in ("creditLimit", "outstanding", "overdue"))]
     return {
-        **pick(c, *CLIENT_FIELDS),
+        **pick(c, *fields),
         "notes": [f"{n['at'][:10]} {n['author']} : {n['text']}" for n in c["notes"][-5:]],
         "usual": [
             pick(u, "productId", "productName", "unit", "avgQty", "lastQty") for u in c["usual"][:10]
