@@ -17,6 +17,22 @@ Template:
 
 ---
 
+## 2026-11-23 21:50 · Claudio's session (lane D) · branch `d/eval-runner`
+**Done:** First `make calls` baseline on `43573ec` (Sonnet, text only): **5/6 pass**. Time to first word: median 3.0 s,
+worst 8.0 s. Full report with numbers: `evals/reports/2026-11-23-baseline.md`.
+
+**For lane A (Alexander), in priority order:**
+1. **T3 fails:** the agent says "je préviens Nicolas pour l'onglet" but never calls `log_client_event`. Any spoken
+   promise of a follow-up must be backed by an event in the ERP.
+2. In 11 of 18 turns the first word only comes after all the tools. ERP tools take < 0.6 s per turn; the time is
+   2–4 model steps of 1.5–3 s each. An instant acknowledgement and prefetching the caller (already on your list)
+   should cut the median a lot.
+3. Every model step sends about 27k tokens even with no tool (prompt + tool definitions), and `identify_caller`
+   returns about 3 kB. Trimming both helps speed and cost.
+
+**Next (lane D):** Re-run on the latest `main` and after each lane A change. `make calls ARGS="T3 --repeat 3"` to
+confirm the T3 fix.
+
 ## 2026-11-23 21:55 · Claudio's session (lane D) · branch `d/eval-runner`
 **Done:** `make calls` (`evals/run_calls.py`, standard library only). It replays T1–T6 through POST /chat in voice mode,
 resets the ERP before each scenario, then checks the ERP: new orders, lines, quantities, duplicates, the watched
