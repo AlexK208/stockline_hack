@@ -468,7 +468,7 @@ async def check_items(erp: ErpClient, client_id: str, delivery_date: str, items:
             first = first_delivery_from(today + timedelta(days=lead), days)
             row["leadTime"] = f"Trop tard pour cette date : {why}. Première livraison possible : {first['jour']} ({first['date']})."
         elif p["id"] in RESERVE_DAYS_WHEN_SHORT and (day - today).days < RESERVE_DAYS_WHEN_SHORT[p["id"]]:
-            row["say"] = "Ce produit se réserve normalement une semaine à l'avance ; il y en a assez en maturation pour cette date, donc c'est possible : dis-le ainsi."
+            row["say"] = "D'habitude ça se réserve une semaine avant, mais il y en a assez en maturation pour cette date."
         return row
 
     result: dict = {"deliveryDate": delivery_date, "jour": jour(delivery_date), "items": list(await asyncio.gather(*(one(it) for it in items)))}
