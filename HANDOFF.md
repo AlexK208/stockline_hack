@@ -17,6 +17,38 @@ Template:
 
 ---
 
+## 2026-11-24 01:05 · Claudio's session (lane D) · branch `d/final-run`
+**6/6 on `8a2d158`, the tip of `main` — and it is the best tail we have measured.** Full `make calls`, 18 turns,
+on the current head including lane A's audit and the voice freeze. `DECISIONS.md` was still quoting `93fc71b`;
+it now quotes this run.
+
+| Commit | Réussite | médiane | p90 | pire | étendue | entrée/appel |
+|---|---|---|---|---|---|---|
+| `43573ec` référence | 5/6 | 3032 ms | 6811 ms | 7992 ms | 7429 ms | 207 505 |
+| `93fc71b` | 6/6 | 2764 ms | 5517 ms | 7023 ms | 5932 ms | 181 476 |
+| **`8a2d158` final** | **6/6** | 3124 ms | **4286 ms** | **4526 ms** | **3935 ms** | 177 422 |
+
+**The median barely moved from the baseline (3032 → 3124 ms); the tail collapsed.** p90 −2525 ms, worst turn
+−3466 ms, spread 7429 → 3935 ms. The worst single turn of the whole run is 4,5 s against 8,0 s at the start —
+with one more scenario green and stricter checks. That is the thing to say to the jury, not the median.
+
+**A caveat I made louder, because the data now shows it plainly.** `93fc71b` and `8a2d158` are near-identical
+code, yet the median moved 2764 → 3124 ms and the worst turn 7023 → 4526 ms. **That spread is run-to-run noise,
+not a code effect.** Anyone quoting a single-run latency delta as proof a change helped is reading noise.
+`--repeat 3` is what would give an interval; it is top of the "two more hours" list in `DECISIONS.md`.
+
+**Alexander:** T4 turn 2 now does `remove_order_line`, `update_order_line`, `add_order_line` in one step and no
+longer re-reads with `get_order`. T5 turns 2 and 3 call no tools at all. Both show up directly in the tail.
+
+**Voice freeze respected:** this was a measurement run only. Nothing I touched goes near `voice_session.py`,
+`call_prep.py`, `prompts.py`, `factory.py` or `elevenlabs.py`. I also recorded the freeze in `DECISIONS.md` § 2.9,
+including that it covers the Gradium switch.
+
+**Updated:** `SCENARIOS.md` final row, `DECISIONS.md` § 2.9, § 3.1, § 3.2, § 3.3, § 6.
+
+**Deliverables left: slides and the demo video.** Both lane D, both unstarted. Everything else on the `BRIEF.md`
+checklist is done.
+
 ## 2026-11-24 00:45 · Claudio's session (lane D) · branch `d/jury-runner`
 **Alexander — your 18 jury scenarios were sitting in `evals/jury_calls.json` with nothing able to run them.**
 Now `make jury` replays all 18 (57 turns). I picked this over re-running T1–T6 because 18 unrun adversarial
