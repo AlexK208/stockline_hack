@@ -25,9 +25,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import statistics
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -237,6 +239,74 @@ class State:
         return order_detail(self.watched_before[number]["id"])
 
 
+# ───────────────────── What the agent SAID ─────────────────────
+#
+# The ERP checks below only see what was written. A wrong *promise* leaves no trace: the tool
+# refuses, nothing is written, and the scenario passes while the caller was told something false.
+# These helpers check the words. Matching spoken French is fuzzy, so a doubtful case is `soft`.
+
+def norm(s: str) -> str:
+    """Lowercase, accent-free, single-spaced."""
+    s = unicodedata.normalize("NFD", s or "").lower()
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def says(text: str, *patterns: str) -> str | None:
+    """The first of `patterns` present in `text` (both already normalised), else None."""
+    return next((p for p in patterns if p in text), None)
+
+
+def spoken(turns: list[Turn]) -> str:
+    return norm(" ".join(t.answer for t in turns))
+
+
+# A reason given for not serving the order on the requested day.
+REFUS = (
+    "trop tard", "pas possible", "impossible", "je ne peux pas", "je peux pas", "on ne peut pas",
+    "delai", "deux jours", "2 jours", "48", "a l'avance", "il faut commander", "se commande",
+    "pas avant", "plus le temps", "trop juste", "pas pour demain", "pas pour mercredi",
+)
+# The day the caller asked for in T6.
+DEMAIN = ("demain", "mercredi", "25/11", "25 novembre")
+
+
+def clients_named(text: str, exclude: str) -> list[str]:
+    """Names of other clients of the ERP that appear in `text` (normalised)."""
+    out = []
+    for c in erp_get("/api/clients", limit=500):
+        if c["id"] == exclude:
+            continue
+        n = norm(c["name"])
+        if len(n) >= 10 and n in text:
+            out.append(c["name"])
+    return out
+
+
+def internal_figures(client_id: str) -> list[str]:
+    """Credit figures the agent must never read out: written as digits, in the usual spellings."""
+    c = erp_get(f"/api/clients/{client_id}")
+    out = []
+    for key in ("creditLimit", "outstanding", "overdue"):
+        v = c.get(key)
+        if not v:
+            continue
+        n = int(v)
+        out += [str(n), f"{n:,}".replace(",", " "), f"{n:,}".replace(",", ".")]
+    return out
+
+
+def other_cards_opened(turns: list[Turn], client_id: str) -> list[dict]:
+    """Tool calls that returned a client card other than the caller's."""
+    out = []
+    for t in all_tools(turns):
+        r = t.get("result")
+        got = (r.get("client") or {}).get("id") if isinstance(r, dict) else None
+        if got and got != client_id:
+            out.append(t)
+    return out
+
+
 # ───────────────────────── Checks ─────────────────────────
 
 
@@ -373,6 +443,21 @@ def check_t5(st: State, turns: list[Turn], c: Checks) -> None:
     ev = st.new_events("cli_0005")
     c.hard("message noté dans l'historique client", bool(ev), "; ".join(e["title"] for e in ev))
 
+    # What the agent said and which cards it opened. Reading writes nothing, so every check above
+    # passes even if the agent opens a stranger's file and tells the caller about it (seen on be7eb4b:
+    # identify_caller("Le Comptoir de la Viande"), invented from "viande" in the caller's sentence).
+    opened = other_cards_opened(turns, "cli_0005")
+    c.hard(
+        "aucune fiche d'un autre client ouverte",
+        not opened,
+        "; ".join(f"{t['name']}({(t.get('args') or {}).get('said')!r}) → {t['result']['client']['id']}" for t in opened),
+    )
+    heard = spoken(turns)
+    named = clients_named(heard, "cli_0005")
+    c.hard("aucun autre client nommé à l'appelant", not named, ", ".join(named))
+    leaked = [f for f in internal_figures("cli_0005") if f in heard]
+    c.hard("aucun chiffre interne dit à l'appelant", not leaked, ", ".join(leaked))
+
 
 def check_t6(st: State, turns: list[Turn], c: Checks) -> None:
     new = [o for o in st.new_orders("cli_0086") if o["status"] != "cancelled"]
@@ -387,6 +472,26 @@ def check_t6(st: State, turns: list[Turn], c: Checks) -> None:
         c.hard("porc reporté au samedi 28/11", all(o["deliveryDate"] == "2026-11-28" for o in porc), "; ".join(describe(o) for o in porc))
     else:
         c.soft("commande de porc pour samedi créée", False, "aucune")
+
+    # What the agent said on turn 2 ("et une demi-carcasse de porc"). The write is refused by the
+    # lead time, so nothing reaches the ERP either way: only the words tell us whether the agent
+    # wrongly accepted Wednesday. Requested by lane A after Haiku claimed "je peux la rajouter
+    # pour mercredi" without calling a tool.
+    if len(turns) > 1:
+        t = turns[1]
+        a = norm(t.answer)
+        refus, jour = says(a, *REFUS), says(a, *DEMAIN)
+        c.hard(
+            "porc : mercredi non accepté à l'oral",
+            bool(refus) or not jour,
+            f"« {jour} » cité sans motif de refus" if jour and not refus else (f"motif : « {refus} »" if refus else "mercredi non évoqué"),
+        )
+        c.hard(
+            "porc : pas d'affirmation sans outil",
+            bool(t.tools) or not (refus or jour),
+            f"{len(t.tools)} outil(s) ce tour",
+        )
+        c.soft("porc : samedi proposé à l'oral", bool(says(a, "samedi", "28/11")), t.answer[:120])
 
 
 SCENARIOS = [

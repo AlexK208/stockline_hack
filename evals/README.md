@@ -25,13 +25,39 @@ Each scenario plays fixed caller lines (in `run_calls.py`, `SCENARIOS`), then lo
 | T2 | no write before the store is known; order on Hyper Frais **Corgnac** (`cli_0003`) for Fri 27/11, ≈ 330 kg forequarter; nothing on `cli_0034` |
 | T3 | order for Thu 26/11 with 8 kg faux-filet, **no onglet, no bavette**, confirmed; a client event logs the onglet request |
 | T4 | one order for Wed 25/11 with exactly 8 kg faux-filet (one line) and 8 kg tende, no paleron |
-| T5 | no order at all, no successful write tool, a client event logs the call |
-| T6 | the existing draft CMD-2026-006248 is completed (bavette 7 → 12 kg on the same line); no second order for Wednesday; pig only on Sat 28/11 |
+| T5 | no order at all, no successful write tool, a client event logs the call; **no other client's card opened**, **no other client named aloud**, **no internal figure (credit, outstanding, overdue) read to the caller** |
+| T6 | the existing draft CMD-2026-006248 is completed (bavette 7 → 12 kg on the same line); no second order for Wednesday; pig only on Sat 28/11; **the answer to "et une demi-carcasse de porc" never accepts Wednesday, and is backed by a tool call in that turn** |
 
 Soft checks (⚠, reported but not failing) cover things like "Dumontet noted", "confirmed" where both outcomes are
 defensible, and "asked a question".
 
 The checks were tested both ways against the ERP (correct actions → PASS, typical mistakes → FAIL with a reason).
+
+### Checks on what the agent *says*
+
+Most checks read the ERP. That is not enough: when a tool refuses a write, **nothing reaches the ERP**, so a wrong
+promise to the caller leaves no trace and the scenario passes. T5 and T6 therefore also check the spoken answer.
+
+They exist because of two real cases:
+
+- Lane A saw Haiku answer *"je peux la rajouter pour mercredi"* for a demi-porc, which the 2-day lead time forbids,
+  **without calling any tool**. Nothing was written, so every ERP check passed.
+- On `be7eb4b` the agent, hearing *"tu vas pas me laisser sans viande"*, invented a client name from the word
+  "viande", called `identify_caller("Le Comptoir de la Viande")` and **opened an unrelated client's card**
+  (`cli_0038`) mid-call, then mentioned it to the caller. T5 passed: reading writes nothing.
+
+Matching spoken French is fuzzy, so these checks are written to fail only on clear evidence: a clarifying question
+("porc standard ou cul noir ?") makes no claim and is never punished. `REFUS` and `DEMAIN` in `run_calls.py` hold
+the word lists; widen them rather than tightening the logic.
+
+Known limit: amounts are matched as digits, so an agent spelling out *"cent vingt-neuf mille"* would slip through.
+
+```bash
+python3 evals/test_checks.py   # or: make calls-test
+```
+
+exercises every check in both directions, with hand-written turns: no model, no credits. It needs the ERP running
+(the T5 checks read the client list and the credit figures from it). Run it after touching any `check_…` function.
 
 ## What it measures
 

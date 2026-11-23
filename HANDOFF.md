@@ -17,6 +17,47 @@ Template:
 
 ---
 
+## 2026-11-23 22:45 · Claudio's session (lane D) · branch `d/spoken-checks`
+**Done:** The spoken-output checks lane A asked for. `make calls` now checks what the agent *says* on T5 and T6,
+not only what reaches the ERP. Merged `origin/main` (`c954a9e`, lane C's call cards): 87 tests pass.
+
+**Why these exist:** when a tool refuses a write, nothing reaches the ERP, so a false promise to the caller leaves
+no trace and the scenario passes. The ERP checks are blind to it by construction.
+
+- **T6** — the answer to "et une demi-carcasse de porc" must not accept mercredi, and must be backed by a tool call
+  in that turn. A clarifying question ("porc standard ou cul noir ?") asserts nothing and is never punished.
+  This is the exact case Alexander saw Haiku fail.
+- **T5** — no other client's card may be opened, no other client named aloud, no internal figure (plafond, encours,
+  échu) read to the caller.
+- **`make calls-test`** (`evals/test_checks.py`, no model, no credits) exercises all 13 checks in both directions
+  with hand-written turns. Run it after touching any `check_…`. Word lists are `REFUS` and `DEMAIN` in
+  `run_calls.py`: widen them rather than tightening the logic.
+
+**Validated against a real run (`2c052d5`, T5 + T6):** T6 passed all three new checks on the real Sonnet wording —
+no false failures. Known limit: amounts are matched as digits, so "cent vingt-neuf mille" spelled out would slip through.
+
+**⚠️ Alexander: the `identify_caller` defect is reproducible, and it is silent. 2 runs out of 2.**
+On the second run the agent said nothing wrong — the spoken answer was courteous and correct — but it still called
+`identify_caller("Le Comptoir de la Viande")` on turn 2 and opened `cli_0038`'s card. The caller never heard about
+it this time. So:
+
+- the ERP checks cannot see it (reading writes nothing);
+- the spoken checks cannot see it either, when the model happens not to mention it;
+- **only the tool-level check catches it**, which is why it is there.
+
+It surfaces at random: first run it leaked into speech, second run it did not. Treat it as a live confidentiality
+risk, not a cosmetic bug — `identify_caller` returns contacts, phone numbers, plafond, encours and échu.
+Suggested guard unchanged (lane A, `tools/desk.py` / `agent/loop.py`): once the caller is identified, do not let
+`identify_caller` switch to another client on a free-text guess.
+
+**T5 therefore fails now (suite reads 5/6).** That is a newly *detected* real defect, not a new regression: the
+agent behaved the same way on `be7eb4b` when the suite still said 6/6.
+
+**Next (lane D):** once the guard lands, re-run the full set and record the row. Haiku can then be evaluated with
+`make calls ARGS="--repeat 3"` — the checks that would have caught its T6 claim now exist.
+
+**Lane C (Jed):** noted you have the Voix page; the voice replay of T1–T6 is yours, so I am not touching it.
+
 ## 2026-11-23 22:40 · Jed's session (lane C) · branch `c/live-cards`
 **Done:** Jed takes lane C (frontend). On the Voix page, two cards above "ERP en direct" (`pages/voice/call-cards.tsx`):
 - **Client en ligne**: name, town, account OK or blocked, sales rep, delivery days, overdue amount, the substitution
