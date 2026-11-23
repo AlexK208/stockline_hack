@@ -17,6 +17,52 @@ Template:
 
 ---
 
+## 2026-11-23 23:45 · Claudio's session (lane D, working in lane B) · branch `b/tts-voice`
+**Pablo — I worked in your lane. Everything below is yours to override.** Lane B had one STT check and
+"Next: nothing planned", while the French TTS voice — flagged twice by Alexander and tied to the "le plus naturel"
+prize and the live demo — was untouched. I took it rather than leave it until the freeze. Your `b/stt-check`
+branch is still unmerged on origin; I did not touch it, say the word and I'll merge it.
+
+**Done — one measured change, shipped:** default TTS model `eleven_flash_v2_5` → **`eleven_v4_turbo`**.
+Measured on our account, same French sentence, 3 runs each:
+
+| Modèle | 1er octet (médiane) | Durée audio, texte identique |
+|---|---|---|
+| `eleven_flash_v2_5` (ancien) | 163 ms | 8,18 s |
+| **`eleven_v4_turbo`** (nouveau) | **137 ms** | **7,89 s** |
+| `eleven_turbo_v2_5` | 198 ms | 8,54 s |
+| `eleven_multilingual_v2` | 520 ms | 7,89 s |
+
+It wins on both axes: starts 26 ms earlier and says the same text 0,3 s faster, so fewer dead gaps. Alexander,
+this is your ear confirmed with numbers — the kit's "same latency, more expressive" comment was true.
+
+**Changed in code, not `.env`.** `.env` is git-ignored and per-machine, so a local setting would have helped one
+laptop. The default now lives in `clients/factory.py` (`DEFAULT_TTS`) and `clients/elevenlabs.py`. `TTS_MODEL`
+still wins if you set it. Two tests pinned the old default and were updated. 87 pass. Verified end to end through
+the service's `/tts`: real mp3 out.
+
+**⚠️ The voice is still not fixed, and the fix is a key, not code.**
+- The ElevenLabs key has **no `voices_read` permission** (`401 missing_permissions`), so the library cannot be
+  listed by API. Alexander was right about that.
+- I tested 8 premade voices by id. All work, and **voice choice does not affect latency** (123–160 ms, inside the
+  noise). So it is purely an ear question. Samples of the same sentence are in
+  `~/Downloads/tts-samples/` (`01-George-ACTUEL.mp3` is what we ship today) — **someone please listen and pick.**
+- **The real fix is already in the kit: `clients/gradium.py`, whose default voice is Armand, a flagship fr-FR
+  native voice.** It reads the same `TTS_API_KEY`. We were never given a Gradium key.
+  **Ask Stockline for one** — then it is three lines in `.env`:
+  `TTS_PROVIDER=gradium`, `TTS_API_KEY=<clé Gradium>`, and Armand is already the default voice.
+  Premade ElevenLabs voices will stay English voices speaking French; this is the only real route.
+
+**Also fixed, a latent silent bug Pablo found:** the STT vocabulary was **dropping terms silently** at the 6 000
+character cap (~5 922 used). A product added to the ERP could quietly stop being recognised, and it would look
+like a model error. `clients/soniox.py` now logs how many terms were dropped, once per change rather than every turn.
+
+**Written up in `DECISIONS.md` § 2.9 and § 2.10** (the code comments point there). I also filled in the lane table
+in `CLAUDE.md`: lane B is Pablo, owning `apps/ai/app/clients/`. It still said "to assign".
+
+**Not done, and not mine to do:** no voice replay from me (Jed has it), and I cannot judge a French accent — the
+voice choice needs a human.
+
 ## 2026-11-23 23:15 · Claudio's session (lane D) · branch `d/decisions`
 **Done:** Wrote **`DECISIONS.md`**. It did not exist, and it is a required deliverable in `BRIEF.md` — "le jury le
 lira". Lane D owns it. It is in French, like `BRIEF.md` and `SCENARIOS.md`.
