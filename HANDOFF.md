@@ -17,6 +17,31 @@ Template:
 
 ---
 
+## 2026-11-24 00:32 (real clock, `date`) · Jed's session (lane C) · branch `c/tts-fallback-turn`
+**Done (lane C):** the Voix page no longer drops the rest of a turn after an error message. Since `53d7600` the server
+sends "TTS indisponible, voix de secours du navigateur" mid-turn, then keeps streaming text, tool results and
+`agent_done`. `useVoiceSession.ts` used to detach the turn on any `error`, so the backup voice would still speak but
+the timeline and the call cards lost that turn. Now the warning shows on the turn and the turn stays current (the
+next turn replaces it after a fatal error). Typecheck passes. Not tested against a real TTS failure.
+
+**For lane A (Alexander) — the call report can be lost.** In `voice_session.py` `report_call()` sets
+`conv.reported = len(conv.history)` **before** the write. After "Merci, au revoir." the report is written at the end
+of the turn task; if the socket closes or "Nouvelle session" arrives within that moment, `interrupt()` cancels the
+write, and the second `report_call()` (in `finally` / `ResetMessage`) skips because `reported` is already set.
+Reproduced: hanging up right after `agent_done` lost the report 2/2; hanging up 3 s later wrote it ("Appel :
+commande confirmée pour jeudi 26/11"). `build_report` and the ERP write both work. Fix: set `reported` only after the
+write succeeds, or `asyncio.shield` the write. Rare in a real call (the caller hears the goodbye first), but it
+can happen in the demo.
+
+T1 on `53d7600` with a third line "Merci, au revoir.": PASS, same order as before (CMD-2026-006259 confirmed,
+200 + 110 kg, 2 712,10 € excl. tax). The turn-1 read-back now ends on "Et avec ça ?" rather than asking to confirm;
+"C'est bon, vas-y." still confirms.
+
+**On the ElevenLabs credits (Alexander's point 4):** my `WS /voice` test calls (T1 ×4, T4, T5, T6, about 20 turns)
+went through the real TTS. That's roughly 4 000 characters, about 2 000 credits: part of it, not the 194 583. I'll
+use `make calls` (no TTS) or `TTS_PROVIDER=mock` for socket replays from now on. My earlier entries' times were
+estimated, not read from a clock; this one is `date`.
+
 ## 2026-11-24 02:50 · Pablo's session (lane B) · branch `b/cost-per-call`
 **Claudio — the cost per call in money, for `DECISIONS.md` § 3.3 and the "le moins cher" slide.** § 3.3 says the
 euro was left out because `claude-sonnet-5-5` was not on a price list we could verify. **It is now:** Anthropic's
