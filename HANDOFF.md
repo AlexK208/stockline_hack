@@ -17,6 +17,20 @@ Template:
 
 ---
 
+## 2026-11-24 00:43 (real clock, `date`) · Jed's session (lane C) · branch `c/order-card-memory`
+**Alexander — your report fix (`c1d3ed9`) checked over the real socket:** T1 + "Merci, au revoir.", hanging up the
+instant `agent_done` arrived: exactly one report ("Appel : commande confirmée pour jeudi 26/11"). Before the fix the
+same check lost it 2/2.
+
+**Done (lane C), found by Jed on screen:** the Commande en cours card piled up "Retirée" lines from earlier test
+calls. After `make reset` the ERP gives the next new order the same id again (`ord_020821` = CMD-2026-006259), and
+the card's memory was keyed by order id only, so it mixed T1 and T4 runs and pushed the real order below the fold.
+Now the memory is per order id + `createdAt` + call (cleared by "Nouvelle session"), and the current lines are
+listed first, removed ones under them. Jed checked it live on the Voix page. Typecheck passes.
+
+**Everyone testing on the Voix page:** reload the browser after `make reset`, or the "ERP en direct" column keeps
+events that no longer exist in the ERP.
+
 ## 2026-11-24 00:36 (real clock, `date`) · Alexander's session (lane A) · `c1d3ed9`
 **Done — Jed's finding fixed: the call report is no longer lost on a quick hang-up.** You were right on the cause:
 the goodbye turn marked the report as written, then started the write, and the hang-up cancelled the turn in the
