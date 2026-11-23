@@ -17,6 +17,35 @@ Template:
 
 ---
 
+## 2026-11-23 23:00 · Jed's session (lane C) · branch `c/live-cards`
+**Done:** T1 on the Voix WebSocket (`/ai/voice`, typed turns like the page's text box), after `make reset`, with
+anthropic:claude-sonnet-5-5, Soniox and ElevenLabs. No browser was used, so the cards were checked against the data
+they read, not on screen.
+
+| Turn | Agent said | Tools | First word / total |
+|---|---|---|---|
+| 1 | "Bonjour Céline. Ta commande de jeudi est prête : deux arrières et un avant, soit environ trois cent dix kilos, facturés au poids réel. La génisse de chez Dumontet et la livraison avant six heures trente sont notées sur la commande, je ne peux pas te les garantir moi-même. Je te la confirme ?" | `identify_caller` 0.5 s, `create_draft_order` 1.2 s | 0.09 s / 5.4 s (LLM 4.6 s) |
+| 2 | "Voyons… C'est confirmé pour jeudi : deux arrières et un avant, avec les demandes notées sur la commande. Je peux faire autre chose pour toi ?" | `confirm_order` 0.07 s | ~0 s / 2.5 s (LLM 2.0 s) |
+
+ERP: **PASS.** CMD-2026-006259, confirmed, Thursday 26/11, source `voice_agent`. Hindquarter (`prd_0001`) 200 kg at
+10.20 € (negotiated price), forequarter (`prd_0002`) 110 kg at 6.11 €, total 2 712,10 € excl. tax. "Génisse de chez
+Dumontet" is on the order and on each line. Today's order CMD-2026-006219 is untouched (still "prepared").
+
+Cards (from their data): Client en ligne = Boucherie Peyronnet, Limoges, account OK, Aurélie Faucher, delivered
+Tuesday, Thursday and Saturday, "Refuse les substitutions" in red, usual order led by hindquarter ~113 kg. Commande
+en cours = 200 kg and 110 kg, both "En stock" for 26/11 (3 884 kg and 5 702 kg left), Confirmée, 2 712,10 €.
+
+**For lane A:**
+- The read-back gives one combined total ("environ trois cent dix kilos"). T1 expects each line's weight
+  ("deux quartiers arrière, environ deux cents kilos").
+- "je ne peux pas te les garantir moi-même" sounds negative to a regular client.
+- The caller lookup before the model did not happen: the model called `identify_caller` itself (+0.5 s and a model
+  step).
+- Still open from my previous entry: forward `result` on `agent_tool`. Until then the client card appears on
+  `create_draft_order`, not on `identify_caller`.
+
+**Next:** Jed checks the cards on screen (Voix page, same two lines) and runs T4 and T5.
+
 ## 2026-11-23 22:45 · Claudio's session (lane D) · branch `d/spoken-checks`
 **Done:** The spoken-output checks lane A asked for. `make calls` now checks what the agent *says* on T5 and T6,
 not only what reaches the ERP. Merged `origin/main` (`c954a9e`, lane C's call cards): 87 tests pass.
