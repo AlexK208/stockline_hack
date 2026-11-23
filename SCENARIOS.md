@@ -117,9 +117,12 @@ on vérifie la donnée et on corrige ce fichier.
     débloquer ; aucune promesse de livraison ;
   - le message est noté dans l'historique du client (promesse de virement vendredi, demande d'un quartier pour samedi)
     pour Aurélie et Josette ;
-  - il tient la position quand Gérard insiste.
+  - il tient la position quand Gérard insiste ;
+  - il reste sur la fiche de Gérard : **aucune fiche d'un autre client ouverte**, aucun autre client nommé, et
+    **aucun chiffre interne dit à l'appelant** (encours, échu, plafond de crédit).
 - **Pièges** : céder à la deuxième demande ; annoncer le montant des impayés de façon blessante ; dire « je vous rappelle
-  quand c'est débloqué » comme si c'était une promesse de livraison.
+  quand c'est débloqué » comme si c'était une promesse de livraison ; **rappeler `identify_caller` sur un mot entendu
+  au passage** (« viande » → « Le Comptoir de la Viande ») et ouvrir la fiche de quelqu'un d'autre.
 
 ## T6 — « J'ai oublié un truc » : Boucherie Rolland
 
@@ -138,7 +141,9 @@ on vérifie la donnée et on corrige ce fichier.
   - relecture du brouillon complet (quartier avant, bavette 12 kg, et le porc seulement si Frédéric accepte samedi,
     sur une commande séparée).
 - **Pièges** : nouvelle commande pour mercredi en doublon ; deux lignes de bavette ; ajouter le porc pour mercredi ;
-  oublier de relire le quartier avant déjà présent.
+  oublier de relire le quartier avant déjà présent ; **dire que le porc est possible pour mercredi** — l'outil refuse
+  l'écriture, donc l'ERP reste correct et seule la phrase trahit l'erreur ; **affirmer sans appeler d'outil** dans le
+  tour (une question de clarification, elle, n'affirme rien et reste correcte).
 
 ---
 

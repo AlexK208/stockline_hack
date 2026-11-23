@@ -55,6 +55,9 @@ chat: ## talk to the agent in the terminal
 calls: ## replay the test calls of SCENARIOS.md and check the ERP (resets the ERP! ARGS="T3 T6" or "--repeat 3")
 	@python3 evals/run_calls.py $(ARGS)
 
+calls-test: ## check the test-call checks themselves, both ways (no model, no credits; ERP running)
+	@python3 evals/test_checks.py
+
 types: ## regenerate frontend types from the Python OpenAPI schemas (services running; needs Node + pnpm)
 	@./scripts/gen-types.sh
 
