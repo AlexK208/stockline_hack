@@ -25,6 +25,7 @@ Claudio: read your lane B entry, thanks. `b/stt-check` is merged (PR #3). Lane B
 **Next:** lane B open items from Claudio's entry: pick the French voice (samples in Claudio's `tts-samples/`) and
 get a Gradium key from Stockline for the fr-FR voice Armand.
 **Broken / open questions:** none.
+
 ## 2026-11-24 00:30 · Jed's session (lane C) · `main`
 **Done:** Merged `d/t5-verified` into `main` (Claudio asked), together with lane A's `f0518e3`.
 - `f0518e3` had **committed conflict markers** in `HANDOFF.md` (`<<<<<<< HEAD` … `>>>>>>> 933c610`). Nothing was
@@ -94,6 +95,33 @@ writing anything and without saying anything.
 
 **Still open, and the last thing I would do before the freeze:** a full `make calls` on the latest commit to
 reconfirm 6/6. Everything since `be7eb4b` has only been verified scenario by scenario.
+
+## 2026-11-23 23:25 · Alexander's session (lane A) · not yet committed
+**Done:**
+- **Silent turns fixed (Jed's "2.9 s of silence after « C'est bon, vas-y. »", and a tester who measured 7.4 s and
+  3.2 s).** The model was not slower (`make calls` on `f0518e3`'s code: 6/6, first word median 2382 ms, worst 4742).
+  What changed two commits ago is that I had made the code-side opening words rare: nothing after a yes, never on two
+  turns in a row. So most tool turns were plain silence until the answer. `call_prep.py` now speaks on every turn
+  that needs a tool, with words that fit the turn and never the same twice in a row: "Je note." / "Un instant." on an
+  order, "Je regarde." on a question, "Très bien." / "Entendu." after a yes, nothing on a goodbye, nothing but
+  "Je comprends." on a blocked account. Still no "alors", "voyons" or "d'accord". `VOICE_ACK=sparse` in `.env` gives
+  the previous quiet behaviour back. Unit-tested only (97 pass): **not replayed with the model and not heard**.
+- Matured ribs: accepted when the ageing room covers the date, and the tool result now carries `mustSay` ("d'habitude
+  ça se réserve une semaine avant…") with a prompt rule to say it. Decision by Alexander: keep it that way.
+- Removed three leftover conflict markers from this file (lines 20, 109, 164). No entry was dropped: checked with
+  `grep -c "^## 2026"` before and after.
+
+**Jed:** `result` on `agent_tool` and "je ne peux pas te les garantir" are both in `f0518e3`; the client card should
+now show on the `identify_caller` row. Note the card has no `credit` key any more (see my 23:05 entry).
+
+**Broken / open questions:**
+- **Pablo / Claudio (lane B): the same tester could not understand the French without reading the text, and heard
+  « quand » where the text said « sans ».** That is the TTS, not the text: English voice (George) on
+  `eleven_v4_turbo`. I cannot listen from my side. Two things to try by ear, same sentence each time:
+  `TTS_MODEL=eleven_flash_v2_5` against `eleven_v4_turbo` (the expressive model may be the one changing words), and
+  the Gradium route as soon as Stockline gives a key. Someone needs to ask Stockline for that key or a French voice id (message drafted for Alexander).
+- I am no longer running model replays from my side unless Alexander asks (cost). Whoever runs `make calls` next,
+  please add the row.
 
 ## 2026-11-23 23:55 · Jed's session (lane C) · branch `c/live-cards`
 **Done:** Restored my 23:30 entry (below, unchanged, from `2bdb794`). The merge of `main` into `b/tts-voice`

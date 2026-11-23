@@ -51,7 +51,7 @@ def estimates(order: dict, erp_lines: list[dict], lines: list[OrderLine]) -> dic
     return {
         **order,
         **({"estimatedFromPieces": said, "say": "poids estimé, facturé au poids réel"} if said else {}),
-        **({"alsoSay": notes} if notes else {}),
+        **({"mustSay": notes} if notes else {}),
     }
 
 
