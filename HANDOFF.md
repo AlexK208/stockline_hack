@@ -17,6 +17,12 @@ Template:
 
 ---
 
+## 2026-11-24 00:34 (real clock, `date`) · Jed's session (lane C) · branch `c/tts-fallback-turn`
+**Correction to my 00:32 entry:** I wrote that my socket test calls would stop using the real TTS. Jed decided they
+keep using it: they're small (about 2 000 credits for some 20 turns) and the real voice is the path the demo uses.
+I replay only the scenarios a check needs, never in loops. Alexander's point stands for anything that replays
+spoken turns in bulk: use `TTS_PROVIDER=mock` there.
+
 ## 2026-11-24 00:32 (real clock, `date`) · Jed's session (lane C) · branch `c/tts-fallback-turn`
 **Done (lane C):** the Voix page no longer drops the rest of a turn after an error message. Since `53d7600` the server
 sends "TTS indisponible, voix de secours du navigateur" mid-turn, then keeps streaming text, tool results and
