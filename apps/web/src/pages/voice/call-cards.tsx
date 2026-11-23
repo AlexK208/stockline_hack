@@ -69,7 +69,7 @@ export function CallCards({ turns, since }: { turns: VoiceTurn[]; since: string 
   return (
     <div className="flex flex-col">
       <ClientCard clientId={clientId} candidates={tools.candidates} />
-      <OrderCard orderId={orderId} order={order} />
+      <OrderCard orderId={orderId} order={order} session={since} />
     </div>
   );
 }
@@ -177,7 +177,10 @@ type Line = OrderDetail["lines"][number];
 const lineKey = (l: Line) => `${l.id}:${l.productId}`;
 
 interface Memory {
-  orderId?: Id;
+  /** Which order this memory is about: its id, when it was created, and the call (session start). After `make reset`
+   *  the ERP hands out the same order id again (ord_020821 = CMD-2026-006259) for another order, so the id alone
+   *  would mix the lines of several test calls. */
+  key?: string;
   initial: Set<string>; // line keys already there when the card first saw the order (no flash)
   lines: Map<string, Line>; // every line key seen during the call, in first-seen order
   firstQty: Map<string, number>;
@@ -193,10 +196,11 @@ function stockState(line: Line, order: OrderDetail, rows: Map<Id, StockAvailabil
   return before <= 0 ? "out" : "short";
 }
 
-function OrderCard({ orderId, order }: { orderId?: Id; order?: OrderDetail }) {
+function OrderCard({ orderId, order, session }: { orderId?: Id; order?: OrderDetail; session: string }) {
   const mem = useRef<Memory>({ initial: new Set(), lines: new Map(), firstQty: new Map() });
-  if (order && mem.current.orderId !== order.id) {
-    mem.current = { orderId: order.id, initial: new Set(order.lines.map(lineKey)), lines: new Map(), firstQty: new Map() };
+  const memKey = order ? `${order.id}|${order.createdAt}|${session}` : undefined;
+  if (order && mem.current.key !== memKey) {
+    mem.current = { key: memKey, initial: new Set(order.lines.map(lineKey)), lines: new Map(), firstQty: new Map() };
   }
   const m = mem.current;
   if (order) for (const l of order.lines) { const k = lineKey(l); m.lines.set(k, l); if (!m.firstQty.has(k)) m.firstQty.set(k, l.qty); }
@@ -206,7 +210,8 @@ function OrderCard({ orderId, order }: { orderId?: Id; order?: OrderDetail }) {
   const rows = useMemo(() => new Map((avail ?? []).map((r) => [r.productId, r])), [avail]);
 
   const current = new Set(order?.lines.map(lineKey));
-  const shown = [...m.lines.values()];
+  // The order as it stands first (in the ERP's order), then what was taken off during the call, crossed out.
+  const shown = [...(order?.lines ?? []), ...[...m.lines.values()].filter((l) => !current.has(lineKey(l)))];
 
   return (
     <section className="border-b border-border">
