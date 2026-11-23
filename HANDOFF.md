@@ -17,6 +17,48 @@ Template:
 
 ---
 
+## 2026-11-24 00:45 (real clock, `date`) · Alexander's session (lane A) · `7b72a6c`
+**Pablo — the STT timing lines you asked for, from a real spoken call on `c1d3ed9` (Alexander's Mac, 00:40).
+The second is not in the browser and not in our code. It is between our socket and Soniox.**
+
+```
+audio 5885 ms in 48 frames, first frame after 111 ms, longest gap 168 ms, 3 frames in the last 300 ms, last frame 0 ms before the end; live transcript 13 words, last update 288 ms AFTER the end; final 17 words 1586 ms after the end
+audio 1719 ms in 14 frames, first frame after 120 ms, longest gap 168 ms, 4 frames in the last 300 ms, last frame 0 ms before the end; live transcript  0 words, last update 247 ms AFTER the end; final  5 words 1686 ms after the end
+audio 1332 ms in 10 frames, first frame after 119 ms, longest gap 168 ms, 3 frames in the last 300 ms, last frame 0 ms before the end; live transcript  0 words, last update 888 ms before the end; final  2 words 1254 ms after the end
+audio 2687 ms in 23 frames, first frame after 117 ms, longest gap 147 ms, 4 frames in the last 300 ms, last frame 0 ms before the end; live transcript  2 words, last update 225 ms AFTER the end; final  5 words 1811 ms after the end
+```
+
+What they say:
+- **The browser is clean.** Frames every ~120 ms, never a gap above 168 ms, the last one right at the release.
+- **Our side is clean.** "The end" is the instant `audio_end` arrived, and `Utterance.end()` is now called there.
+- **Soniox is 1,3–1,8 s behind the voice, whatever the length.** A 5,9 s sentence was still 4 words short at the
+  release; a 1,7 s sentence had produced nothing at all. The final words then take 1,25–1,8 s, against the
+  0,1–0,35 s you measured alone.
+- Line 3 matters: there the socket had already answered 444 ms after `audio_start`, so a slow handshake does not
+  explain it by itself. That turn still took 1 254 ms.
+
+**So what differs between your script and a real turn?** Two things I can see, both yours to test in a few minutes
+with the script you already have:
+1. **The vocabulary.** Your test did not send it; production sends ~5 900 characters of `context.terms` with every
+   utterance. Rerun with the real list (`services/vocabulary.py`). If the delay appears, we have found it, and the
+   trade is fewer terms against mishearing names.
+2. **Speech right up to the release.** Synthetic files usually end with a little silence, so the model has finished
+   before `finalize`. Cut the file at the last word and measure how many words are still missing at `finalize`.
+3. If neither moves it: one socket per call with keep-alive messages, as you proposed. You have my OK to change
+   `soniox.py`; tell me what you need from `Utterance`.
+
+This is now the largest latency item we have: over a second on every turn, and it also decides whether the instant
+word can come at 0,2 s (it needs 4 words of live transcript, and short sentences have none).
+
+**Done in lane A from the same call (103 tests pass, not replayed with the model):**
+- "C'est tout." got no instant word and 3,1 s of silence: it was filed as a goodbye. It is now its own kind and
+  gets "Très bien." (the read-back follows).
+- "Oui, valide. Merci, au revoir." got no instant word and **5,0 s of silence**: also filed as a goodbye, although
+  it needs `confirm_order`. A validation word now wins over the goodbye around it.
+- The call report was written twice in that call ("à valider" after "C'est tout.", then "confirmée"). It is now
+  written on a real goodbye only, not on "c'est tout".
+- The ElevenLabs voice answered in that call (TTS first byte 118–228 ms): credits seem to be back.
+
 ## 2026-11-24 00:43 (real clock, `date`) · Jed's session (lane C) · branch `c/order-card-memory`
 **Alexander — your report fix (`c1d3ed9`) checked over the real socket:** T1 + "Merci, au revoir.", hanging up the
 instant `agent_done` arrived: exactly one report ("Appel : commande confirmée pour jeudi 26/11"). Before the fix the
