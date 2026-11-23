@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## 2026-11-24 00:49 (real clock, `date`) · Claudio's session (lane D) · branch `d/feature-ideas`
+**Alexander — a request, from Claudio directly: please run the AI agent arena on the seven ideas below and tell
+us which to build.** I don't know how your arena is set up, so I'm giving each idea with its evidence, cost,
+risk and owning lane so it can be judged without re-deriving anything. **I am holding off on the slides and the
+video until the arena answers**, so this is blocking me — a fast verdict is worth more than a thorough one.
+
+**Where the ideas came from.** The agent has 31 tools, but **20+ ERP endpoints are untouched**: all of
+`/api/invoices`, `/api/payments`, `/api/receivables`, `/api/purchase-orders/*`, `/api/routes`,
+`/api/route-runs*`, `/api/stock/movements`, `/api/prices/grid`, `/api/price-rules`, `/api/dashboard`.
+Excluded as already built: your `call_report.py` and `warmup.py`.
+
+| # | Idea | What it buys | Cost | Lane / files | Risk |
+|---|---|---|---|---|---|
+| 1 | **Weigh ticket / short delivery** — client calls about a light delivery, agent reads ordered vs weighed per line + lot | The showpiece `CLAUDE.md` promised and we never built. Data already exists: `order_history` returns `weighed` (`preparedQty`), `/api/stock` returns lots with supplier and dates | 1–2 h | A (`tools/`, `prompts.py`) | Low |
+| 2 | **« Il est où mon camion ? » — delivery round and ETA** | `/api/routes`, `/api/route-runs`, `/api/route-runs/plan`, `/api/route-runs/{id}/stops` are **entirely unused**. A butcher at 6 h asking when the van arrives is one of the most realistic calls in this trade, and I doubt any other team has touched routes | 1,5–2 h | A (new tool) | Medium — new surface |
+| 3 | **Numbers spoken as French words** — « 278,5 » → « deux cent soixante-dix-huit kilos cinq » | `GUIDE-VOIX.md` § 4.10 says in so many words that the kit has no number→spoken-French function and to write one if answers read prices. Straight naturalness, the axis we are judged on | ~45 min | A (`tools/catalog.py` `format_number`) | Low, unit-testable with no credits |
+| 4 | **Proactive « comme d'habitude »** — offer the usual basket instead of only reacting | `/api/clients/{id}/usual` is already in the card but never used to *offer*. « Je te mets ton foie de veau comme d'habitude ? » Makes the agent sound like it knows the client | ~30 min | A (`prompts.py`) | Low, but it is voice wording → your freeze |
+| 5 | **Accepted-substitution path** | `find_alternatives` exists; T3 only covers a client who *refuses*. A client who says yes is untested | ~1 h | A + D (new scenario) | Low |
+| 6 | **Jev for one fast yes/no** | `BRIEF.md` lists it as a technique, the key is set, it is completely unused. Shows model tiering | 1–2 h | A | Medium — new code near the freeze. **I would vote against** |
+| 7 | **Invoice / receivables questions** | `/api/invoices`, `/api/payments`, `/api/receivables` unused | 1–2 h | A | **Conflicts with a decision we already shipped**: you removed credit figures from the phone agent for confidentiality, and J17/J18 now pass because of it. Only with your explicit yes |
+
+**My own ranking, for what it is worth, so the arena has a baseline to beat:** 3 and 4 are the cheapest wins on
+"natural"; 1 and 2 are the ones that make a jury sit up, with 2 most likely to be unique to us; 6 and 7 I would
+not do today.
+
+**Two constraints the arena should weigh:**
+- It is **00:48**, freeze 13:00. Anything here competes with the slides and the video, which **still do not
+  exist** and which I am down to present (`DEMO.md`).
+- **4 touches spoken wording, so it is inside your voice freeze.** 1, 2, 3, 5 do not.
+
+**Reply with the numbers to build and I will start immediately.** If the arena says "none, do the slides", that
+is a perfectly good answer and I will take it.
+
 ## 2026-11-24 00:45 (real clock, `date`) · Alexander's session (lane A) · `7b72a6c`
 **Pablo — the STT timing lines you asked for, from a real spoken call on `c1d3ed9` (Alexander's Mac, 00:40).
 The second is not in the browser and not in our code. It is between our socket and Soniox.**
