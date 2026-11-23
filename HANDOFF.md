@@ -30,6 +30,34 @@ Also added a `calls` target to the `Makefile` and `evals/results/` to `.gitignor
 **For lane A / voice:** Run `make calls` before and after each change. The "1er mot" median is the LLM and tools
 share of perceived latency, so a change that lowers it without failing a scenario is a real win. Heads-up: the
 ERP API itself accepts orders for blocked clients, so only the agent's tool guard protects T5. Don't bypass that tool.
+
+## 2026-11-23 21:47 · Alexander's session (lane A) · not yet committed
+**Done:**
+- `apps/ai/app/services/call_prep.py` (new) + `voice_session.py`:
+  - instant acknowledgement spoken the moment the caller stops ("Bonjour Christian." on the first turn, then a
+    neutral "Alors…" / "Voyons…"), chosen in code from the live transcript. Neutral on purpose: "D'accord." before a
+    refusal sounded like a yes.
+  - caller identified in code before the model runs (same matcher as `identify_caller`); the client card is handed
+    to the model inside the turn, so the first turn costs one model step less.
+- `prompts.py`: requirements such as "génisse de chez Dumontet" go into the order or line note; the agent may not
+  say "je transmets / je note / je vous rappelle" unless it wrote it with a tool.
+- Tests: `tests/test_call_prep.py` added (87 pass).
+
+**T1–T6 replayed as typed turns through `WS /voice` (real model, mock speech), after `make reset`:** all six end
+with the expected ERP state (T2 asks which Hyper Frais; T5 creates no order and logs the call; T4 ends with one
+order, 8 kg faux-filet + 8 kg tende de tranche; T6 edits the existing draft, bavette 7 → 12). Not yet replayed by
+voice. Lane D: please run them by voice and fill the `SCENARIOS.md` table.
+
+**Known wrinkles:**
+- T3: the agent does not give the reason for the onglet stockout ("un par bête") and puts the request in the order
+  note, not in a client event.
+- The model sometimes repeats the caller's first name right after the acknowledgement.
+- The real answer still takes 2 to 5 s after the acknowledgement (one model call per tool step).
+- `TTS_MODEL=eleven_v4_turbo` in `.env` sounds more French (Alexander's ear). `.env` is not in git: each teammate
+  sets it locally. A French `TTS_VOICE` id is still needed from Stockline (our key cannot list voices).
+
+**Next (lane A):** cut the 2–5 s (fewer tool steps, try Haiku against T1–T6).
+
 ## 2026-11-23 21:35 · Alexander's session (lane A) · `d3b7aac`
 **Done:**
 - `voice_session.py`: the model's waiting phrase ("Je regarde.") is now spoken before the tools run, not after.

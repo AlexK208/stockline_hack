@@ -356,6 +356,16 @@ def voice_session_with(monkeypatch, steps, tts_sleep=False):
         monkeypatch.setattr(voice_session, "get_tts_client", lambda: SlowTTS())
     else:
         monkeypatch.setattr(voice_session, "get_tts_client", lambda: MockTTS())
+    # These tests are about the history after an interruption: switch off the in-code acknowledgement and caller
+    # prefetch (services/call_prep.py, tested in test_call_prep.py), which talk to the ERP before the model runs.
+    async def no_ack(*args, **kwargs):
+        return ""
+
+    async def no_prefetch(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(voice_session, "choose_ack", no_ack)
+    monkeypatch.setattr(voice_session, "prefetch_caller", no_prefetch)
     session = voice_session.VoiceConnection(FakeWS())
     conv = voice_session.Conversation(id="t")
     return session, conv, llm
