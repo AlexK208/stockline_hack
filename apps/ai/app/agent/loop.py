@@ -108,7 +108,9 @@ async def run_agent(
 
             # 3. Run the tools (in parallel), append the results, loop.
             messages.append(ChatMessage(role="assistant", content=text, tool_calls=calls))
-            results = await asyncio.gather(*(execute_tool(call, tools, ctx) for call in calls))
+            if mode == "voice":  # a client is on the phone: the tools only work on that client (see call_guard)
+                ctx.on_call, ctx.caller, ctx.heard = True, known_caller(messages), last_heard(messages)
+            results = await execute_all(calls, tools, ctx)
             # All results go into the history BEFORE the first yield: if the caller interrupts while we stream them,
             # an order that was written stays known and is not created a second time.
             messages.extend(ChatMessage(role="tool", tool_call_id=r.call_id, name=r.name, content=to_json(r.result)) for r in results)
@@ -126,6 +128,24 @@ async def run_agent(
         yield ErrorEvent(message=str(e) or type(e).__name__)
 
 
+async def execute_all(calls: list[ToolCall], tools: list[Tool], ctx: ToolContext) -> list[ToolResultEvent]:
+    """Run the tool calls of one step in parallel, except the calls on the same order: those run one after the
+    other, in the order the model wrote them. Two edits of one order then never cross, and the last result is the
+    order as it ends up (no get_order needed to read it back). Results come back in call order."""
+    results: list[ToolResultEvent | None] = [None] * len(calls)
+    chains: dict[str, list[int]] = {}
+    for i, call in enumerate(calls):
+        order_id = (call.arguments or {}).get("orderId")
+        chains.setdefault(order_id if isinstance(order_id, str) and order_id else f"#{i}", []).append(i)
+
+    async def run_chain(indexes: list[int]) -> None:
+        for i in indexes:
+            results[i] = await execute_tool(calls[i], tools, ctx)
+
+    await asyncio.gather(*(run_chain(indexes) for indexes in chains.values()))
+    return [r for r in results if r is not None]
+
+
 async def execute_tool(call: ToolCall, tools: list[Tool], ctx: ToolContext) -> ToolResultEvent:
     """Run one tool call. Never raises: errors become `{"error": ...}` so the model can explain or retry."""
     started = time.perf_counter()
@@ -133,6 +153,7 @@ async def execute_tool(call: ToolCall, tools: list[Tool], ctx: ToolContext) -> T
     try:
         if not tool:
             raise LookupError(f"Outil inconnu : {call.name}")
+        await call_guard(call, ctx)
         result = await tool.run(call.arguments, ctx)
         try:  # a value the model can't read back (datetime, set, object…) is the tool's error, not the turn's
             to_json(result)
@@ -148,7 +169,58 @@ async def execute_tool(call: ToolCall, tools: list[Tool], ctx: ToolContext) -> T
 
 def caller_known(messages: list[ChatMessage]) -> bool:
     """True once identify_caller has returned a client card in this conversation."""
-    return any(m.role == "tool" and m.name == "identify_caller" and '"status":"found"' in (m.content or "") for m in messages)
+    return known_caller(messages) is not None
+
+
+def known_caller(messages: list[ChatMessage]) -> str | None:
+    """Id of the client on the phone: the last card identify_caller returned in this conversation.
+    (Parsed, not searched as text: a history sent back by a client of POST /chat is not always compact JSON.)"""
+    for m in reversed(messages):
+        if m.role == "tool" and m.name == "identify_caller":
+            try:
+                result = json.loads(m.content or "")
+                if result.get("status") == "found":
+                    return result["client"]["id"]
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+    return None
+
+
+def last_heard(messages: list[ChatMessage]) -> str:
+    """The caller's last sentence as transcribed, without the notes the voice session adds for the model."""
+    said = next((m.content or "" for m in reversed(messages) if m.role == "user"), "")
+    return said.split("\n\n[Système", 1)[0]
+
+
+OTHER_CLIENT = (
+    "Refusé : pendant un appel, les outils ne servent que le client qui appelle. Les commandes, prix et informations "
+    "d'un autre client sont confidentiels : dis-le simplement, sans rien citer de l'autre client."
+)
+NOT_IDENTIFIED = "Refusé : identifie d'abord l'appelant avec identify_caller (nom du commerce, ville). Rien ne s'écrit ni ne se lit avant."
+
+
+async def call_guard(call: ToolCall, ctx: ToolContext) -> None:
+    """One call = one client. On the phone, a tool that names a client or an order only runs for the caller's own.
+    The prompt says so too, but a rule the model can forget is not a guarantee: this one is in code. Raises to refuse."""
+    if not ctx.on_call or call.name == "identify_caller":
+        return
+    args = call.arguments or {}
+    client_ids = {v for v in args.values() if isinstance(v, str) and v.startswith("cli_")}
+    order_id = args.get("orderId") or args.get("order_id")
+    if not client_ids and not order_id:
+        return
+    if not ctx.caller:
+        raise PermissionError(NOT_IDENTIFIED)
+    if client_ids - {ctx.caller}:
+        raise PermissionError(OTHER_CLIENT)
+    if order_id:
+        try:
+            order = await ctx.erp.get(f"/api/orders/{order_id}")
+        except Exception:
+            return  # unknown order: the tool reports it itself
+        owner = order.get("clientId") or (order.get("client") or {}).get("id")
+        if owner and owner != ctx.caller:
+            raise PermissionError(OTHER_CLIENT)
 
 
 def ms_since(t0: float) -> int:
