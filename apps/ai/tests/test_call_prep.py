@@ -1,7 +1,8 @@
 """In-code acknowledgement and caller prefetch (app/services/call_prep.py): the parts that need no ERP."""
 
 from app.schemas import ChatMessage
-from app.services.call_prep import MARKER, ack_note, caller_known, choose_ack
+from app.agent.loop import caller_known
+from app.services.call_prep import ack_note, choose_ack
 from app.tools import desk
 
 
@@ -15,9 +16,8 @@ async def test_ack_on_later_turns_needs_no_erp():
     assert await choose_ack("", False, None) == ""
 
 
-def test_caller_known_from_prefetch_or_tool():
+def test_caller_known_once_identify_caller_found_a_client():
     assert not caller_known([ChatMessage(role="user", content="bonjour")])
-    assert caller_known([ChatMessage(role="user", content=f"bonjour\n\n[Système : {MARKER}]")])
     found = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"found","client":{}}')
     assert caller_known([found])
     asked = ChatMessage(role="tool", name="identify_caller", tool_call_id="x", content='{"status":"ambiguous"}')

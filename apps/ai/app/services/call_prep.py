@@ -4,15 +4,13 @@ What the voice session does in CODE around the model, to cut dead air and model 
     choose_ack        a one- or two-word acknowledgement spoken the instant the caller stops ("Bonjour Christian.",
                       "Alors…"), from the live transcript: no model, no tool. It is only a courtesy
                       sound: it never states a fact, so it cannot be wrong about the order.
-    prefetch_caller   on the first turns, identify the caller with the same matcher as the identify_caller tool and
-                      hand the client card to the model inside the user turn: the model answers in one step instead
-                      of "call identify_caller, wait, answer".
+    (The caller is also identified in code before the model runs: that lives in the agent loop, agent/loop.py,
+    with tools/desk.py prefetch_identify, so the text chat and the test runner get it too.)
 
-Both are best effort: any doubt (two plausible clients, ERP slow) → return nothing and let the model do it with tools.
+Best effort: any doubt (two plausible clients, ERP slow) → say a plain "Bonjour." and let the model do the rest.
 """
 
 import asyncio
-import json
 import re
 
 from app.tools import ErpClient
@@ -51,36 +49,6 @@ async def choose_ack(text: str, first_turn: bool, erp: ErpClient) -> str:
     if not words or CLOSING.search(text):
         return ""  # "merci, au revoir": a filler would sound odd
     return FILLERS[len(words) % len(FILLERS)]  # varies from turn to turn, so it does not sound like a recording
-
-
-async def prefetch_caller(text: str, erp: ErpClient) -> tuple[str, str] | None:
-    """→ (client_id, note for the model) when the caller is identified without doubt, else None."""
-    client, _ = await find_caller(text, erp)
-    if not client:
-        return None
-    try:
-        card = await asyncio.wait_for(desk.client_card(erp, client["id"]), 2.0)
-    except Exception:
-        return None
-    note = (
-        "[Système : appelant identifié automatiquement, voici le résultat de identify_caller. "
-        "Ne rappelle pas identify_caller pour lui.]\n" + json.dumps({"status": "found", "client": card}, ensure_ascii=False, separators=(",", ":"))
-    )
-    return client["id"], note
-
-
-MARKER = "appelant identifié automatiquement"
-
-
-def caller_known(history: list) -> bool:
-    """True once the caller's card is in the conversation (prefetched here, or returned by the identify_caller tool)."""
-    for m in history:
-        content = m.content or ""
-        if m.role == "user" and MARKER in content:
-            return True
-        if m.role == "tool" and m.name == "identify_caller" and '"status":"found"' in content:
-            return True
-    return False
 
 
 def ack_note(ack: str) -> str:

@@ -276,33 +276,21 @@ class Item(ToolArgs):
     pieces: float | None = Field(None, description="Nombre de pièces si l'appelant parle en pièces : « deux arrières », « un agneau », « un demi-veau »")
 
 
-@tool
-async def check_products(
-    ctx: ToolContext,
-    client_id: str,
-    delivery_date: str = Field(description="Date de livraison visée, YYYY-MM-DD"),
-    items: list[Item] = Field(description="Tous les produits demandés dans ce tour, en un seul appel"),
-) -> dict:
-    """
-    À appeler AVANT d'écrire des lignes de commande, une seule fois pour tous les produits du tour. Pour chaque produit et pour la date
-    de livraison : quantité en kilos (convertit les pièces : « deux arrières » → kilos estimés), prix de CE client, disponibilité À LA
-    DATE (compte les arrivages prévus avant la livraison : seule vérité sur le stock), délai de commande respecté ou non, et si ça
-    manque : quantité possible, date du prochain arrivage, produits de remplacement. Dit aussi si le client est livré ce jour-là.
-    Ne propose un remplacement que si les préférences du client l'autorisent.
-    """
-    meta, client = await asyncio.gather(ctx.erp.get("/api/meta"), ctx.erp.get(f"/api/clients/{enc(client_id)}"))
+async def check_items(erp: ErpClient, client_id: str, delivery_date: str, items: list[Item]) -> dict:
+    """Everything to know before writing order lines, for one delivery date (shared by check_products and the write
+    tools of orders.py, which refuse to write while `problems_of` finds something)."""
+    meta, client = await asyncio.gather(erp.get("/api/meta"), erp.get(f"/api/clients/{enc(client_id)}"))
     today = date.fromisoformat(meta["today"])
     day = date.fromisoformat(delivery_date)
     ids = list(dict.fromkeys(i.product_id for i in items))
     products, levels = await asyncio.gather(
-        asyncio.gather(*(ctx.erp.get(f"/api/products/{enc(i)}") for i in ids)),
-        ctx.erp.get("/api/stock/availability", {"date": delivery_date, "productIds": ",".join(ids)}),
+        asyncio.gather(*(erp.get(f"/api/products/{enc(i)}") for i in ids)),
+        erp.get("/api/stock/availability", {"date": delivery_date, "productIds": ",".join(ids)}),
     )
     product = {p["id"]: p for p in products}
     level = {r["productId"]: r for r in levels}
 
-    out_items = []
-    for it in items:
+    async def one(it: Item) -> dict:
         p = product[it.product_id]
         row: dict = {"productId": p["id"], "name": p["name"], "unit": p["unit"]}
         qty = it.qty
@@ -310,11 +298,11 @@ async def check_products(
         if qty is None and it.pieces and rng:
             qty = round(it.pieces * (rng[0] + rng[1]) / 2, 1)
             row["estimatedFromPieces"] = f"{fmt(it.pieces)} pièce(s) ≈ {fmt(qty)} kg (pièce de {fmt(rng[0])} à {fmt(rng[1])} kg, facturé au poids réel)"
-        elif qty is None and it.pieces:
-            row["needQty"] = "Pas de poids par pièce connu : demande la quantité en kilos."
+        elif qty is None:
+            row["needQty"] = "Quantité inconnue (pas de poids par pièce pour ce produit) : demande la quantité en kilos."
         if qty is not None:
             row["qty"] = qty
-            price = await ctx.erp.get("/api/prices/resolve", {"clientId": client_id, "productId": p["id"], "qty": fmt(qty)})
+            price = await erp.get("/api/prices/resolve", {"clientId": client_id, "productId": p["id"], "qty": fmt(qty)})
             row["unitPrice"] = price["price"]
         lv = level.get(p["id"], {})
         available = max(0.0, lv.get("availableOn", 0.0))
@@ -328,16 +316,16 @@ async def check_products(
                 row["nextArrival"] = {"date": lv["nextArrival"]["date"], "jour": jour(lv["nextArrival"]["date"])}
             else:
                 row["nextArrival"] = "aucun arrivage confirmé"
-            alts = await ctx.erp.get(f"/api/products/{enc(p['id'])}/alternatives")
+            alts = await erp.get(f"/api/products/{enc(p['id'])}/alternatives")
             row["alternatives"] = [pick(a, "id", "name") for a in alts[:3]]
         lead = LEAD_DAYS_BY_PRODUCT.get(p["id"], LEAD_DAYS_BY_CATEGORY.get(p.get("category"), 1))
         if (day - today).days < lead:
             earliest = today + timedelta(days=lead)
             row["leadTime"] = f"Trop tard pour cette date : ce produit se commande {lead} jours avant. Au plus tôt le {earliest.isoformat()}."
-        out_items.append(row)
+        return row
 
     days = client.get("deliveryDays") or []
-    result: dict = {"deliveryDate": delivery_date, "jour": jour(delivery_date), "items": out_items}
+    result: dict = {"deliveryDate": delivery_date, "jour": jour(delivery_date), "items": list(await asyncio.gather(*(one(it) for it in items)))}
     if day <= today:
         result["deliveryDay"] = "Date passée ou aujourd'hui : les camions sont partis. Propose un des prochains jours."
         result["nextDeliveries"] = next_delivery_dates(meta["today"], days)
@@ -347,5 +335,55 @@ async def check_products(
     return result
 
 
+def problems_of(checked: dict) -> list[str]:
+    """What stops these lines from being written as asked ([] = all good)."""
+    out = [checked["deliveryDay"]] if checked.get("deliveryDay") else []
+    for row in checked["items"]:
+        if row.get("needQty"):
+            out.append(f"{row['name']} : quantité à demander")
+        if row["stock"] != "ok":
+            out.append(f"{row['name']} : {row['stock']} ({fmt(row.get('availableQty', 0))} {row['unit']} possibles à cette date)")
+        if row.get("leadTime"):
+            out.append(f"{row['name']} : {row['leadTime']}")
+    return out
+
+
+async def default_delivery_date(erp: ErpClient, client_id: str) -> str:
+    """The client's next delivery day (what the ERP would pick for an order without a date)."""
+    meta, client = await asyncio.gather(erp.get("/api/meta"), erp.get(f"/api/clients/{enc(client_id)}"))
+    return next_delivery_dates(meta["today"], client.get("deliveryDays") or [], 1)[0]["date"]
+
+
+@tool
+async def check_products(
+    ctx: ToolContext,
+    client_id: str,
+    delivery_date: str = Field(description="Date de livraison visée, YYYY-MM-DD"),
+    items: list[Item] = Field(description="Tous les produits concernés, en un seul appel"),
+) -> dict:
+    """
+    Pour RÉPONDRE À UNE QUESTION sans rien écrire (« il vous reste de l'onglet ? », « c'est combien la bavette ? », « je peux avoir
+    un arrière pour mercredi ? ») : pour chaque produit et pour la date, prix de CE client, disponibilité À LA DATE (compte les
+    arrivages prévus avant la livraison), conversion pièces → kilos, délai de commande, jour de livraison, et si ça manque : quantité
+    possible, prochain arrivage, produits de remplacement. Inutile avant create_draft_order, add_order_line ou update_order_line :
+    ces outils font eux-mêmes ces vérifications.
+    """
+    return await check_items(ctx.erp, client_id, delivery_date, items)
+
+
 def fmt(n: float) -> str:
     return str(int(n)) if float(n).is_integer() else str(n)
+
+
+async def prefetch_identify(said_text: str, erp: ErpClient) -> tuple[str, dict] | None:
+    """What identify_caller would return for this utterance, when exactly ONE client matches it; else None (the model
+    then calls the tool itself and asks). Used by the agent loop to skip a model round-trip at the start of a call."""
+    try:
+        clients, idf = await asyncio.wait_for(directory(erp), 1.5)
+        best, _ = match_clients(said_text, clients, idf)
+        if not best:
+            return None
+        card = await asyncio.wait_for(client_card(erp, best["id"]), 2.0)
+    except Exception:  # ERP slow or down: let the model use the tool and report the problem
+        return None
+    return best["name"], {"status": "found", "client": card}

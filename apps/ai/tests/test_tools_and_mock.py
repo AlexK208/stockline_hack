@@ -53,7 +53,9 @@ async def test_tool_validates_arguments():
 def test_nested_model_is_inlined():
     schema = json_schema(TOOLS["create_draft_order"].args_model)
     assert "$defs" not in schema
-    assert schema["properties"]["lines"]["items"]["required"] == ["productId", "qty"]
+    # qty is optional since a line can be given in pieces ("deux arrières"): the tool converts them to kilos
+    assert schema["properties"]["lines"]["items"]["required"] == ["productId"]
+    assert {"qty", "pieces"} <= set(schema["properties"]["lines"]["items"]["properties"])
 
 
 def test_french_formatting():
