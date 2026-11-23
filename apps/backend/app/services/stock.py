@@ -92,6 +92,47 @@ def _compute_levels(exclude_order_id: str | None) -> dict[str, Doc]:
     return levels
 
 
+def availability_on(date: str, exclude_order_id: str | None = None) -> dict[str, Doc]:
+    """Stock a product can really offer for a delivery on `date` (YYYY-MM-DD), per product:
+
+        availableOn = onHand + incoming expected on or before `date` − reserved by orders delivered on or before `date`
+
+    Why: `available` (onHand − reserved) ignores purchase orders already sent. A meat wholesaler buys carcasses to
+    order (slaughter on Monday and Thursday, arrival at 03:00, trucks leave at 05:00), so its best sellers show a
+    negative `available` although the goods arrive before the delivery. An arrival dated the delivery day counts.
+    `nextArrival` = the first purchase order line still expected (any date), so the agent can say when stock is back.
+    """
+    out: dict[str, Doc] = {}
+    for product_id, level in stock_levels().items():
+        out[product_id] = {"productId": product_id, "onHand": level["onHand"], "reservedByDate": 0.0, "incomingByDate": 0.0}
+    for order in crud.orders.rows.values():
+        if order["status"] not in RESERVING_STATUSES or order["id"] == exclude_order_id or order["deliveryDate"] > date:
+            continue
+        for line in order["lines"]:
+            if line["productId"] in out:
+                out[line["productId"]]["reservedByDate"] += line_qty(line)
+    for po in crud.purchase_orders.rows.values():
+        if po["status"] not in ("sent", "partially_received"):
+            continue
+        for line in po["lines"]:
+            left = max(0, line["qty"] - line["receivedQty"])
+            row = out.get(line["productId"])
+            if not row or left <= 0:
+                continue
+            if po["expectedDate"] <= date:
+                row["incomingByDate"] += left
+            nxt = row.get("nextArrival")
+            if nxt is None or po["expectedDate"] < nxt["date"]:
+                row["nextArrival"] = {"date": po["expectedDate"], "qty": round3(left)}
+            elif po["expectedDate"] == nxt["date"]:
+                nxt["qty"] = round3(nxt["qty"] + left)
+    for row in out.values():
+        row["reservedByDate"] = round3(row["reservedByDate"])
+        row["incomingByDate"] = round3(row["incomingByDate"])
+        row["availableOn"] = round3(row["onHand"] + row["incomingByDate"] - row["reservedByDate"])
+    return out
+
+
 def stock_level(product_id: str) -> Doc:
     crud.products.require(product_id)
     return stock_levels()[product_id]

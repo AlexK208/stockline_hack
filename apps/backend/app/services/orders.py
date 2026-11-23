@@ -21,7 +21,7 @@ from app.core.listing import Key, ListQuery, apply_sort, count_by, respond, spli
 from app.core.errors import bad_request, conflict
 from app.core.utils import add_days, collate_key, de, fmt_eur, fr_day, fr_num, js_str, normalize, round2, round3, total
 from app.services import clients, invoices, pricing, routing
-from app.services.stock import consume_fefo, fefo_lots, line_qty, stock_levels
+from app.services.stock import availability_on, consume_fefo, fefo_lots, line_qty, stock_levels
 
 STATUS_FR = {
     "draft": "brouillon",
@@ -146,14 +146,15 @@ def order_warnings(order: Doc) -> list[Doc]:
     if not routing.zone_served_on(client["zone"], order["deliveryDate"]):
         warnings.append({"code": "no_route", "message": f"Aucune tournée ne dessert la zone « {client['zone']} » {fr_day(order['deliveryDate'])}"})
 
-    levels = stock_levels(order["id"])
+    # Date-aware: goods arriving on or before the delivery date count (see stock.availability_on).
+    levels = availability_on(order["deliveryDate"], order["id"])
     demand: dict[str, float] = {}
     for l in order["lines"]:
         demand[l["productId"]] = demand.get(l["productId"], 0) + line_qty(l)
     for product_id, qty in demand.items():
         p = crud.products.get(product_id)
         name = p["name"] if p else product_id
-        available = levels[product_id]["available"] if product_id in levels else 0
+        available = levels[product_id]["availableOn"] if product_id in levels else 0
         if available < qty:
             warnings.append({
                 "code": "insufficient_stock",

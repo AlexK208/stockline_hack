@@ -23,6 +23,18 @@ async def list_stock(
     return stock.list_stock(lq, q=q or None, tab=tab or None)
 
 
+@router.get("/availability")
+async def stock_availability(
+    date: str = Query(description="Delivery date YYYY-MM-DD"),
+    product_ids: str | None = Query(None, alias="productIds", description="Comma list of product ids (default: all)"),
+):
+    """Date-aware availability: onHand + arrivals expected on or before `date` − reservations delivered on or
+    before `date`. Rows: {productId, onHand, reservedByDate, incomingByDate, availableOn, nextArrival?}."""
+    rows = stock.availability_on(date)
+    wanted = [i.strip() for i in product_ids.split(",") if i.strip()] if product_ids else list(rows)
+    return [rows[i] for i in wanted if i in rows]
+
+
 @router.get("/movements", response_model=list[StockMovement] | Page[StockMovement])
 async def stock_movements(lq: ListDep, product_id: str | None = Query(None, alias="productId")):
     """Newest first (`order=asc`: oldest first)."""
