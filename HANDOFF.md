@@ -17,6 +17,61 @@ Template:
 
 ---
 
+## 2026-11-23 22:20 · Claudio's session (lane D) · branch `d/eval-runner`
+**Done:** Merged `origin/main` (`7208081` then `ad5a776`) into `d/eval-runner`. 87 tests pass. Full `make calls`
+on the merged tree (`be7eb4b`): **6/6 confirmed on my Mac**, your fixes hold. Row added to `SCENARIOS.md`.
+Earlier I also ran `make calls ARGS="T3 --repeat 3"` on `7166485`: 3/3, the client-event fix is solid.
+
+**Latency, the honest reading — the median is not the story.** Median first word went 3022 → 3445 ms (worse),
+but the tail collapsed:
+
+| commit | min | médiane | p90 | pire | étendue | tokens entrée (18 tours) |
+|---|---|---|---|---|---|---|
+| 43573ec (baseline) | 563 | 3032 | 6811 | 7992 | 7429 | 1 245 032 |
+| 99842b2 | 1182 | 3022 | 7052 | 7890 | 6708 | 1 295 948 |
+| be7eb4b (now) | 676 | 3445 | 4700 | 4709 | 4033 | 994 729 |
+
+p90 −2352 ms, worst −3181 ms, spread almost halved, input tokens −23 %. On a phone call the worst wait is what
+makes a caller think the line is dead, so I read this as a clear win even though the median moved the wrong way.
+My numbers run slower than yours (you had 2855 ms median) — different machine, so compare shapes, not absolutes.
+
+**Your self-checking write tools work exactly as intended.** T3 turn 1: `create_draft_order` returned
+`problems: ['Onglet de bœuf : rupture']` and wrote nothing, the model retried without the onglet and logged the
+event. That is the behaviour you designed, visible in the trace.
+
+**T6, the Haiku worry you raised — Sonnet is clean on `ad5a776`.** Turn 2 ("et une demi-carcasse de porc") the
+agent called `add_order_line`, the tool refused on lead time, and it said: *"Pour demain c'est trop tard. La
+demi-carcasse de porc se commande deux jours avant. Je peux te la mettre pour samedi."* Tool-backed and correct.
+Your new prompt rule holds here.
+
+**⚠️ But a new problem, and it is the best argument yet for your spoken-output request. T5, turn 2.**
+The caller said only: *"Allez, un seul quartier, tu vas pas me laisser sans viande pour le week-end !"*
+The agent invented a client name out of the word "viande", called `identify_caller(said="Le Comptoir de la
+Viande")`, and **opened a different real client's card, `cli_0038`** — then told Gérard about it:
+*"Pardon, je viens aussi d'ouvrir une fiche qui n'était pas la vôtre par erreur. Je n'y ai rien modifié."*
+
+- **T5 still passed every hard check**, because nothing was written. The ERP-only checks are blind to this.
+- Nothing was written and nothing confidential was read aloud, so no damage in this run.
+- The risk is real though: `identify_caller` returns the full card — contacts, phone numbers, credit limit,
+  outstanding and overdue amounts. That is another customer's commercial data pulled into a call with a blocked,
+  hostile caller. One sentence further and it is a confidentiality problem.
+- This is **not** your `loop.py` pre-identification: that matches the caller's opening words on turn 1, and turn 1
+  resolved `cli_0005` correctly. The bad call came from the model on turn 2.
+- **Suggested guard (lane A, `tools/desk.py` / `agent/loop.py`, your call):** once a caller is identified in a
+  session, `identify_caller` should not silently switch to another client on a free-text guess — either refuse,
+  or require an explicit confirmation step.
+
+**Your request accepted (lane D):** I will add checks on what the agent *says*, not only on the ERP, starting with
+T6 ("demi-carcasse de porc" must not be accepted for Wednesday) and T5 (must not mention another client, must not
+read internal figures). The T5 case above is exactly why.
+
+**On Haiku:** I would not switch yet. T5 shows Sonnet already inventing a client name from a stray word; a faster,
+less careful model on the same tool surface is a bad trade until the spoken-output checks exist to catch it.
+Happy to run `make calls ARGS="--repeat 3"` on Haiku once they are in.
+
+**Next (lane D):** spoken-output checks, then re-run. The voice replay of T1–T6 on the Voix page is being handled
+by someone else, so the perceived-latency columns are not blocked on me.
+
 ## 2026-11-23 22:12 · Alexander's session (lane A) · not yet committed
 **Baseline on Alexander's Mac (`7208081`, Sonnet 5.5):** `make calls` 6/6, médiane 2855 ms, pire 6165 ms.
 
@@ -37,6 +92,30 @@ clarifying questions (porc standard ou cul noir ?).
 only on the ERP: in T6, the answer to "et une demi-carcasse de porc" must not accept Wednesday. Then
 `make calls ARGS="--repeat 3"` on Haiku tells us whether we can switch.
 
+## 2026-11-23 22:05 · Claudio's session (lane D) · branch `d/eval-runner`
+**Done:** Merged `origin/d/eval-runner` then `origin/main` (`d2abbd6`) into `d/eval-runner`. The only conflict was
+this file; every entry from both sides was kept. `uv run pytest`: 87 pass. Re-ran `make calls` on the merged tree
+(`99842b2`): **5/6**, 1er mot médiane 3022 ms, p90 6191 ms, pire 7890 ms (18 tours). Row added to `SCENARIOS.md`.
+
+**Important for lane A (Alexander) — the run does not measure your latency work.** `make calls` drives
+`POST /chat`, and `call_prep.py` is imported only by `voice_session.py`. So neither the instant acknowledgement
+nor the pre-identification runs on the path I measured: `identify_caller` is still the first tool call in all six
+scenarios, and the median is unchanged from the baseline (3032 → 3022 ms). That is **not** evidence your work
+didn't help — it means this harness can't see it. Your Voix-page numbers (8.7 → 3.6 s first sound) remain the
+measurement that counts for those two changes.
+
+**T3 still fails, same check as before:** the agent handles the stockout correctly (8 kg faux-filet, no onglet, no
+bavette, confirmed) but still does not log the onglet request as a client event. In this run it put the request in
+the order note instead, which matches the wrinkle you already listed.
+
+**Next (lane D):** replay T1–T6 by voice on the Voix page, as you asked, and fill the perceived-latency columns —
+that is the only way to capture the acknowledgement and pre-identification gains. Then `make calls ARGS="T3 --repeat 3"`
+once the client-event fix lands.
+
+**Open question for lane A:** would it be worth having `POST /chat` share `call_prep` with the voice session? Today
+the two paths differ, so an eval through `/chat` will keep under-reporting voice work. Your call — `voice_session.py`
+is yours.
+
 ## 2026-11-23 22:03 · Alexander's session (lane A) · not yet committed
 **Done (after the first `make calls` run: 5/6, médiane 2859 ms, pire 7567 ms):**
 - `tools/orders.py`: `create_draft_order`, `add_order_line` and `update_order_line` now run the checks themselves
@@ -53,6 +132,22 @@ only on the ERP: in T6, the answer to "et une demi-carcasse de porc" must not ac
 two model calls on any turn that writes. Lane D: please rerun `make calls` after pulling and paste the row.
 
 **Next (lane A):** try `LLM_MODEL=claude-haiku-5-5` against `make calls`; keep it only at 6/6.
+
+## 2026-11-23 21:50 · Claudio's session (lane D) · branch `d/eval-runner`
+**Done:** First `make calls` baseline on `43573ec` (Sonnet, text only): **5/6 pass**. Time to first word: median 3.0 s,
+worst 8.0 s. Full report with numbers: `evals/reports/2026-11-23-baseline.md`.
+
+**For lane A (Alexander), in priority order:**
+1. **T3 fails:** the agent says "je préviens Nicolas pour l'onglet" but never calls `log_client_event`. Any spoken
+   promise of a follow-up must be backed by an event in the ERP.
+2. In 11 of 18 turns the first word only comes after all the tools. ERP tools take < 0.6 s per turn; the time is
+   2–4 model steps of 1.5–3 s each. An instant acknowledgement and prefetching the caller (already on your list)
+   should cut the median a lot.
+3. Every model step sends about 27k tokens even with no tool (prompt + tool definitions), and `identify_caller`
+   returns about 3 kB. Trimming both helps speed and cost.
+
+**Next (lane D):** Re-run on the latest `main` and after each lane A change. `make calls ARGS="T3 --repeat 3"` to
+confirm the T3 fix.
 
 ## 2026-11-23 21:55 · Claudio's session (lane D) · branch `d/eval-runner`
 **Done:** `make calls` (`evals/run_calls.py`, standard library only). It replays T1–T6 through POST /chat in voice mode,
