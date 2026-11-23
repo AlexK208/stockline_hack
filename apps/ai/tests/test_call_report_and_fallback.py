@@ -122,3 +122,38 @@ async def test_warmer_touches_the_cache_at_connection_then_only_after_silence(mo
     w.caller_active_at -= warmup.STOP_AFTER_IDLE_S + 1
     assert w.idle()  # nobody has called for a long time: stop costing anything
     assert await warmup.warm_prompt_cache() is None  # and never from the test suite
+
+
+async def test_call_report_survives_a_hang_up_right_after_the_goodbye(monkeypatch):
+    """Jed's finding: the goodbye turn starts the report, the caller hangs up at once, the turn is cancelled.
+    The report must still be written, exactly once."""
+    import asyncio
+
+    written = []
+
+    async def slow_write(erp, history, start=0):
+        await asyncio.sleep(0.05)  # the ERP is still answering when the socket closes
+        written.append((len(history), start))
+
+    monkeypatch.setattr(voice_session, "write_report", slow_write)
+    session = voice_session.VoiceConnection.__new__(voice_session.VoiceConnection)
+    session.conversation = voice_session.Conversation(id="x", history=[ChatMessage(role="user", content="merci, au revoir")])
+
+    turn = asyncio.create_task(session.report_call())  # as at the end of the goodbye turn
+    await asyncio.sleep(0.01)
+    turn.cancel()  # hang-up: interrupt() cancels the turn…
+    await session.report_call()  # …and the hang-up asks for the report again
+    await asyncio.sleep(0.1)
+    assert written == [(1, 0)]
+
+    # a write that fails is tried again at the next end-of-call
+    async def failing(erp, history, start=0):
+        raise RuntimeError("ERP down")
+
+    monkeypatch.setattr(voice_session, "write_report", failing)
+    session.conversation.history.append(ChatMessage(role="user", content="allô ?"))
+    await session.report_call()
+    assert session.conversation.reported == 1
+    monkeypatch.setattr(voice_session, "write_report", slow_write)
+    await session.report_call()
+    assert written[-1] == (2, 1)

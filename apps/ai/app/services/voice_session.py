@@ -71,6 +71,7 @@ client_message = TypeAdapter(VoiceClientMessage)
 CALL_MEMORY = 200
 # Longest text spoken before a tool call ("Je regarde ça tout de suite.").
 MAX_WAIT_WORDS = 5
+REPORTS: set[asyncio.Task] = set()  # call reports being written (they outlive the turn that started them)
 # After a TTS failure the provider is left alone for this long and the browser's voice speaks instead.
 TTS_RETRY_AFTER_S = 60
 TTS_HEALTH = {"down_until": 0.0}  # time.monotonic() until which the provider is considered down
@@ -163,13 +164,29 @@ class VoiceConnection:
 
     async def report_call(self) -> None:
         """Write the call report to the client's history (once per call; again only if the call went on after it).
-        Best effort: a report that cannot be written must never break a call."""
+        Best effort: a report that cannot be written must never break a call.
+
+        The write runs as its own task: the goodbye turn that starts it can be cancelled a moment later (the caller
+        hangs up, "Nouvelle session"), and a report cancelled halfway was simply lost, because the hang-up then
+        found it already marked as written. Now the write goes on by itself, and if it fails the mark is taken back
+        so the next end-of-call tries again."""
         conv = self.conversation
         if not conv or len(conv.history) <= conv.reported:
             return
-        start, conv.reported = conv.reported, len(conv.history)
+        start, conv.reported = conv.reported, len(conv.history)  # claimed now: a hang-up right behind us must not write it twice
+        history, actor = list(conv.history), conv.actor_name
+
+        async def write() -> None:
+            try:
+                await asyncio.wait_for(write_report(ErpClient("voice_agent", actor), history, start), 6)
+            except Exception:
+                conv.reported = min(conv.reported, start)  # not written: try again at the next end-of-call
+
+        task = asyncio.create_task(write())
+        REPORTS.add(task)  # keep a reference until it is done
+        task.add_done_callback(REPORTS.discard)
         with suppress(Exception):
-            await asyncio.wait_for(write_report(ErpClient("voice_agent", conv.actor_name), conv.history, start), 4)
+            await asyncio.shield(task)  # if we are cancelled here, the write itself carries on
 
     async def handle_text(self, raw: str) -> None:
         try:
