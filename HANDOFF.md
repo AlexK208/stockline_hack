@@ -17,6 +17,53 @@ Template:
 
 ---
 
+## 2026-11-24 00:56 (real clock, `date`) · Alexander's session (lane A) · arena verdict for Claudio
+**Claudio — the arena has answered. Start the slides and the video NOW. All three judges said so, unprompted, in
+almost the same words: nothing below changes the story, and the video must never wait on code.**
+
+The arena is three independent role-played judges, each given the same brief (your seven ideas plus what I could
+check tonight): a juror who sells voice agents to food wholesalers and will phone us tomorrow, a senior engineer
+paid to say no, and a butcher with the wholesaler's telesales rep. They are AI judges, so read their arguments,
+not their votes.
+
+| # | Idea | Juror | Engineer | Butcher / rep | **Verdict** |
+|---|---|---|---|---|---|
+| 5 | Accepted substitution | 1st | 1st | both | **Build. Claudio writes the scenario, lane A fixes what it shows** |
+| 1 | Weigh ticket | 3rd, "what I most want to SEE in the video" | 2nd, "no code, it works: the video is the gap" | rep's 2nd | **Already works: put it in the video and the replay set** |
+| 2 | « Il est où mon camion ? » | refuses (new surface) | 3rd, with guards, "drop it if not green by 06:30" | butcher's 1st | **Build, lane A, read-only, with the guards below** |
+| 3 | Digits to French words in code | 2nd | refuses: frozen TTS path | "a basic requirement" | **Not in code. One prompt line for phone numbers only** |
+| 4 | Proactive « comme d'habitude » | refuses | refuses | rep: "butchers hate the nagging upsell" | **No** |
+| 6 | Jev for a yes/no | refuses | refuses | — | **No** |
+| 7 | Invoices by phone | refuses | refuses | "never an amount owed to an unverified caller" | **No. Say in Q&A that we left it out on purpose** |
+
+**What I checked before the judges saw it:**
+- **1 already works.** `order_history` gives ordered against weighed per line and the agent says it: jury call J8,
+  "commandé vingt-cinq kilos, pesé vingt-quatre, la facture suit le poids pesé", complaint logged, no credit note
+  promised. Only the lot and supplier are missing. It has never been filmed.
+- **2 has real data.** `GET /api/route-runs?date=…` returns, per round, the driver, the vehicle, the departure
+  time (05:00) and for each stop the client, its position in the round and a planned ETA ("05:36"). There is no
+  live position. So the honest answer is the butcher's own: "Pas de suivi en direct, mais c'est Thierry qui
+  livre, il part à cinq heures et vous êtes le premier de sa tournée, prévu vers cinq heures trente-six."
+
+**For you, Claudio (after the slides and video are started, not before):**
+- **A new jury call for idea 5,** three turns, on a client whose preferences allow substitution: the product is
+  out of stock, the caller says « bon, mettez-moi de la bavette à la place, même quantité », then validates. Check
+  on the final order: the substitute's product id, the quantity, `substituteFor` set, no line for the missing
+  product. A second variant with a condition (« d'accord, mais seulement dix kilos au lieu de quinze »). The
+  engineer's failure mode: the caller accepts and the order keeps the original product, price or weight.
+- **A hostile call for idea 2** once the tool exists: a caller asking for ANOTHER client's truck. `call_guard`
+  should refuse it; I want that proven, not assumed.
+- **Video:** the juror wants to open on a fast, natural order, then the weigh-ticket call.
+
+**For lane A (me), in this order:** the truck tool (read-only, the caller's own client id only, "prévu vers",
+never "il est à dix minutes"); then whatever your substitution scenario exposes. **Hard stop for the agent core:
+10:30** (the engineer's number, and I agree). After that, one full replay on the final commit, three voice calls,
+docs only.
+
+**One correction to `DECISIONS.md` from your 00:35 entry:** "2,5–3,5 s after a yes, where the agent is deliberately
+silent" is no longer true. Since `401765f` a yes gets « Très bien. » at once, and since `7b72a6c` so do « c'est
+tout » and « oui, valide, au revoir ».
+
 ## 2026-11-24 00:49 (real clock, `date`) · Claudio's session (lane D) · branch `d/feature-ideas`
 **Alexander — a request, from Claudio directly: please run the AI agent arena on the seven ideas below and tell
 us which to build.** I don't know how your arena is set up, so I'm giving each idea with its evidence, cost,
