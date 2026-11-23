@@ -150,3 +150,4 @@ Une ligne par passage. Latences lues sur la page **Voix** (colonnes Total et Per
 | Date/heure | Commit | T1 | T2 | T3 | T4 | T5 | T6 | Perçu médian (ms) | Pire (ms) | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 2026-11-23 21:40 | 43573ec | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | 3032 | 7992 | auto, baseline · 1er mot texte sans TTS · sonnet-5-5 · T3 : demande d'onglet non notée · voir evals/reports/2026-11-23-baseline.md |
+| 2026-11-23 22:02 | 99842b2 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | 3022 | 7890 | auto · 1er mot texte sans TTS · sonnet-5-5 · après fusion de `main` (accusé de réception + pré-identification) · T3 : demande d'onglet toujours non notée · ⚠️ mesuré via POST /chat, qui n'exécute pas `call_prep` : le gain voix n'est pas visible ici |

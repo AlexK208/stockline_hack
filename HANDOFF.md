@@ -17,6 +17,30 @@ Template:
 
 ---
 
+## 2026-11-23 22:05 · Claudio's session (lane D) · branch `d/eval-runner`
+**Done:** Merged `origin/d/eval-runner` then `origin/main` (`d2abbd6`) into `d/eval-runner`. The only conflict was
+this file; every entry from both sides was kept. `uv run pytest`: 87 pass. Re-ran `make calls` on the merged tree
+(`99842b2`): **5/6**, 1er mot médiane 3022 ms, p90 6191 ms, pire 7890 ms (18 tours). Row added to `SCENARIOS.md`.
+
+**Important for lane A (Alexander) — the run does not measure your latency work.** `make calls` drives
+`POST /chat`, and `call_prep.py` is imported only by `voice_session.py`. So neither the instant acknowledgement
+nor the pre-identification runs on the path I measured: `identify_caller` is still the first tool call in all six
+scenarios, and the median is unchanged from the baseline (3032 → 3022 ms). That is **not** evidence your work
+didn't help — it means this harness can't see it. Your Voix-page numbers (8.7 → 3.6 s first sound) remain the
+measurement that counts for those two changes.
+
+**T3 still fails, same check as before:** the agent handles the stockout correctly (8 kg faux-filet, no onglet, no
+bavette, confirmed) but still does not log the onglet request as a client event. In this run it put the request in
+the order note instead, which matches the wrinkle you already listed.
+
+**Next (lane D):** replay T1–T6 by voice on the Voix page, as you asked, and fill the perceived-latency columns —
+that is the only way to capture the acknowledgement and pre-identification gains. Then `make calls ARGS="T3 --repeat 3"`
+once the client-event fix lands.
+
+**Open question for lane A:** would it be worth having `POST /chat` share `call_prep` with the voice session? Today
+the two paths differ, so an eval through `/chat` will keep under-reporting voice work. Your call — `voice_session.py`
+is yours.
+
 ## 2026-11-23 21:50 · Claudio's session (lane D) · branch `d/eval-runner`
 **Done:** First `make calls` baseline on `43573ec` (Sonnet, text only): **5/6 pass**. Time to first word: median 3.0 s,
 worst 8.0 s. Full report with numbers: `evals/reports/2026-11-23-baseline.md`.
