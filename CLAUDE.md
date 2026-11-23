@@ -39,7 +39,8 @@ delivery, and the agent reads them the weigh ticket (prepared vs ordered weight,
 |---|---|---|
 | A · Agent + tools | Alexander's session | `apps/ai/app/tools/`, `apps/ai/app/agent/`, `apps/ai/app/services/voice_session.py` |
 | D · Tests + docs | Claudio's session | `SCENARIOS.md`, `DECISIONS.md`, `HANDOFF.md` structure, slides and video notes |
-| B / C | _to assign_ | e.g. backend endpoints (`apps/backend/`), voice latency, frontend |
+| B | _to assign_ | e.g. backend endpoints (`apps/backend/`), voice latency, French TTS voice |
+| C · Frontend (Voix page) | Jed's session | `apps/web/` (live call cards: `apps/web/src/pages/voice/`) |
 
 Lane A is working on next:
 - an instant spoken acknowledgement;

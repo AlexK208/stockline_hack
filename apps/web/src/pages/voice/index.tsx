@@ -13,6 +13,8 @@ import { MicOff, Mic, RotateCcw, Send, VolumeX } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, Dot, IconButton, Input, Kbd, Page, PageHeader, Spinner, Tabs } from "@/ui";
 import { useVoiceSession, type Activity, type Conn } from "@/features/assistant/useVoiceSession";
+import { businessNow } from "@/lib/clock";
+import { CallCards } from "./call-cards";
 import { CommandMode } from "./command";
 import { LiveActivity } from "./live-activity";
 import { MetricsBar } from "./metrics";
@@ -45,6 +47,9 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
   const vRef = useRef(v);
   vRef.current = v;
   const [text, setText] = useState("");
+  // Start of the current call (business clock, like ERP events): the order card only follows orders written after it.
+  const [since, setSince] = useState(() => businessNow().toISOString());
+  const newSession = () => { setSince(businessNow().toISOString()); v.reset(); };
   const spaceDown = useRef(false);
 
   // Space = push-to-talk (outside text fields), Esc = stop playback.
@@ -104,7 +109,7 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
               </div>
             ) : null}
             {v.activity === "speaking" ? <Button size="sm" variant="ghost" icon={VolumeX} kbd="Échap" onClick={v.stopPlayback}>Couper</Button> : null}
-            <Button size="sm" icon={RotateCcw} onClick={v.reset} disabled={!ready}>Nouvelle session</Button>
+            <Button size="sm" icon={RotateCcw} onClick={newSession} disabled={!ready}>Nouvelle session</Button>
           </>
         }
       />
@@ -150,8 +155,13 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
             </form>
           </div>
         </section>
-        <aside className="w-[280px] shrink-0 border-l border-border bg-card xl:w-[320px] 2xl:w-[380px]">
-          <LiveActivity />
+        <aside className="flex w-[300px] shrink-0 flex-col border-l border-border bg-card xl:w-[340px] 2xl:w-[400px]">
+          <div className="max-h-[65%] shrink-0 overflow-y-auto">
+            <CallCards turns={v.turns} since={since} />
+          </div>
+          <div className="min-h-0 flex-1">
+            <LiveActivity />
+          </div>
         </aside>
       </div>
     </Page>

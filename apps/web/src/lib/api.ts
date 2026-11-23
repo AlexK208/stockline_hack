@@ -6,7 +6,7 @@
  */
 import type {
   ActivityEvent, Client, ClientDetail, ClientInput, ClientSummary, Dashboard, DataPack, Id, InvoiceDetail,
-  InvoiceSummary, IsoDate, OrderDetail, OrderInput, OrderLineInput, OrderStatus, PaymentInput, PaymentSummary,
+  InvoiceSummary, IsoDate, StockAvailability, OrderDetail, OrderInput, OrderLineInput, OrderStatus, PaymentInput, PaymentSummary,
   ProductCategory, ProductDetail, ProductSummary, PurchaseOrderDetail, PurchaseOrderInput, PurchaseOrderStatus,
   Route, RouteRunDetail, SearchResult, StockLevel, StockMovement, Supplier, SupplierDetail, UsualBasketLine,
   InvoiceStatus, ClientType, Product, OrderSummary, PurchaseOrderSummary,
@@ -152,6 +152,9 @@ export const api = {
     page: (p?: StockListParams) => getPage<StockLevel & { product: Product }>("/stock", p),
     movements: (p?: MovementListParams) => getPage<StockMovement>("/stock/movements", p),
     adjust: (body: { productId: Id; qty: number; reason: "adjustment" | "waste"; note?: string }) => post<StockLevel>("/stock/adjust", body),
+    /** Date-aware: what is left for `date` once arrivals before it and reservations up to it are counted. */
+    availability: (date: IsoDate, productIds: Id[]) =>
+      get<StockAvailability[]>("/stock/availability", { date, productIds: productIds.join(",") }),
   },
 
   orders: {

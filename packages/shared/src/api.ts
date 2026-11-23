@@ -227,6 +227,16 @@ export interface UsualBasketLine {
   lastOrderedAt: IsoDate;
 }
 
+/** GET /api/stock/availability?date=&productIds= : stock for a delivery date (arrivals before it, reservations up to it). */
+export interface StockAvailability {
+  productId: Id;
+  onHand: number;
+  reservedByDate: number;
+  incomingByDate: number;
+  availableOn: number;
+  nextArrival?: { date: IsoDate; qty?: number };
+}
+
 export interface ClientDetail extends ClientSummary {
   prices: { productId: Id; productName: string; price: number; listPrice: number }[];
   /** Latest 20 (all of them: GET /api/orders?clientId=). */

@@ -75,7 +75,8 @@ export type VoiceServerMessage =
   // `stable` = its leading part made of final words (won't change). Then once final=true: what the agent answers.
   | { type: "transcript"; track: "caller"; text: string; final: boolean; stable?: string }
   | { type: "agent_text"; delta: string }
-  | { type: "agent_tool"; name: string; ok?: boolean; ms?: number; args?: Record<string, unknown> }
+  // `result` (on the done message) = the tool's JSON result, when the server forwards it (Voix page cards read it).
+  | { type: "agent_tool"; name: string; ok?: boolean; ms?: number; args?: Record<string, unknown>; result?: unknown }
   | { type: "agent_audio_start"; mime: string } // binary frames follow
   | { type: "agent_audio_end" }
   | { type: "agent_done"; text: string; timings: TurnTimings }
