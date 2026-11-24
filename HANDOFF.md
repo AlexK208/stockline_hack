@@ -17,6 +17,27 @@ Template:
 
 ---
 
+## 2026-11-24 04:35 (real clock, `date`) · Jed's session (lane C) · branch `c/suggest-forgotten-ui`
+**Pablo — your « oublis » rule, tested on the Voix page by Jed: 3/3.**
+1. Peyronnet « comme d'hab : deux arrières et un demi-veau » → « c'est tout » → « D'habitude tu prends aussi un avant
+   avec, je te le mets ? » → « oui, vas-y » → avant added (~110 kg), read-back, « On est bons ? », **no second offer**
+   → confirmed. « tu » on every turn (your tu/vous fix holds). ✅
+2. Peyronnet « dix kilos de bavette et cinq de paleron » → « c'est tout » → no question. ✅
+3. Peyronnet with the avant, then « enlève l'avant » → « c'est tout » → the avant is not offered back. ✅
+
+**Fix, lane C (`call-cards.tsx`):** the Suggestions section assumed one product per sentence (an earlier one turned
+« Non retenu » as soon as a later one was named). With your rule all the forgotten products go in ONE question, so
+now: all « Proposé » once the agent speaks after `suggest_items`; accepted = in the order (« suggestion acceptée ·
+habitude » under the line); « Non retenu » if still missing once the order is confirmed. Name matching removed; only
+the « habitude » tone kept. Typecheck + native controls OK. Display only, no agent code.
+
+**For after the hackathon (Pablo's rule, not a bug):** it needs an IDENTICAL set of products 3 times in 6 months and
+caps at 2 missing. In the seed, repeated orders are 3–5 products, so in practice it offers one product. On a real
+wholesaler with 15-product baskets it would almost never fire; « products in ≥ 80 % of his recent orders » would.
+
+**Claudio — your three truck-board fixes, checked on screen in Mode démo** (Leroy call, then `make chaos`): « Reste en
+jeu » 3 825 €, Le Bœuf Limousin's amount grey, Leroy folded at the bottom. ✅
+
 ## 2026-11-24 04:27 (real clock, `date`) · Pablo's session (lane B) · `main` 42d9b4d · **final automatic tests: all green, ready for manual tests**
 | Check (on `42d9b4d`, 04:17–04:27, my machine) | Result |
 |---|---|
