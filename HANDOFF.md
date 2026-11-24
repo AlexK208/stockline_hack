@@ -17,6 +17,47 @@ Template:
 
 ---
 
+## 2026-11-24 03:12 (real clock, `date`) · Claudio's session (lane D) · branch `d/allocation`, merged
+**Alexander — « Qui est servi d'abord » is built (your 02:55 items 1–5).** ERP API only, no model.
+- **`apps/ai/app/services/allocation.py`** (new): `propose(erp, product_id, available)` → both plans, each line with its
+  reason in words; `apply(erp, product_id, available, mode, why)` → stock written down to `available`, then each line's
+  `preparedQty` + a note « Répartition du stock restant : n° 2 : refuse les substitutions… → servi en partie : 4 sur
+  13,5 kg » (appended to the line's existing note, never replacing it). Priority = your order: refuse substitutions →
+  earliest departure → regulars (`avgQty × frequency` from `/usual`) → order number. Imports `substitution_rule`,
+  `truck_stops`, `day_orders`, `line_gap` from your `truck_calls.py`; **your files are untouched**.
+- **Routes for Jed** (`apps/ai/app/routers/allocation.py` + one import line in `routers/__init__.py`):
+  `GET /outbound/allocation?productId=&available=` (both plans + their cost: fully served, partly, nothing, toCall,
+  notDelivered €) and `POST /outbound/allocation/apply {productId, available, mode, why}`. Apply **recomputes** the plan
+  from the ERP (the page never sends quantities), writes as actor `user` (« Répartition approuvée »), and clears the
+  board cache.
+- **CLI:** `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--keep 20"` prints both plans and writes nothing; `--apply`
+  (`--mode prorata`) writes, then prints the board and checks it.
+- **Checks without a model, in `make chaos-check`: 7/7** (the 5 cards + 2 allocations: ribs 20 kg priority, entrecôte
+  30 kg prorata). Plan never above ordered nor available; applied, the board calls exactly the lines your `line_gap`
+  flags (note: that is « less than 95 % **and** ≥ 15 € », or absent, not just « < 95 % »); served in full = not called.
+- **Ribs, 20 kg left for 6 clients / 123 kg:** priority 1 full, 1 part (Aux Saveurs du Limousin 4 of 13,5), 4 nothing,
+  5 calls; prorata 16 % each, 6 calls (Le Petit Rouchaud gets 0,89 of 5,5 kg).
+- **Replay with the model, Aux Saveurs du Limousin (4 of 13,5):** complement for the rest only (9,5 kg of entrecôte
+  after « oui, allez-y », 228 €), figures right when asked (« quatre kilos partent ce matin sur les treize et demi »). ✅
+  **Two things for you (`truck_calls.py`):**
+  1. The opening says only « il manque neuf kilos et demi », not « quatre sur treize et demi »: he had to ask. For a
+     `short` the opening could say both numbers.
+  2. « Pourquoi moi ? » → « ce n'est pas un choix contre vous ». The real reason is on the line's note (the plan's
+     reason), but `truck_call_brief` doesn't read line notes. If the brief carried it, the agent could say « les
+     clients qui ne prennent pas de remplacement ont été servis d'abord ».
+- **My mistake, 03:08: I took the AI service down for ~1 min.** `routers/__init__.py` imported `allocation` first, which
+  loads `truck_calls` before the tools package: circular import with `short_dated` (`JOURS`). Fixed by importing it
+  after `outbound` (with a comment). 192 unit tests pass on the host. **It killed my `make calls`/`make jury` run** on
+  your 02:55 commit; I'm re-running it now, after this merge, with no more `apps/ai` edits in flight.
+
+**Jed:** after the truck board, a « Répartir » panel is the next piece for you: for a product and the kg left, show the
+two plans side by side (`GET /outbound/allocation`), with each line's reason, and one **Approuver** button per plan
+(`POST …/apply`). The truck board then fills by itself.
+**Pablo (slides):** Alexander's sentence for the pitch: « Stockline's site lists three agents: selling, pricing,
+purchasing. Ours makes the calls of two of them, and adds a fourth: delivery. A person approves, the agent phones. » And
+for « Qui est servi d'abord »: « Il reste 20 kilos pour six clients qui en ont commandé 123. L'agent propose qui est
+servi, une personne approuve, et chaque client apprend sa part avant le départ du camion. »
+
 ## 2026-11-24 02:59 (real clock, `date`) · Claudio's session (lane D, plus one page in lane C) · `d/cadran-tests` merged, `c/truck-board` pushed
 **Pablo — « Le cadran annoncé »: your five tests pass, 5/5.** They're jury calls **J25–J29** now (`make jury ARGS="J25 J26
 J27 J28 J29"`). Median first word 2847 ms, worst 4906 ms.

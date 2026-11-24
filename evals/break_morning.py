@@ -7,6 +7,11 @@
     python3 evals/break_morning.py --list                     # products on today's trucks, clients hit by each
     make chaos-check                                          # the five cards of DEMO.md § 9, reset before each
 
+« Qui est servi d'abord » (services/allocation.py): part of the lot survives, a person decides who gets it.
+    make chaos PRODUCT=prd_0011 WHY="…" ARGS="--keep 20"                  # prints both plans, writes NOTHING
+    make chaos PRODUCT=prd_0011 WHY="…" ARGS="--keep 20 --apply"          # writes the priority plan, then the board
+    make chaos PRODUCT=prd_0011 WHY="…" ARGS="--keep 20 --apply --mode prorata"
+
 What it does, through the ERP API only (no model, no credits):
   1. writes the product's whole stock off (POST /api/stock/adjust, reason "adjustment", note = WHY: the agent says
      that note to the client as the reason);
@@ -38,6 +43,11 @@ CARDS = [
     ("prd_0012", "Filet saisi par les services vétérinaires ce matin", 0),
     ("prd_0037", "Lot refusé au contrôle qualité de 3 h", 0),
     ("prd_0011", "Une partie du lot n'a pas atteint ses 21 jours", 30),
+]
+# « Qui est servi d'abord »: (product, reason, kg left, plan applied).
+ALLOCATION_CARDS = [
+    ("prd_0011", "Chambre froide 2 en panne : il ne reste que 20 kg de côtes saines", 20, "priority"),
+    ("prd_0010", "La palette de lundi a cassé la chaîne du froid : 30 kg sauvés", 30, "prorata"),
 ]
 
 
@@ -90,6 +100,49 @@ def stage(product_id: str, why: str, short: int, orders: list[dict]) -> list[str
     return broken
 
 
+def print_plans(p: dict) -> None:
+    print(f"{p['productName']} : {p['available']:g} {p['unit']} pour {p['clients']} client(s) qui en ont commandé {p['ordered']:g}")
+    print("  règles : " + " · ".join(p["rules"]))
+    for mode, plan in p["plans"].items():
+        label = "PRIORITÉ (recommandé)" if mode == p["recommended"] else "MÊME PART POUR TOUS"
+        print(f"\n  {label} — servis en entier {plan['fullyServed']}, en partie {plan['partly']}, rien {plan['nothing']} · "
+              f"{plan['toCall']} appel(s) · {plan['notDelivered']:.2f} € non livrés")
+        for l in plan["lines"]:
+            mark = "☎" if l["call"] else " "
+            print(f"   {mark} {l['clientName'][:30]:<30} {l['ordered']:>6g} → {l['loaded']:>6g}  {l['reason']}")
+
+
+def check_plan(p: dict) -> bool:
+    ok = True
+    for mode, plan in p["plans"].items():
+        over = [l["clientName"] for l in plan["lines"] if l["loaded"] > l["ordered"] + 1e-9 or l["loaded"] < 0]
+        total = round(sum(l["loaded"] for l in plan["lines"]), 2)
+        if over or total > p["available"] + 1e-9:
+            print(f"  ÉCHEC {mode} : plus que commandé {over} ou plus que disponible ({total} > {p['available']})")
+            ok = False
+    return ok
+
+
+def allocate(product: str, keep: float, why: str, apply: bool, mode: str, before: set[str]) -> bool:
+    p = call(AI, "/outbound/allocation", params={"productId": product, "available": keep})
+    print_plans(p)
+    ok = check_plan(p)
+    if not apply:
+        print("\nRien n'est écrit. Pour appliquer ce plan après l'avoir lu : ajoutez --apply (et --mode prorata pour l'autre).")
+        return ok
+    out = call(AI, "/outbound/allocation/apply", "POST", {"productId": product, "available": keep, "mode": mode, "why": why})
+    print(f"\nPlan « {out['applied']} » appliqué : stock ramené à {keep:g} {p['unit']}, {len(out['lines'])} ligne(s) chargées.")
+    should_call = [l["orderId"] for l in out["lines"] if l["call"]]
+    full = [l["orderId"] for l in out["lines"] if l["missing"] <= 0]
+    ok = show_and_check(should_call, before) and ok
+    time.sleep(0.2)
+    ids = {c["orderId"] for c in call(AI, "/outbound/truck-calls")["calls"]}
+    wrongly = [o for o in full if o in ids]
+    if wrongly:
+        print("  ÉCHEC : servis en entier mais appelés :", ", ".join(wrongly))
+    return ok and not wrongly
+
+
 def show_and_check(broken: list[str], before: set[str]) -> bool:
     time.sleep(3.2)  # the board is cached 3 s (services/truck_calls.py BOARD_TTL_S)
     board = call(AI, "/outbound/truck-calls")
@@ -123,6 +176,9 @@ def main() -> int:
     ap.add_argument("--short", type=int, default=0, help="percent missing (0 = absent from the truck)")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--cards", action="store_true", help="run the five sabotage cards, ERP reset before and after each")
+    ap.add_argument("--keep", type=float, help="kg (or units) of the lot that survive: propose who gets them")
+    ap.add_argument("--apply", action="store_true", help="with --keep: write the plan (after a person has read it)")
+    ap.add_argument("--mode", choices=["priority", "prorata"], default="priority")
     a = ap.parse_args()
     if a.cards:
         results = []
@@ -134,6 +190,12 @@ def main() -> int:
             before = {c["orderId"] for c in call(AI, "/outbound/truck-calls")["calls"]}
             broken = stage(product, why, short, orders)
             results.append(bool(broken) and show_and_check(broken, before))
+        for product, why, keep, mode in ALLOCATION_CARDS:
+            print(f"\n════ {product} --keep {keep:g} --apply --mode {mode} · {why}")
+            call(ERP, "/api/admin/reset", "POST", {})
+            time.sleep(3.2)
+            before = {c["orderId"] for c in call(AI, "/outbound/truck-calls")["calls"]}
+            results.append(allocate(product, keep, why, True, mode, before))
         call(ERP, "/api/admin/reset", "POST", {})
         print(f"\nCartes sabotage : {sum(results)}/{len(results)} OK (ERP remis à zéro)")
         return 0 if all(results) else 1
@@ -145,6 +207,8 @@ def main() -> int:
         ap.error("--short must be between 0 and 99")
     time.sleep(3.2)
     before = {c["orderId"] for c in call(AI, "/outbound/truck-calls")["calls"]}
+    if a.keep is not None:
+        return 0 if allocate(a.product, a.keep, a.why, a.apply, a.mode, before) else 1
     broken = stage(a.product, a.why, a.short, orders)
     if not broken:
         print("Aucune commande du jour ne contient ce produit : rien à casser.")

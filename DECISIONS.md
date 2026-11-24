@@ -289,6 +289,18 @@ la garde du « oui » l'arrêtait). Les deux sont corrigés (`e3f1aa0`) : une ma
 « à rappeler », toujours sur la liste, et la limite est devenue le manquant plus 20 %. Trouvé par nos rejeux le
 soir même, corrigé dans l'heure ; rejoué avec le modèle sur la nouvelle version (`75b62ab`) : les deux tiennent.
 
+**« Qui est servi d'abord » : quand une partie du lot survit (lane D).** Entre « tout est perdu » et « 70 % pour
+tout le monde », il y a le vrai matin : il reste 20 kg de côtes pour six clients qui en ont commandé 123, et quelqu'un
+doit décider. Le code propose deux plans (`services/allocation.py`, sans modèle), chacun avec sa raison en mots :
+**priorité** (d'abord ceux dont la fiche refuse les substitutions, puis le camion qui part le plus tôt, puis les
+habitués du produit, chacun servi en entier jusqu'à épuisement) ou **même part pour tous**, avec ce que chacun coûte
+(clients servis en entier, appels à passer, € non livrés). Ici : 5 appels contre 6, et la part égale laisse 0,89 kg à
+un restaurant qui en attendait 5,5. **Rien n'est écrit avant qu'une personne ait choisi** (`--apply`, ou
+`POST /outbound/allocation/apply`, écrit sous le nom d'un utilisateur, pas de l'agent). Ensuite les appels « avant le
+camion » disent à chacun sa part réelle. Vérifié sans modèle dans `make chaos-check` (le plan ne donne jamais plus que
+commandé ni plus que disponible ; le tableau appelle exactement ceux qui ont eu moins ; un client servi en entier n'est
+pas appelé).
+
 ### 2.13 Le carnet des fêtes : réserver Noël au téléphone (lane B)
 
 **Pourquoi celui-là.** Toutes les équipes reçoivent les mêmes idées génériques. La nôtre est la seule à avoir un
