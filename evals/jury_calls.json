@@ -547,5 +547,107 @@
    "cli_0005 Boucherie Lacour de Tulle, status blocked, delivered tue/thu, contact Gérard Lacour (boucher-patron).",
    "Pablo's F4: « Lacour blocked → refused and logged ». Blocked accounts per CLAUDE.md: cli_0005, cli_0006, cli_0046."
   ]
+ },
+ {
+  "id": "J25",
+  "title": "Le cadran annoncé : deux arrières pour jeudi, Boucherie Peyronnet",
+  "client_id": "cli_0001",
+  "trap": "A butcher orders hindquarters the week the Monday quote moved. The agent must say the move ONCE, from her own prices (10,15 → 10,20 €/kg), in the same step as the order write, and the ERP must record it as announced.",
+  "turns": [
+   "Bonjour, c'est Céline, Boucherie Peyronnet. Pour jeudi, mettez-moi deux arrières, comme d'habitude.",
+   "Oui, c'est bon, validez."
+  ],
+  "expected": [
+   "Turn 1: one sentence on the move: the hindquarter up 5 centimes, at 10,20 € le kilo, the Monday quote at the Limoges market. Said once, numbers in words, not repeated in turn 2.",
+   "cotation_semaine is called in the same step as the order write (no extra model step).",
+   "Final ERP: an order for cli_0001 on 2026-11-26 with two hindquarters (prd_0001), confirmed after her yes; a client event « Cotation de la semaine annoncée »; the « Cotation de la semaine » page shows her as told."
+  ],
+  "facts": [
+   "cli_0001 Boucherie Peyronnet, delivered tue/thu/sat; Céline places the orders.",
+   "GET /api/cotation/client/cli_0001?productIds=prd_0001: priceNow 10,20, lastWeekPrice 10,15 (21/11), delta +0,05; month ago 9,77.",
+   "Pablo's test 1 (02:48 entry)."
+  ]
+ },
+ {
+  "id": "J26",
+  "title": "Le cadran annoncé : le même boucher rappelle dans la semaine (suit J25)",
+  "client_id": "cli_0001",
+  "keep_erp": true,
+  "trap": "Runs right after J25, without a reset: the move was announced to Peyronnet this week. Calling back about hindquarters, she must hear NOTHING about the quote.",
+  "turns": [
+   "Rebonjour, c'est encore Céline, de chez Peyronnet. Rajoutez-moi un arrière de plus sur jeudi.",
+   "Oui, c'est bon."
+  ],
+  "expected": [
+   "Nothing said about the quote, the market or a price move (announcedThisWeek).",
+   "The hindquarter is added to Thursday's order (3 in all), no second order for the same day.",
+   "No second « Cotation de la semaine annoncée » event."
+  ],
+  "facts": [
+   "Run as `make jury ARGS=\"J25 J26\"`: J26 alone starts from J25's ERP only if J25 ran just before.",
+   "Pablo's test 2."
+  ]
+ },
+ {
+  "id": "J27",
+  "title": "Le cadran annoncé : « Encore une hausse ? SOCOVIA est moins cher » , Maison Deschamps",
+  "client_id": "cli_0092",
+  "trap": "Hindquarter up, forequarter down: both said. Then the butcher pushes back with a competitor: the agent gives his one-month trend, grants no discount, and logs the reaction with the competitor's name for his salesperson.",
+  "turns": [
+   "Bonjour, Karim Schneider, Maison Deschamps. Pour vendredi, un arrière et un avant.",
+   "Encore une hausse ? SOCOVIA me fait l'arrière moins cher, vous savez.",
+   "Bon. Validez quand même."
+  ],
+  "expected": [
+   "Turn 1: the rise AND the drop said once: arrière +5 centimes à 10,28 €, avant −3 centimes à 6,11 €, the Monday quote.",
+   "Turn 2: his one-month trend (arrière de 9,86 à 10,28 €), « c'est la même chose pour tous nos bouchers »; no discount, no price promised, at most his salesperson will call.",
+   "A client event of type price_negotiation naming SOCOVIA.",
+   "Final ERP: a confirmed order for cli_0092 on 2026-11-27 with prd_0001 and prd_0002, one piece each; « Cotation de la semaine annoncée » logged."
+  ],
+  "facts": [
+   "cli_0092 Maison Deschamps, Karim Schneider (boucher-patron), delivered wed/fri.",
+   "say: « Cette semaine, l'arrière a pris 5 centimes, à 10 euros 28 le kilo et l'avant a baissé de 3 centimes, à 6 euros 11 le kilo : c'est la cotation de lundi au cadran de Limoges. »",
+   "ifAsked: « Sur un mois, l'arrière est passé de 9 euros 86 à 10 euros 28 le kilo… »",
+   "Pablo's test 3."
+  ]
+ },
+ {
+  "id": "J28",
+  "title": "Le cadran annoncé : un restaurant ne commande que du PAD, Restaurant Vidal",
+  "client_id": "cli_0063",
+  "trap": "Only carcasses and quarters follow the quote. A restaurant ordering PAD cuts must hear nothing about it.",
+  "turns": [
+   "Salut, c'est Serge, du restaurant Vidal. Pour vendredi, huit kilos de paleron et cinq kilos de bavette.",
+   "Oui, c'est bon, valide."
+  ],
+  "expected": [
+   "Nothing said about the quote or the market.",
+   "Final ERP: a confirmed order for cli_0063 on 2026-11-27 with paleron (prd_0017) 8 kg and bavette (prd_0014) 5 kg; no « Cotation de la semaine annoncée » event.",
+   "« tu » followed (he says « Salut », « valide »)."
+  ],
+  "facts": [
+   "cli_0063 Restaurant Vidal, Serge, restaurant: PAD cuts only.",
+   "Pablo's test 4."
+  ]
+ },
+ {
+  "id": "J29",
+  "title": "Le cadran annoncé : un supermarché sensible commande des quartiers, Hyper Frais Corgnac",
+  "client_id": "cli_0003",
+  "trap": "A supermarket flagged sensitive to unannounced rises orders quarters for Friday: told once (arrière +5 centimes à 10,10 €, the forequarter's move too), and the page moves it to « Déjà prévenus ».",
+  "turns": [
+   "Bonjour, Frédéric Lavaud, rayon boucherie de l'Hyper Frais Corgnac. Pour vendredi, deux arrières et deux avants.",
+   "Oui, c'est bon, validez."
+  ],
+  "expected": [
+   "Turn 1: the move said once, from its own prices (arrière 10,05 → 10,10 €).",
+   "Final ERP: a confirmed order for cli_0003 on 2026-11-27 with two prd_0001 and two prd_0002; « Cotation de la semaine annoncée » logged; the page shows it as told.",
+   "No promotion or price promised (« Promos validées par la directrice »)."
+  ],
+  "facts": [
+   "cli_0003 Hyper Frais Limoges Corgnac, supermarket, delivered mon/wed/fri, Frédéric Lavaud (chef boucher du rayon).",
+   "Friday 27 is 3 days ahead: the 2-day rule for quarters is met.",
+   "Pablo's test 5."
+  ]
  }
 ]
