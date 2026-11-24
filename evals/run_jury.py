@@ -133,7 +133,15 @@ def erp_delta(st, client_id: str) -> dict:
         }
         for o in st.new_orders(client_id)
     ]
-    return {"new_orders": orders, "new_events": [e["title"] for e in st.new_events(client_id)]}
+    # Holiday reservations (carnet des fêtes, J21–J24). The table is emptied by every reset, so all are new.
+    try:
+        festive = [
+            f"{r['productId']} {r['deliveryDate']} réservé {r['qtyReserved']:g} + attente {r['qtyWaitlist']:g}"
+            for r in rc.erp_get("/api/festive/reservations", clientId=client_id)
+        ]
+    except Exception:  # an ERP without the carnet des fêtes: nothing to show
+        festive = []
+    return {"new_orders": orders, "new_events": [e["title"] for e in st.new_events(client_id)], "festive": festive}
 
 
 def run_one(sc: dict, mode: str, verbose: bool) -> dict:
@@ -173,6 +181,8 @@ def run_one(sc: dict, mode: str, verbose: bool) -> dict:
     ))
     if delta["new_events"]:
         print(rc.dim("  événements : ") + "; ".join(delta["new_events"]))
+    if delta.get("festive"):
+        print(rc.dim("  carnet des fêtes : ") + "; ".join(delta["festive"]))
 
     print(rc.dim("  à juger à la main :"))
     for e in sc.get("expected", []):

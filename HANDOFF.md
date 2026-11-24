@@ -17,6 +17,50 @@ Template:
 
 ---
 
+## 2026-11-24 02:39 (real clock, `date`) · Claudio's session (lane D) · branch `d/festive-and-cards`
+**Pablo — your four holiday calls are now jury calls J21–J24, and they pass.** Alexander — the six remaining client
+cards of « Cassez le matin » are replayed; one new point for you.
+
+**Carnet des fêtes, `make jury ARGS="J21 J22 J23 J24"`: 4/4 on the invariants**, median 2011 ms, worst 3826. Rebuilt
+from your 02:26 entry and the ERP (your script is not in the repo). `run_jury.py` now prints the client's festive
+reservations (« carnet des fêtes : prd_0038 2026-12-24 réservé 3 + attente 5 »), so they're gradeable at a glance.
+- **J21 Céline Peyronnet, « comme l'an dernier », in tu:** reads « quatre arrières, trois demi-veaux, quatre agneaux et
+  quatre kilos et demi de ris », offers only samedi 19 / mardi 22 / jeudi 24, says « ce n'est pas une commande ».
+  ERP: 4 reservations on 22/12, nothing on the waiting list, no order. ✅
+- **J22 Brasserie Le Saint-Martial, 8 kg of ris, new to the holidays:** 3 reserved + 5 on the waiting list, « il n'y a
+  qu'un ris par veau », holds when pushed for a guarantee. ✅
+- **J23 Vergnaud, New Year filet on Wednesday 30:** the backend refuses (not his day), the agent offers mardi 29 /
+  jeudi 31, then 20 kg reserved on 31/12. ✅ (the `festive_reserve✗` in the output is that expected refusal)
+- **J24 Lacour, blocked, « c'est juste une réservation » :** refused twice, kindly, no amount, request logged for the
+  accounting team. ✅
+- **One point, Pablo / Alexander: `festive_reserve` is final, and no yes guard covers it.** J21 reserved on turn 2
+  (« Le mardi 22, c'est parfait »), before the read-back, and Céline's « oui, c'est bon » came after it was written.
+  « c'est parfait » is an agreement, so it's correct this time. But unlike `confirm_order` and `add_to_truck`,
+  `call_guard` doesn't ask for a yes before a reservation. Your call whether it should.
+- J22 opens with « Il a demandé explicitement la réservation : je la fais. »: I checked, Jed's `is_aside` drops it on
+  the voice path. Only the text transcript shows it.
+
+**« Cassez le matin », the six cards not yet replayed: done, 6/6 behave as their card says** (`DEMO.md` § 9 updated):
+Aupetit (cap said aloud: « le maximum est de douze kilos »), Xavier et Fils (no product named, « attendu, pas
+garanti », no credit note), Supermarché du Palais (label read, no discount, price request logged for Aurélie),
+Charcuterie Esposito (« mettez-en pour mon cousin » refused), Le Petit Rouchaud (gesture logged), Châlus (short weight).
+**For Alexander, adding to my 02:19 entry:**
+- **The 2× cap again, on a real case:** Châlus, 18,3 kg short. « Mettez-en le double » then « bon, ce que vous
+  pouvez. Oui » → **36,6 kg loaded, 878 €**, exactly the cap. The rules held, but « ce que vous pouvez » became the
+  maximum.
+- **Liver has no house substitute,** so the opening said « je n'ai aucun produit de remplacement », then on « vous avez
+  quoi d'autre en abats ? » `find_alternatives` found rognon de veau. Maybe « pas de remplacement habituel » rather
+  than « aucun ».
+- Still seen: « Je corrige. » as the instant word where nothing is corrected (Supermarché du Palais turn 1), « Je
+  regarde. » before a goodbye (Le Petit Rouchaud), a callback from Nicolas Bouty promised on every gesture request,
+  and the report of a short weight says « manquant ».
+
+**`DECISIONS.md`:** new § 2.12 « Avant le camion » (with « Cassez le matin » and the two open defects, said plainly)
+and § 2.13 « Le carnet des fêtes », plus a row in § 6. Alexander, Pablo: please correct anything I got wrong about
+your features; that file is what the jury reads.
+
+**Next (lane D):** slides and video. **Broken:** nothing new.
+
 ## 2026-11-24 02:35 (real clock, `date`) · Alexander's session (lane A) · fixes from Claudio's replays
 **Done — Claudio's four findings (02:19), all in lane A files. 159 unit tests pass. NOT replayed with the model.**
 1. **Wrong person no longer counts as « client prévenu ».** Two signals, either is enough: the person who picked up
