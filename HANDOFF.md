@@ -17,6 +17,47 @@ Template:
 
 ---
 
+## 2026-11-24 01:08 (real clock, `date`) · Claudio's session (lane D) · branch `d/decisions-numbers`
+**Alexander — J10 (matured ribs) needs one decision from the two of us before the jury reads it.** Today the
+scenario and the agent disagree, so a juror who opens `evals/jury_calls.json` sees a failure that is really a choice.
+
+**The conflict:**
+- **Scenario** (`evals/jury_calls.json`, J10, `cli_0074` Julien Mazaud, asks 12 kg of `prd_0011` on Tuesday for
+  Saturday 28/11) expects a **refusal**: « No prd_0011 line exists on any order of cli_0074 dated before
+  2026-12-01 », the one-week rule said, first dates Wed 2 / Sat 5 December, entrecôte only on his request, and the
+  12 kg reserved for 5/12.
+- **Agent** (your decision, 23:55 entry and the J1–J12 replay entry) **accepts** 12 kg for Saturday from stock and
+  says « d'habitude ça se réserve une semaine avant » (`mustSay` from `tools/desk.py`).
+
+**What each side rests on:**
+- For the refusal: the house rule is written three times in `data/context/` (`02-journee-type.md`,
+  `06-livraisons-zones.md`: « réservation une semaine à l'avance »; `04-playbook`: « réservée le lundi »), and
+  the CRM note on this very client says « Julien réserve ses côtes maturées le lundi pour le week-end ».
+- For accepting: 692 rib lines in 12 months were all ordered 1 to 3 days ahead, and the ribs are physically
+  there (183,6 kg on hand, ~26 kg free for 28/11). Refusing meat in the cold room loses a sale the real rep makes.
+
+**The two ways out (pick one, then the other side changes):**
+- **A. Keep accepting (no code change).** I rewrite J10's `expected`: a 28/11 order with `prd_0011` 12 kg, the
+  one-week rule said aloud as a habit, not a refusal; turn 3 then becomes « et réservez-moi la même chose pour le
+  samedi d'après ». I also add a line to `DECISIONS.md` § 2.8 next to the carcass lead time ("we follow the data,
+  not the document"), which is the same argument.
+- **B. Make it strict (lane A).** You switch on the stricter behaviour (`RESERVE_DAYS_WHEN_SHORT` in
+  `tools/desk.py`), the scenario stays as is, and we run `make jury ARGS="J10 -v"` plus `make calls` before your
+  10:30 stop.
+
+**My leaning: A.** It matches § 2.8, needs no agent change this close to the freeze, and the jury sees a reasoned
+choice instead of a broken test. But you know the tool, so your call counts as much as mine. Reply here.
+
+**Also in this push (`DECISIONS.md`, lane D):**
+- § 3.2: Pablo's STT fix (`4ac4348`, end of speech → final transcript 1,25–1,64 s → 0,15–0,60 s, measured with
+  recorded audio, browser mic still to confirm) and his last full run (`dbcc191`: 6/6, median 2,9 s, worst 6,4 s,
+  jury 18/18).
+- § 3.2 and § 6: removed "2,5 à 3,5 s de silence volontaire après un « oui »", no longer true since `401765f`.
+- § 3.3: STT cost (< $0,005) and the total, ≈ $0,10–0,15 per call with a cold cache.
+- § 2.11, § 4, § 6: the short-sentence 1,2–1,7 s is marked as measured before `4ac4348` and not yet re-measured.
+
+**Next (lane D):** slides and video. **Broken:** nothing new.
+
 ## 2026-11-24 01:01 (real clock, `date`) · Pablo's session (lane B) · branch `b/slides-numbers`
 **Jed — one spoken call to confirm the Soniox fix (`4ac4348`), please.** You have the Voix page and a browser; my
 gain is measured with recorded audio sent over `WS /voice`, never from a real browser mic. After `git pull`:
