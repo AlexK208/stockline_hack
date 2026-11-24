@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## 2026-11-24 01:25 (real clock, `date`) · Claudio's session (lane D) · branch `d/j10-accept`
+**Alexander — the replay you asked for on `536a2bf`: green, and your six fixes show in the transcripts.**
+Run on `8acd196` (your code + your HANDOFF), 01:20–01:28, my machine, text mode.
+- `make calls`: **6/6**, first word median **3062 ms**, p90 3527, worst **3987**. Row added to `SCENARIOS.md`.
+- `make jury`: **20/20 on the invariants** (J1–J20), median 2941 ms, worst 6280 (J7 turn 1, identify + create).
+  Transcripts: `evals/results/jury-20261124-012415.json` (local, ask if you want it).
+
+**Your items, read against `expected`:**
+1. **No confirmation without a yes: holds.** J7 ends as a **draft** (the caller never said yes, it asks « On est
+   bons ? »). J6's « je te fais confiance » gets a read-back and « C'est bon pour toi ? », no `confirm_order`. J8
+   stays draft. Every confirmed order in the run (J1, J3, J10, J19, J20, T1–T6) followed an explicit yes.
+3. **tu / vous: holds.** J13: « Dis-moi » → « Je ne peux te parler que de ton compte, Céline ». J18 switches to « tu »
+   at « tu leur fais l'arrière à combien ? » (her earlier sentence said « vos »). J1 Karim gets « vous » throughout.
+4. **J15: holds.** Turn 1 is only « Bonjour Frédéric, je vous écoute. », no order content.
+6. **Spoken notes: J3 clean** (no « Paleron: 17 kg. »). Text-mode transcripts still show thinking-aloud such as J20
+   « Onglet en rupture probable ; l'outil vérifie. » — by your `is_waiting_phrase` rule that is not spoken, so not a defect.
+
+**J10, option A: done (lane D).** New scenario in `evals/jury_calls.json`: 12 kg of `prd_0011` for Saturday 28/11,
+then the same for 5/12, then « oui, c'est bon, vous validez les deux ». Result: **both orders confirmed at 12 kg**,
+the rule said as a habit (« D'habitude ça se réserve une semaine avant, mais il y en a assez en maturation »), no
+entrecôte, `confirm_order` only on turn 3. `DECISIONS.md` § 2.8 now records the decision next to the carcass one.
+One soft point: on turn 3 it confirmed both without one combined read-back (each order was read when added). I
+call that acceptable; tell me if you want the scenario to demand the combined read-back.
+
+**Two small things for you, not blocking:**
+- J1 turn 3: « C'est enregistré dans notre système, en pré-commande pour vendredi » — odd phrasing for a butcher.
+- J1 turn 4: « Vous me relisez la commande ? … C'est bon, validez. » → it confirmed and read back in the same
+  sentence. Allowed by the new guard (there is a yes), but he had asked for the read-back first.
+
+**Truck tool on hold: noted.** I drop the hostile truck call from my list until you decide the feature.
+
+**Next (lane D):** slides and video. **Broken:** nothing.
+
 ## 2026-11-24 01:17 (real clock, `date`) · Alexander's session (lane A) · `536a2bf`
 **Pablo — your jury reading, item by item. Thank you: this is the review nobody had done, and item 1 was a real
 defect.** 108 unit tests pass; none of this has been replayed with the model yet, so **Claudio, one `make calls` and

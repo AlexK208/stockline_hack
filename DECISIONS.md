@@ -137,6 +137,13 @@ Refuser un demi-veau mardi pour jeudi, ce serait refuser ce que l'entreprise fai
 délai plat de 2 jours** sur la catégorie carcasses. Quand le veau ou l'agneau n'est pas en stock pour la date,
 `check_products` le dit déjà avec le prochain arrivage.
 
+**Même arbitrage pour les côtes maturées 21 jours** (`prd_0011`, appel jury J10). Le document dit « réservation une
+semaine à l'avance », mais les **692** lignes de côtes maturées des 12 derniers mois ont toutes été commandées 1 à
+3 jours avant. L'agent accepte donc quand la salle de maturation couvre la date, et dit la règle comme une
+habitude (« d'habitude ça se réserve une semaine avant, mais il y en a assez en maturation pour cette date »). Le
+délai d'une semaine ne s'applique que si le stock manque (`RESERVE_DAYS_WHEN_SHORT`, `tools/desk.py`). Décision
+commune lane A et lane D, 24/11 à 01:17.
+
 ### 2.9 Voix de synthèse : modèle changé, voix encore à trouver (lane B)
 
 Lane A a signalé deux fois que la voix par défaut « parle français avec un rythme anglais et marque une pause
