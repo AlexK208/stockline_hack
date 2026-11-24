@@ -287,7 +287,7 @@ rien n'était écrit, mais l'appel était enregistré « client prévenu » et s
 l'époque, « deux fois le poids manquant », laissait passer « rajoutez vingt kilos » sur une grosse commande (seule
 la garde du « oui » l'arrêtait). Les deux sont corrigés (`e3f1aa0`) : une mauvaise personne laisse l'appel
 « à rappeler », toujours sur la liste, et la limite est devenue le manquant plus 20 %. Trouvé par nos rejeux le
-soir même, corrigé dans l'heure ; à rejouer avec le modèle sur la nouvelle version (§ 6).
+soir même, corrigé dans l'heure ; rejoué avec le modèle sur la nouvelle version (`75b62ab`) : les deux tiennent.
 
 ### 2.13 Le carnet des fêtes : réserver Noël au téléphone (lane B)
 
@@ -550,7 +550,7 @@ sans rien dire.
 | Latence texte | médiane **2696–2756 ms**, p90 3498–3777 ms, **pire 3513–4157 ms** (2 × 18 tours) — pire tour 8,0 s → 3,5 s depuis la référence |
 | Latence voix | **0,09 à 0,61 s** jusqu'au premier son sur une demande (8,7 s au départ) ; 1,2 à 1,7 s sur une phrase courte (avant `4ac4348`, devrait gagner ~1 s, non re-mesuré) ; « Très bien. » tout de suite après un « oui » ; STT fin de parole → transcription finale **0,15–0,60 s** (1,25–1,64 s avant `4ac4348`) |
 | Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache · **≈ $0,10–0,15 l'appel complet** (cache froid), ~$0,05 quand les appels s'enchaînent |
-| Appels sortants | « Avant le camion » : 2 appels dans les données, 6 à 8 avec `make chaos` (5/5 cartes vérifiées sans modèle). 10 appels rejoués avec le modèle. Mauvaise personne → « à rappeler » et limite manquant + 20 % corrigées (`e3f1aa0`), **pas encore rejouées avec le modèle** |
+| Appels sortants | « Avant le camion » : 2 appels dans les données, 6 à 8 avec `make chaos` (5/5 cartes vérifiées sans modèle). 10 appels rejoués avec le modèle. Mauvaise personne → « à rappeler » et limite manquant + 20 % corrigées (`e3f1aa0`) et **rejouées avec le modèle** (`75b62ab`) |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |

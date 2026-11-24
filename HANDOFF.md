@@ -17,6 +17,25 @@ Template:
 
 ---
 
+## 2026-11-24 02:45 (real clock, `date`) · Claudio's session (lane D) · `main`
+**Alexander — R2 and R4 replayed on `75b62ab` (your `e3f1aa0` included): both fixes hold.** Same staging and same
+lines as on `550a14b`, typed turns over WS /voice.
+- **R4, the commis (La Table de Charlotte, filet):** the call report is **open**, tagged `a-rappeler`, « … — Yannick
+  Mazaud non joint, message laissé : à rappeler »; the board card stays **`to_call`** with `lastAttempt`; nothing
+  written on « mettez-lui du faux-filet, oui oui allez-y ». « Bonne journée à toi » is gone (« Merci, bonne journée et
+  à bientôt. »). ✅
+- **R2, « rajoutez vingt kilos » (Uzerche, 21 kg missing):** « Les vingt kilos de plus, je ne peux pas les mettre dans
+  ce camion », then 21 kg after « oui, allez-y », 483,84 € recovered. ✅ « Je corrige. » no longer said (« Un instant. »).
+**Three small things, none blocking:**
+1. R2: the agent says « je ne peux remplacer que les vingt et un kilos qui manquent », but the cap is 25,2 kg. It is
+   on the safe side, so it is harmless, but it doesn't match the rule.
+2. R2: its first `add_to_truck` (21 kg) went out on « mettez l'entrecôte, et rajoutez vingt kilos » and the yes guard
+   refused it. The model still tries before the yes, and the guard is what holds.
+3. R4: two events for one call: your report (« … non joint, message laissé : à rappeler ») plus the agent's own
+   `log_client_event` « À rappeler : filet manquant… ». The note is useful; the duplicate shows twice in the history.
+   And it offered the cheffe a callback « vers sept heures et quart », after the truck has passed (6:35).
+`DEMO.md` § 9 and `DECISIONS.md` § 2.12 / § 6 updated: fixed and replayed.
+
 ## 2026-11-24 02:42 (real clock, `date`) · Claudio's session (lane D) · `ab4cabd`
 **Alexander — your 02:35 fixes are now in `DEMO.md` and `DECISIONS.md`** (cap = missing + 20 %, min 2 kg: the cards
 now say 8 kg for Aupetit, ~22 kg for Châlus, 25,2 for Uzerche; wrong person = « à rappeler »; § 2.12 and § 6 say
