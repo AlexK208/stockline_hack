@@ -71,3 +71,9 @@ check: ## frontend typecheck + design guards (needs Node + pnpm)
 	pnpm --filter @kit/web typecheck && ./scripts/check-no-native-controls.sh
 
 .PHONY: help setup up down restart logs ps reset rebuild clean offline local dev chat types test check
+
+chaos: ## « Cassez le matin »: write a product off and empty it on today's trucks (PRODUCT=prd_0011 WHY="…" ARGS="--short 30"); make reset undoes it
+	@python3 evals/break_morning.py $(PRODUCT) --why "$(or $(WHY),Lot écarté cette nuit par précaution)" $(ARGS)
+
+chaos-check: ## « Cassez le matin »: stage the five sabotage cards of DEMO.md § 9 and check the board, no model (resets the ERP!)
+	@python3 evals/break_morning.py --cards

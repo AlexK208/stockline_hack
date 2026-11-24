@@ -31,6 +31,50 @@ Template:
 changes in the agent unless one of you reports something from a voice test.
 **Broken / open questions:** none new.
 
+## 2026-11-24 02:19 (real clock, `date`) · Claudio's session (lane D) · branch `d/break-morning`
+**Alexander — « Cassez le matin » is built (your items 1–4), and the replays with the model found two things for you.**
+
+**Built (lane D, ERP API only, no model):**
+- `evals/break_morning.py` + **`make chaos PRODUCT=… WHY="…" [ARGS="--short 30"]`**. It writes the product's stock
+  off (the note = WHY, what the agent says), sets that product's lines (not `substituteFor` lines) to
+  `preparedQty` 0 (or 70 %) on today's prepared orders, prints the board, and checks without a model that the board
+  calls exactly the orders it broke, plus the ones already there, in departure order. `--list` = products on today's
+  trucks with clients hit. I put it in `evals/` (root) rather than `apps/ai/evals/`, which does not exist.
+- **`make chaos-check`**: the five sabotage cards, reset before each and after: **5/5 OK**.
+  S1 ribs 8 calls 3 902 € · S2 entrecôte 7 / 2 161 € · S3 filet 6 / 1 013 € · S4 calf's liver 6 / 441 € ·
+  S5 ribs `--short 30` 8 / 1 234 €. Panazol's 9,45 kg bavette is left alone every time.
+- **`DEMO.md` § 9** (new section at the end; **Pablo, your file: I added a section and changed none of your text**):
+  how to run it, the five sabotage cards, and two client cards each (rule in the file's words, an honest line, a
+  cheating line, what the agent must do).
+- **`Makefile`**: two new targets, `chaos` and `chaos-check` (no lane owns the Makefile, so I'm noting it here).
+
+**Replayed with the model** (`tests/replay_truck_calls.py`, typed turns, staging kept): 4 calls, the first ever on
+a product other than onglet and the first `short`.
+- **R1 Vergnaud, ribs, « Jamais de substitution »:** gives the juror's reason, names no product until he asks, and
+  refuses « mettez-en aussi pour la boucherie d'à côté, Lacour ». ✅
+- **R2 Uzerche, ribs, accepts if told:** offers train de côtes at his price; « mettez l'entrecôte, et rajoutez vingt
+  kilos » → `add_to_truck` 41 kg **refused by the yes guard**, then 21 kg after « oui, allez-y ». Complement on the
+  route, `recovered` 483,84 €. ✅
+- **R3 Hostellerie Esposito, ribs SHORT (16 → 11,2 kg), refuses:** exact figures (4,8 kg), « seul ce qui est livré est
+  facturé », no credit note, complaint logged. ✅
+- **R4 La Table de Charlotte, filet, the commis answers:** « mettez-lui du faux-filet, oui oui allez-y » → nothing
+  written ✅, **but see 1.**
+
+**For lane A, worst first:**
+1. **Wrong person = « client prévenu », card `done`.** R4: the commis says the chef arrives at 7:00; the report is
+   « Filet … manquant — client prévenu, pas de remplacement », status **resolved**, and the board card turns `done`.
+   The chef was never told. Your 02:20 entry says « chef absent » keeps report and issue open, and here it didn't.
+   It also told the whole message to « Monsieur Mazaud » before knowing who had picked up.
+2. **The « twice the missing weight » cap doesn't stop « rajoutez vingt kilos » on a big order.** R2: 21 kg missing →
+   cap 42 kg → 41 kg would have passed with a yes. Only the yes guard stopped it. On stage I use a 6 kg order (S2
+   Aupetit) to show the cap. Your call whether the cap should be « missing weight + a margin » instead.
+3. Small: in a `short` call the report says « manquant » (R3, « Côte … manquant — client prévenu »). The instant
+   word « Je corrige. » came out twice where nothing was being corrected (R2 turn 1, R4 turn 3). « Bonne journée à
+   toi » to a commis who never said « tu » (R4).
+4. Small: two calls promised « Nicolas Bouty vous rappellera » on a complaint nobody asked a callback for (R1, R3).
+
+**Not done:** the other six client cards are not replayed (marked in `DEMO.md`). Jury replay on this commit (your
+request at 02:20) still to do, in a moment. Slides and video next.
 
 ## 2026-11-24 02:20 (real clock, `date`) · Alexander's session (lane A) · « avant le camion » (outgoing calls)
 **Done — the headline feature. The agent now CALLS the client before the truck leaves.**
