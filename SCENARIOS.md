@@ -20,6 +20,7 @@ on vérifie la donnée et on corrige ce fichier.
 | T4 | Changement d'avis en cours d'appel | Le Petit Roger (`cli_0016`) | modifier et retirer des lignes |
 | T5 | Compte bloqué | Boucherie Lacour de Tulle (`cli_0005`) | aucune commande, message transmis |
 | T6 | « J'ai oublié un truc » | Boucherie Rolland (`cli_0086`) | compléter un brouillon existant |
+| T7 | Suggestions en fin de commande (V2) | Boucherie Peyronnet (`cli_0001`) | une suggestion à la fois, avec sa raison ; oui puis non |
 
 ---
 
@@ -147,6 +148,34 @@ on vérifie la donnée et on corrige ce fichier.
 
 ---
 
+## T7 — Suggestions en fin de commande : Boucherie Peyronnet (V2)
+
+- **Appelant** : Céline Peyronnet, comme en T1. **Refuse les substitutions** : on ne lui propose que des produits
+  qu'elle a déjà achetés.
+- **Contexte ERP** : son habituel (60 jours) contient aussi la demi-carcasse de porc cul noir (`prd_0007`, 58 % de
+  ses livraisons), l'onglet (54 %, en rupture), le quartier avant (`prd_0002`, 50 %) et l'agneau (50 %).
+  Fin novembre, aucun produit n'est « de saison » pour elle, aucune promo n'est valable le 26/11 (`prl_0008` commence
+  le 01/12) : les suggestions viennent de l'habitude.
+- **Script** :
+  > « Bonjour, c'est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, comme d'hab : deux arrières et un demi-veau. »
+  > « Ce sera tout. »
+  > « Oui, mets-moi ça. »
+  > « Non, pas cette semaine. »
+  > « Oui, c'est bon. »
+- **Attendu** :
+  - sur « Ce sera tout », l'agent appelle **`suggest_items` une seule fois**, relit, et propose **le demi-porc cul
+    noir avec sa raison** (« vous en prenez d'habitude ») ;
+  - après le oui, il l'ajoute et propose **le quartier avant** ; après le non, il n'insiste pas et pose la question
+    d'accord, **sans valider** ;
+  - commande du 26/11 confirmée : **2 arrières (≈ 200 kg), 1 demi-veau (≈ 72,5 kg), 1 demi-porc cul noir
+    (≈ 50 kg)**, pas de quartier avant, rien d'autre.
+- **Pièges** : une troisième suggestion (l'outil n'en rend que deux) ; valider sur le « non » (refusé par le
+  garde-fou `call_guard`) ; proposer l'onglet (rupture) ; un argument de marge ou de volume.
+- **Page Voix** : section « Suggestions » sous la commande : le porc « Proposé » puis dans la commande (« suggestion
+  acceptée · habitude »), le quartier avant « Proposé » puis « Non retenu » une fois la commande confirmée.
+
+---
+
 ## Résultats
 
 Une ligne par passage. Latences lues sur la page **Voix** (colonnes Total et Perçu).
@@ -163,3 +192,4 @@ Une ligne par passage. Latences lues sur la page **Voix** (colonnes Total et Per
 | 2026-11-24 00:16 | 608a233 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 2756 | 4157 | connexions gardées ouvertes (`keepalive_expiry` 5 s → 600 s, `clients/http.py`) · auto · sonnet-5-5 |
 | 2026-11-24 00:18 | 608a233 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 2696 | 3513 | **passage de référence final** · même commit, 2e passage pour confirmer · **pire tour 3513 ms** contre 4526–7992 ms sur les 6 passages précédents (plages disjointes) |
 | 2026-11-24 01:20 | 8acd196 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 3062 | 3987 | auto · 1er mot texte sans TTS · sonnet-5-5 · **pas de confirmation sans oui** (`536a2bf`, `call_guard`), tu/vous lu dans le code · jury 20/20 invariants (médiane 2941, pire 6280 = J7 tour 1) · J10 réécrit en option A |
+| 2026-11-24 02:20 | `c/suggest-items` | ✅ |  |  | ✅ |  |  | 2083 | 3342 | auto · sonnet-5-5 · **suggestions en fin de commande** · T1 et T4 seulement (crédits) : pas de suggestion quand le client dit de valider · **T7 3/4** : 1 échec à 02:19 (3e suggestion proposée → l'outil n'en rend plus que 2), puis 2/2 · tour de suggestion 2,0–3,5 s |

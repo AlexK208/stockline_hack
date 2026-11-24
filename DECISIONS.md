@@ -253,6 +253,44 @@ fermeture du socket Soniox, qui met 1,1 à 1,3 s à être acquittée, avant de r
 socket se ferme maintenant en arrière-plan : fin de parole → transcription finale **1,25–1,64 s → 0,15–0,60 s**
 (même enregistrement envoyé 6 fois par `WS /voice`, avant et après). Détail en § 3.2.
 
+### 2.12 Suggestions en fin de commande : décidées par du code, dites par le modèle (V2)
+
+**Une fois la commande finie, l'agent peut proposer un ou deux produits, chacun avec une raison que le client peut
+vérifier : « Vous prenez d'habitude un demi-porc cul noir, je vous en mets un ? »**
+
+*Pourquoi.* Un bon commercial au téléphone pense à ce que le client oublie : il connaît ses habitudes, ce qu'il
+prenait aux fêtes l'an dernier, le lot qu'il faut écouler, l'offre qui commence. L'ERP a ces données (trois ans
+d'historique, les lots, les règles de prix) ; un agent qui ne s'en sert pas laisse ce travail à Josette.
+
+*Pourquoi du code et pas le modèle.* Une suggestion inventée est pire que pas de suggestion : un produit en
+rupture, une promo pas encore active, un substitut proposé à un client qui les refuse. `suggest_items`
+(`tools/suggest.py`) est du Python sans appel au modèle : cinq sources (l'an dernier, réservation, habitude, promo,
+lot à écouler), puis les mêmes vérifications que les outils d'écriture (`check_items` : stock à la date, délai,
+jour de livraison). Le modèle ne fait que formuler. Les tests le vérifient sur les données du pack : rien pour un
+compte bloqué ; jamais le ris de veau ni l'onglet (à zéro) ; la promo chair à saucisse (`prl_0008`) pas avant le
+1er décembre ; seulement ses propres produits pour un client qui refuse les substitutions.
+
+*Deux règles du prompt n'ont pas tenu seules : on les a mises dans le code.*
+- « Au plus deux suggestions par appel » : sur un passage de T7, le modèle en a proposé une troisième, et le « oui,
+  c'est bon » final du client a ajouté deux agneaux. L'outil ne rend plus que deux produits : on ne peut pas proposer
+  ce qu'on n'a pas.
+- « L'an dernier » listait d'abord les produits de base (« 866 kg de quartier arrière l'an dernier à cette
+  période ») : vrai, mais ce n'est pas une raison, il en prend toute l'année. Un produit n'est « de saison » pour un
+  client que s'il est dans une part nettement plus grande de ses livraisons à cette période que sur l'année (× 1,5).
+  Fin novembre, rien ne l'est pour Peyronnet ; à Noël, le ris de veau l'est × 5 (en rupture, donc filtré).
+
+*Ce que nous n'avons pas fait.* « Le stock du client lui-même » (« il vous reste sûrement peu de veau ») : nous
+n'avons aucune donnée sur ce que le client a en chambre froide, donc rien de vérifiable. Et pas de suggestion
+quand le client dit lui-même de valider : il est pressé, on ne le retient pas.
+
+*Le risque, et la réponse.* Les trois juges de lane A avaient écarté l'idée « comme d'habitude proactif » (« les
+bouchers détestent la relance commerciale »). D'où les garde-fous : seulement après la fin de la commande, une à la
+fois, deux au plus, toujours avec la raison, jamais d'argument de marge, et un « non » clôt le sujet.
+
+*Mesure (T7, `make calls`, texte sans TTS).* Le tour « Ce sera tout » (appel de l'outil + relecture + première
+suggestion) : premier mot en **2,0 à 3,5 s** sur quatre passages, dans la plage des autres tours. L'outil lui-même :
+0,2 à 0,6 s (huit lectures ERP en parallèle).
+
 ---
 
 ## 3. Mesures
