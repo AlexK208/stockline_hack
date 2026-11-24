@@ -17,6 +17,47 @@ Template:
 
 ---
 
+## 2026-11-24 01:01 (real clock, `date`) · Pablo's session (lane B) · branch `b/slides-numbers`
+**Jed — one spoken call to confirm the Soniox fix (`4ac4348`), please.** You have the Voix page and a browser; my
+gain is measured with recorded audio sent over `WS /voice`, never from a real browser mic. After `git pull`:
+1. A short call on the Voix page, 4–5 turns, including one very short sentence ("Oui." or "C'est tout.").
+2. Paste the `[ai] stt timing:` lines from the `ai` logs (`make logs`, or `docker logs <ai container> | grep "stt timing"`)
+   here. What to read: **"final … ms after the end"**. Before the fix: 1 254–1 811 ms (Alexander's call at 00:40).
+   Expected now: **~150–600 ms**.
+3. Also say whether the instant word came early on the short sentence. It should, since the final transcript now
+   arrives ~1 s sooner.
+Keep it short: the ElevenLabs quota is shared.
+
+**Claudio — the measurements for the slides and `DECISIONS.md` § 3.2 / § 3.3, ready to paste.** Each number says
+how it was measured. Use only these, and drop any you cannot defend in a question.
+
+**Slide "Mesures", proposed: three numbers.**
+
+| Mesure | Avant → après | Comment c'est mesuré |
+|---|---|---|
+| **Fin de parole → transcription finale** | **1,25–1,64 s → 0,15–0,60 s** | même audio envoyé 6 fois par `WS /voice`, avant/après `4ac4348` (lane B). Cause : on attendait la fermeture de la socket Soniox (1,1–1,3 s) avant de rendre le texte |
+| **Pire tour (1er mot)** | **4,5–8,0 s → 3,5–4,2 s** | `make calls`, deux passages, avant/après la connexion gardée ouverte (`clients/http.py`, Claudio) |
+| **Coût par appel réussi** | **≈ 0,10–0,15 $** | jetons mesurés (`8a2d158`) × tarifs publics : modèle 0,074–0,087 $, voix 0,02–0,06 $ (caractères estimés), STT < 0,005 $ |
+
+**State on the latest full run (`dbcc191`, 00:41, text mode, no STT/TTS):** T1–T6 **6/6**, first word median
+**2,9 s**, p90 3,9 s, worst 6,4 s. Jury calls **18/18** on the invariants, median 2,6 s.
+
+**Lines for the voice-over:**
+- « Une seconde gagnée à chaque tour, sans toucher au modèle : on attendait que la socket se ferme avant de lire
+  la transcription. » (fix found by measuring each step, not by guessing)
+- « Le cache de prompt rend la partie modèle 4 à 5 fois moins chère : 85 % de l'entrée est relue depuis le cache. »
+- « Un appel coûte une dizaine de centimes. Le poste principal est le modèle, puis la voix. »
+
+**Honest caveats, if the jury asks:**
+- The STT gain is measured with recorded audio through our real socket. Jed's call above will confirm it from a
+  real mic.
+- Latency medians are one run each (`REVIEW.md` § 3.4).
+- The cost uses public list prices in USD. The kit's keys may be billed differently. The spoken characters per
+  call are an estimate (500–1 500).
+- Sources: STT in my 00:56 entry. Cost in my "02:50" entry (really ~00:30): Anthropic, ElevenLabs and Soniox
+  price pages linked there.
+
+**Next:** nothing pending in lane B. **Broken:** nothing.
 ## 2026-11-24 01:01 (real clock, `date`) · Jed's session (lane C) · branch `c/refusals`
 **Done (lane C):** the Commande en cours card now shows **what the business rules refused during the call, and why**,
 in red under the order lines ("Refusé pendant l'appel"). It reads the tools' own results, no model, nothing new on
