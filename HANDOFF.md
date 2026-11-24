@@ -17,6 +17,63 @@ Template:
 
 ---
 
+## 2026-11-24 02:26 (real clock, `date`) · Pablo's session (lane B) · `b/carnet-des-fetes`, merged
+**New feature: « Le carnet des fêtes ». Christmas and New Year reservations by phone. Pablo asked for it to set us apart
+from the other teams. Everyone, please read: it touches several lanes, all additive.**
+
+**Why this one.** Every Claude session gives every team the same generic ideas (callbacks, truck, briefing). Only our
+pack has a chevillard in late November. Christmas is its peak, and it falls on the scarcest pieces. Christmas 2025
+against a normal fortnight in the history: carré de veau ×6.5, filet ×5.3, demi-carcasses ×3.7, ris ×2.9. Those
+pieces are limited by the animal: one ris per veal, one onglet per beef, ribs matured for 21 days. And the context
+says « Réservations des veaux sous la mère et des ris pour Noël en cours : la liste est chez Damien ». So today it is
+a paper list, and 15 clients' « réserver pour les fêtes » requests are free text in their history.
+
+**What the agent does now.**
+- « Pour les fêtes, comme l'an dernier ? » → « Pour Noël l'an dernier vous aviez pris quatre arrières, trois
+  demi-veaux, quatre agneaux et quatre kilos et demi de ris. Pour quel jour : samedi 19, mardi 22 ou jeudi 24 ? »
+  This is his real 2025 basket. Whole pieces are said in pieces, and only his delivery days are offered. Then it
+  reserves.
+- **Scarce pieces** (ris, rognon, onglet, filet, carré de veau, quasi, côte maturée, whole veal/half veal/lamb) have
+  a capacity per window. The capacity is **the most the house delivered for that window last year**, the one number
+  the data can defend. **His own volume of last year is guaranteed** (or 15 % of the window). Beyond that he gets
+  only what no regular of last year is still owed. The rest goes on a **waiting list, never promised**, said with
+  the reason: « trois kilos réservés, cinq en liste d'attente, il n'y a qu'un ris par veau ». A cancellation moves
+  the waiting list up, oldest first, with an activity line « à le prévenir ».
+- Refused in the backend: blocked account, a day the client is not delivered, outside 19–24/12 and 26–31/12, after
+  the deadline (whole veal/lamb and matured ribs: a week before; carcasses: 2 days; the rest: the day before).
+- **A reservation is not an order.** No stock, order or invoice is touched. The order is taken nearer the date, and
+  the agent says so.
+- **Page « Carnet des fêtes »** (Ventes) for Damien: a bar per scarce piece (reserved / waiting list / capacity), who
+  booked what (with the actor icon), the shortfall to buy, and the holiday requests still only in text. It refreshes
+  live on `festive.*` events, so in the video the bar fills while the agent is on the phone.
+
+**Files.** All new except one-line registrations:
+- New: `apps/backend/app/services/festive.py` (all the rules), `routers/festive.py`, `apps/ai/app/tools/festive.py`,
+  `apps/ai/tests/test_festive.py`, `apps/web/src/pages/festive/index.tsx`.
+- **Alexander (lane A), please check two things in your files:** one rule in `BASE_RULES` (`prompts.py`, the
+  « Fêtes (Noël, réveillon…) » line: holiday requests only, create_draft_order not used for those dates), and the
+  `festive` import in `tools/__init__.py`. The rebase on your `truck` import conflicted, and **both imports are
+  kept**. The four tools take `client_id`, so `call_guard` covers them; there is a test for it.
+- **Jed (lane C):** a route `festive` in `routes.tsx` and one nav item in `nav.ts`. The page uses only `@/ui`, and
+  its types are local (new endpoints only, nothing changed in `packages/shared`). Typecheck and the native-controls
+  check pass. **Not looked at in a browser yet: please have a look and restyle freely.**
+- Backend: new table `festive_reservations` (`crud/__init__.py`), emptied by `make reset` (`datapack.py`, one line),
+  and the router registered in `main.py`.
+
+**Verified on the merged code (rebased on `550a14b`):**
+- Unit tests in the `ai` container: **140 pass**. 1 fails, and it was already failing on `main`
+  (`test_identify_caller_does_not_switch_client_on_a_guess`, `KeyError: 'idf'`, lane A).
+- `make calls` **6/6** (median 2 668 ms). Before the rebase: `make jury` **20/20** on the invariants (median 2 455 ms),
+  and no jury call used a festive tool.
+- Four holiday calls through `POST /chat` (voice mode), all correct, no order created: F1 « comme l'an dernier »
+  (4 lines reserved on 24/12), F2 a new client asking 8 kg of ris (3 reserved + 5 on the waiting list, said
+  honestly), F3 Vergnaud asks about filet for New Year then reserves 20 kg, F4 Lacour blocked → refused and logged.
+- Cost: +4 tool schemas ≈ +7 % input tokens per call, read from cache.
+
+**Claudio:** these four calls would make good scenarios (I have the script). And the « comme l'an dernier »
+call + the live board is my proposal for the video's « wow » moment.
+**Known, not mine:** the agent says « vous » to Céline, who says « tu » (the tu/vous item in my jury findings).
+
 ## 2026-11-24 02:25 (real clock, `date`) · Alexander's session (lane A) · outgoing call heard by voice
 **Done:**
 - **First outgoing call played by voice on Alexander's machine (Restaurant Leroy, `fa04e29`): it works end to end.**
