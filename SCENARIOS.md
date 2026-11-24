@@ -20,7 +20,7 @@ on vérifie la donnée et on corrige ce fichier.
 | T4 | Changement d'avis en cours d'appel | Le Petit Roger (`cli_0016`) | modifier et retirer des lignes |
 | T5 | Compte bloqué | Boucherie Lacour de Tulle (`cli_0005`) | aucune commande, message transmis |
 | T6 | « J'ai oublié un truc » | Boucherie Rolland (`cli_0086`) | compléter un brouillon existant |
-| T7 | Suggestions en fin de commande (V2) | Boucherie Peyronnet (`cli_0001`) | une suggestion à la fois, avec sa raison ; oui puis non |
+| T7 | Suggestions en fin de commande (V2) | Boucherie Peyronnet (`cli_0001`) | une seule suggestion, avec sa raison ; oui, puis relecture et accord |
 
 ---
 
@@ -160,16 +160,16 @@ on vérifie la donnée et on corrige ce fichier.
   > « Bonjour, c'est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, comme d'hab : deux arrières et un demi-veau. »
   > « Ce sera tout. »
   > « Oui, mets-moi ça. »
-  > « Non, pas cette semaine. »
   > « Oui, c'est bon. »
 - **Attendu** :
   - sur « Ce sera tout », l'agent appelle **`suggest_items` une seule fois**, relit, et propose **le demi-porc cul
     noir avec sa raison** (« vous en prenez d'habitude ») ;
-  - après le oui, il l'ajoute et propose **le quartier avant** ; après le non, il n'insiste pas et pose la question
-    d'accord, **sans valider** ;
+  - **une seule suggestion par appel** (depuis le 24/11 ~03:50) : après le oui, il l'ajoute, relit toute la commande
+    et pose la question d'accord, **sans proposer autre chose** ; sur un non, il n'insiste pas et pose la question
+    d'accord, sans valider ;
   - commande du 26/11 confirmée : **2 arrières (≈ 200 kg), 1 demi-veau (≈ 72,5 kg), 1 demi-porc cul noir
     (≈ 50 kg)**, pas de quartier avant, rien d'autre.
-- **Pièges** : une troisième suggestion (l'outil n'en rend que deux) ; valider sur le « non » (refusé par le
+- **Pièges** : une deuxième suggestion (l'outil n'en rend plus qu'une) ; valider sans un oui (refusé par le
   garde-fou `call_guard`) ; proposer l'onglet (rupture) ; un argument de marge ou de volume.
 - **Page Voix** : section « Suggestions » sous la commande : le porc « Proposé » puis dans la commande (« suggestion
   acceptée · habitude »), le quartier avant « Proposé » puis « Non retenu » une fois la commande confirmée.

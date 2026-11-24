@@ -1,5 +1,5 @@
 """
-suggest_items: at most 2 extra products worth offering at the end of an order call, each with a reason the client can
+suggest_items: at most 1 extra product worth offering at the end of an order call, each with a reason the client can
 check. Plain code over ERP data, no model: the model only phrases what comes back. [] is a valid answer.
 
     gather()  reads the facts from the ERP (one round of parallel reads)
@@ -31,7 +31,8 @@ from .desk import Item, check_items, fmt, jour, piece_kg, problems_of
 from .erp import ErpClient, enc
 from .registry import ToolContext, tool
 
-MAX_SUGGESTIONS = 2  # "at most 2 suggestions per call": enforced here, the prompt alone let a third one through
+MAX_SUGGESTIONS = 1  # one per call (lane B, 24/11 ~03:50): with two, « oui, c'est bon » to the first got a second upsell
+# instead of the confirmation (measured on WS /voice: 2,8 + 3,8 s and the order still not confirmed). Enforced here.
 SEASON_HALF_WINDOW = 10  # days around the same date in past years
 YEARS_BACK = 2
 HABIT_MIN_FREQUENCY = 0.5  # in at least one delivery out of two in the last 60 days
@@ -221,15 +222,17 @@ async def suggest_items(
     delivery_date: str = Field(description="Date de livraison de la commande, YYYY-MM-DD"),
 ) -> dict:
     """
-    À appeler UNE fois, quand le client dit que sa commande est finie (« c'est tout »), avant la relecture. Rend au plus deux
-    produits à proposer, déjà vérifiés (stock à la date, délai, jour de livraison, pas déjà dans la commande), chacun avec sa
+    À appeler UNE fois, quand le client dit que sa commande est finie (« c'est tout »), avant la relecture. Rend au plus UN
+    produit à proposer, déjà vérifiés (stock à la date, délai, jour de livraison, pas déjà dans la commande), chacun avec sa
     raison (reasonText) et la quantité. Liste vide = ne propose rien.
     """
     found = await suggest(ctx.erp, client_id, delivery_date)
     out: dict = {"deliveryDate": delivery_date, "jour": jour(delivery_date), "suggestions": found}
-    if len(found) == 2:  # said here, where the model looks: in the prompt alone it skipped the second one half the time
-        out["plan"] = (f"Propose {found[0]['name']} maintenant. Au tour suivant, après sa réponse (oui ou non), propose "
-                       f"{found[1]['name']}. Seulement ensuite, la question d'accord.")
-    elif not found:
+    if found:  # said here, where the model looks
+        out["plan"] = (f"Propose {found[0]['name']} maintenant, à la fin de ta relecture. C'est la seule suggestion de l'appel. "
+                       "Au tour suivant : s'il dit oui, ajoute-la et, dans la même réponse, relis toute la commande en une phrase "
+                       "et pose la question d'accord (ou valide tout de suite s'il t'a dit de valider) ; s'il dit non, pose la "
+                       "question d'accord. Ne propose rien d'autre.")
+    else:
         out["plan"] = "Rien à proposer : relecture et question d'accord."
     return out

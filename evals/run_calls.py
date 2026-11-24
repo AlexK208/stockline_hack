@@ -503,7 +503,7 @@ def check_t7(st: State, turns: list[Turn], c: Checks) -> None:
         c.hard(*(("2 quartiers arrière ≈ 200 kg",) + qty_in(o, "prd_0001", 180, 230)))
         c.hard(*(("1 demi-veau",) + qty_in(o, "prd_0005", 55, 95)))
         c.hard(*(("suggestion acceptée : 1 demi-carcasse de porc cul noir",) + qty_in(o, "prd_0007", 35, 65)))
-        c.hard("suggestion refusée : pas de quartier avant", not lines(o, "prd_0002"), describe(o))
+        c.hard("pas de quartier avant (jamais proposé : une seule suggestion)", not lines(o, "prd_0002"), describe(o))
         c.hard("rien d'autre", len(o["lines"]) == 3, describe(o))
         c.hard("commande confirmée", o["status"] == "confirmed", o["status"])
     calls = [t for t in all_tools(turns) if t["name"] == "suggest_items"]
@@ -514,8 +514,10 @@ def check_t7(st: State, turns: list[Turn], c: Checks) -> None:
         c.hard("1re suggestion au tour « ce sera tout »", bool(says(a, "porc", "cochon")), t.answer[:160])
         c.soft("raison donnée", bool(says(a, "habitude", "d'hab", "souvent", "derniere", "an dernier", "d'ordinaire")), t.answer[:160])
         c.soft(f"latence du tour de suggestion : 1er mot {t.first_text_ms} ms", True, "")
-    if len(turns) > 2:
-        c.soft("2e suggestion après le oui", bool(says(norm(turns[2].answer), "avant")), turns[2].answer[:160])
+    if len(turns) > 2:  # « Oui, mets-moi ça. »: the suggestion is added, then the read-back and the agreement question
+        a = norm(turns[2].answer)
+        c.hard("une seule suggestion par appel : pas de 2e proposition après le oui", not says(a, "avant"), turns[2].answer[:160])
+        c.soft("après le oui : relecture et question d'accord", "?" in turns[2].answer and bool(says(a, "porc", "cochon")), turns[2].answer[:160])
     c.hard("jamais d'argument de marge", not says(norm(spoken(turns)), "marge", "profit", "rentab"), "")
 
 
@@ -598,7 +600,6 @@ SCENARIOS = [
             "Bonjour, c'est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, comme d'hab : deux arrières et un demi-veau.",
             "Ce sera tout.",
             "Oui, mets-moi ça.",
-            "Non, pas cette semaine.",
             "Oui, c'est bon.",
         ],
         check_t7,

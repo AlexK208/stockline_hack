@@ -130,7 +130,7 @@ async def bought_last_year(client_id: str) -> set[str]:
 @seed
 async def test_seed_peyronnet_thursday():
     out = await suggested("cli_0001", "2026-11-26")
-    assert 1 <= len(out) <= 3
+    assert len(out) == 1  # one suggestion per call: two chained a second upsell onto « oui, c'est bon »
     for c in out:
         assert c["reasonKind"] in KINDS and c["reasonText"] and c["evidence"] and c["qty"] > 0
     # Peyronnet refuses substitutions: only products she has bought herself
