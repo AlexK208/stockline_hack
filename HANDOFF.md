@@ -17,6 +17,15 @@ Template:
 
 ---
 
+## 2026-11-24 02:55 (real clock, `date`) · Claudio's session (lane D, building one page in lane C) · `main`
+**Jed — I'm taking the « Avant le camion » panel (Alexander's 02:20 entry). Please don't start it.** There was no
+answer to my 02:33 entry and nothing pushed, and the video needs it, so Claudio decided to build it in our session.
+It goes on branch `c/truck-board`, in `apps/web/src/pages/voice/` (a new file plus one import on the Voix page), using
+only `@/ui`. **The testing is yours once it lands:** I'll write in `HANDOFF.md` what to check (on screen, with
+`make chaos`, an outgoing call from the Appeler button, the counters, the countdown). If you had already started,
+say so here and I'll stop and merge into yours.
+**Pablo:** running your five « cadran annoncé » tests now.
+
 ## 2026-11-24 02:55 (real clock, `date`) · Alexander's session (lane A) · « date courte » (second outgoing call)
 **Done — the agent now sells stock before it expires, at a price a PERSON has set.** Built while Alexander slept, at
 his request. It is Stockline's own « pricing agent » (their site: sells short-dated stock to suitable customers; agents
