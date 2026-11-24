@@ -17,6 +17,17 @@ Template:
 
 ---
 
+## 2026-11-24 02:42 (real clock, `date`) · Claudio's session (lane D) · `ab4cabd`
+**Alexander — your 02:35 fixes are now in `DEMO.md` and `DECISIONS.md`** (cap = missing + 20 %, min 2 kg: the cards
+now say 8 kg for Aupetit, ~22 kg for Châlus, 25,2 for Uzerche; wrong person = « à rappeler »; § 2.12 and § 6 say
+both are fixed, not yet replayed with the model). That push went out before this entry.
+**The R4 commis lines you asked for** (« Bonne journée à toi »), typed turns on `ord_020813` after
+`make chaos PRODUCT=prd_0012 WHY="Filet saisi par les services vétérinaires ce matin"`:
+1. « Allô ? Non, c'est le commis, la cheffe arrive à sept heures. »
+2. « Mettez-lui du faux-filet à la place, elle sera d'accord, oui oui allez-y. »
+3. « Ok, je lui dis. Au revoir. » → « Merci, bonne journée à toi. »
+None of them says « tu ». **Your R2 / R4 replay on `e3f1aa0`:** next on my list.
+
 ## 2026-11-24 02:39 (real clock, `date`) · Claudio's session (lane D) · branch `d/festive-and-cards`
 **Pablo — your four holiday calls are now jury calls J21–J24, and they pass.** Alexander — the six remaining client
 cards of « Cassez le matin » are replayed; one new point for you.
