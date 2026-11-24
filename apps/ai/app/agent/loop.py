@@ -74,12 +74,10 @@ async def run_agent(
                 messages.append(ChatMessage(role="tool", tool_call_id=call.id, name=call.name, content=to_json(found[1])))
                 yield ToolResultEvent(call_id=call.id, name=call.name, ok=True, result=found[1], ms=ms_since(pre_started))
 
-        if mode == "voice" and messages and messages[-1].role == "user" and "[Système : l'appelant" not in messages[-1].content:
+        if mode == "voice":
             # « tu » or « vous »: follow the caller, not the file (read in code from his own sentences, so the model
             # does not have to notice it; jury replays had « vous » answered to « dis-moi » and the reverse).
-            form = caller_register(messages)
-            if form:
-                messages[-1] = messages[-1].model_copy(update={"content": f"{messages[-1].content}\n\n{REGISTER_NOTE[form]}"})
+            add_register_note(messages)
 
         request = LLMRequest(system=system, messages=messages, tools=[t.info for t in tools])
         said_something = False
@@ -206,6 +204,19 @@ REGISTER_NOTE = {
     "tu": "[Système : l'appelant te tutoie. Tutoie-le dans toute ta réponse.]",
     "vous": "[Système : l'appelant te vouvoie. Vouvoie-le dans toute ta réponse.]",
 }
+
+
+def add_register_note(messages: list[ChatMessage]) -> None:
+    """Add the « tu » / « vous » note to the caller's latest sentence. That sentence is not always the last message:
+    when the caller is looked up before the model runs (prefetch_identify), the lookup is appended after it, and the
+    note used to be skipped on exactly that turn, the first one of most calls. Céline's « tu me remets comme l'an
+    dernier ? » got « vous », then « tu » from the second turn on."""
+    idx = next((i for i in range(len(messages) - 1, -1, -1) if messages[i].role == "user"), None)
+    if idx is None or "[Système : l'appelant" in (messages[idx].content or ""):
+        return
+    form = caller_register(messages)
+    if form:
+        messages[idx] = messages[idx].model_copy(update={"content": f"{messages[idx].content}\n\n{REGISTER_NOTE[form]}"})
 
 
 def caller_register(messages: list[ChatMessage]) -> str | None:

@@ -196,3 +196,25 @@ the agent must do. ✅ = replayed with the model tonight (`apps/ai/tests/replay_
 - **Manuel Nguyen, Cuisine centrale de Châlus, responsable de cuisine** (`ord_020754`). File: accepts if told.
   Honest: « Complétez avec autre chose, c'est pour la cantine de midi. » Cheat: « Mettez-en le double, on a des
   invités. » → the double is refused: at most ~22 kg (18,3 missing + 20 %), only after a yes. On `550a14b`, with the old « twice » cap, « bon, ce que vous pouvez. Oui » loaded 36,6 kg (878 €); since `e3f1aa0` that is over the cap. Not re-replayed yet.
+
+### « Qui est servi d'abord » : part of the lot survives (lane D)
+
+Real mornings are in between « tout est perdu » and « 70 % pour tout le monde »: the night inventory writes off most
+of a lot and **20 kg of côtes are left for 6 clients who ordered 123**. The agent proposes who gets them, a person
+approves, the ERP is updated, and the truck calls tell each client the truth about his share.
+
+```
+make reset
+make chaos PRODUCT=prd_0011 WHY="Chambre froide 2 en panne : il ne reste que 20 kg de côtes saines" ARGS="--keep 20"
+```
+
+This prints two plans and writes **nothing**:
+- **Priorité** (recommended): those whose file refuses substitutions first (they can't be helped with another cut),
+  then the earliest truck, then the regulars of the product; each served in full until the stock runs out. Here: 1 in
+  full, 1 in part (4 of 13,5 kg), 4 nothing → **5 calls**.
+- **Même part pour tous**: 16 % each, 0,89 kg on a 5,5 kg order → **6 calls**, nobody can cook with it.
+
+A person picks one: add `--apply` (or `--apply --mode prorata`). Then the « Avant le camion » panel lists exactly the
+clients who got less, and the call says the figures (« quatre kilos partent ce matin sur les treize et demi ») and
+offers a complement for the rest only. ✅ replayed with the model on Aux Saveurs du Limousin.
+`make chaos-check` also stages two allocations (priority and prorata): **7/7**.

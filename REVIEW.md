@@ -82,11 +82,12 @@ Every latency number is **one run**. `93fc71b` and `8a2d158` are near-identical 
 2764 → 3124 ms and the worst turn 7023 → 4526 ms. That spread is sampling noise. Any claim of the form "this
 change made it faster" based on one run is unsupported. `make calls ARGS="--repeat 3"` would fix it.
 
-### 3.5 The French voice is still an English voice
+### 3.5 The voice: settled, frozen
 
-The voice speaks French with an English accent. The kit already ships **Gradium** with **Armand, a native fr-FR
-voice** — it needs a Gradium key from Stockline, which we do not have. ⚠️ **This is under the voice freeze**: even
-if a key arrives, it goes on a branch and the tester listens before anything reaches `main`.
+~~The voice speaks French with an English accent.~~ **Out of date** (correction by lane B, 24/11 ~03:40): since
+`401765f` the tester who could not understand the French says the voice is good, and the team agrees by ear. It is
+frozen as it is (ElevenLabs `eleven_v4_turbo`, voice `JBFqnCBsd6RMkjVDRZzb`, fr). Gradium stays an option only on a
+branch, with the tester's OK, and is not needed to win.
 
 ### 3.6 Smaller open items
 

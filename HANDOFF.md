@@ -17,6 +17,144 @@ Template:
 
 ---
 
+## 2026-11-24 03:48 (real clock, `date`) · Jed's session (lane C) · branch `c/truck-board` (fixes only, per Pablo's freeze)
+**« Avant le camion » board: tested on screen by Jed, Claudio's five tests.** All pass, after three lane C fixes.
+1. Board at rest: 2 cards, Panazol greyed, 91 € en jeu, clock from 04:38, Leroy « part dans 7 min ». ✅
+2. **Appeler** on Leroy, Alexander's script: no discount promised, client card + conversation follow, violet border,
+   « fait » + outcome, **Récupéré 77 €**, the bavette shows « remplace Onglet de bœuf » on the order card. ✅
+3. `make chaos PRODUCT=prd_0011 …` without reloading: **8 cards, 3 902 €**, departure order. ✅
+4. The commis at La Table de Charlotte (`prd_0012` chaos): nothing written, the card stays with « Déjà tenté » +
+   « Rappeler », both client events in « ERP en direct ». ✅
+5. Mode démo + board at 125 % zoom (≈ 1 230 px, a projector): **broken, fixed** (see 2. below). ✅ after the fix.
+
+**Fixes (lane C, `apps/web/src/pages/voice/`):**
+1. **Order card badge on a prepared order** (`call-cards.tsx`): the filet missing from Charlotte's truck showed
+   **« En stock »**. The badge read the stock left for the date, which means nothing once the order is loaded. Now
+   on a prepared order it says what is in the truck, from `preparedQty`: **Chargé / Poids court / Absent** (±5 %,
+   the same tolerance as `truck_calls.py`).
+2. **Mode démo + board** (`index.tsx`, `timeline.tsx`): at 1 230 px the conversation got ~330 px and two fixed
+   halves, so one word per line. With the board open, the side columns keep the lab widths (cards zoom 1.05). In Mode
+   démo the conversation is one thread (caller left, agent right, bubbles up to 85 %, no time column). The lab view
+   is unchanged.
+3. Merge conflict on the board's width in `index.tsx`: kept the version tested at 125 %. `truck-board.tsx` on `main`
+   is byte-for-byte the one tested.
+
+**Seen, not changed (Claudio, your file, your call):**
+- « En jeu » stays at 91 € after 77 € is recovered: a juror may read it as « still 91 € to get back ».
+- Le Bœuf Limousin shows « −15,35 € » in red although it isn't counted in « En jeu » (already replaced in the truck).
+- A card is ~230 px tall: with `make chaos`, only 2 of the 8 cards are on screen at once.
+
+**Pablo, on `suggest_items` (« for the team to decide »):** noted, Jed decides with the team. Turning it off is the
+`suggest` import in `tools/__init__.py` plus the prompt line, nothing else depends on it.
+
+Checks on the merged code: typecheck + native controls OK, **193 unit tests pass**. No agent code touched, so no
+`make calls` (Pablo's 7/7 on `50323dc` holds).
+
+## 2026-11-24 03:38 (real clock, `date`) · Pablo's session (lane B, fixes in lanes A, C, D) · `b/final-fixes`, merged
+**Development is finished on our side. This entry closes the last open items and gives the full test result.**
+Pablo asked for a feature freeze: from here on, fixes only.
+
+**Correction first: there is no failing unit test.** My entries « 00:56 », « 02:26 » and « 02:48 » said
+`test_identify_caller_does_not_switch_client_on_a_guess` fails on `main` (lane A). Wrong. My container run used the
+old `tests/` folder baked into the `ai` image for `from tests.test_call_prep import …`. With the current tests in
+place, **all of them pass**. Sorry, Alexander.
+
+**Closed:**
+- **tu/vous, fixed (lane A, `agent/loop.py`, Alexander please check).** Root cause: the « l'appelant te tutoie »
+  note was added only when the caller's sentence was the last message. `prefetch_identify` appends the lookup after
+  it, so **the first turn of most calls had no note**. Céline's « tu me remets… » got « vous », then « tu » from
+  turn 2 (and T7's switch). Now `add_register_note` puts it on the caller's latest sentence. Test added (it fails
+  without the fix). Replayed by voice-mode chat: Céline « tu » → « tu » on every turn, Vergnaud « vous » → « vous »,
+  and a first sentence that tells nothing → the file decides, then the caller's « dis-moi » wins.
+- **Truck board (`c/truck-board`), tested and merged.** Typecheck and the native-controls check pass, the Voix page
+  and `truck-board.tsx` compile, and `GET /ai/outbound/truck-calls` answers (39 orders checked). **Jed: please look
+  at it on screen.**
+- **`REVIEW.md` § 3.5 (Claudio):** the « English accent » section is marked out of date. The voice is settled
+  and frozen.
+
+**Looked at, deliberately not changed:**
+- **Slow first turn (5–8 s when identify + write in one turn).** The tools take ≤ 0.7 s (J7: identify 245 ms, create
+  477 ms). The rest is the model's two steps. The fixes would be a second filler phrase (but the spoken words are
+  under the voice freeze) or a faster model (too big a change before the freeze). On the phone, the instant word
+  covers the start.
+- **The model still tries `confirm_order` on a request.** The guard refuses and the caller hears the read-back + « C'est
+  bon pour vous ? », which is correct. Hiding the tool on those turns would change the tool list and break the
+  prompt cache.
+
+**For the team to decide (not touched):** the end-of-order suggestion (`suggest_items`, T7) fires on « c'est tout »
+(« Tu prends d'habitude un quartier arrière, je t'en mets un ? »). It works, but the arena's butcher said « butchers
+hate the nagging upsell », and it adds a model step: 3.3–4.0 s on that turn.
+
+**Full test result, `50323dc` (this branch = `main` + the fixes + the truck board), 03:30–03:37, my machine:**
+| Check | Result |
+|---|---|
+| Unit tests (`ai` container, current tests) | **193 pass**, 0 fail |
+| Web typecheck + native-controls check | OK |
+| Fresh start (backend on an EMPTY database, seed loaded from scratch) | OK: every table seeded, `/api/festive/*` and `/api/cotation/*` answer |
+| `make calls` T1–T7 | **7/7**, first word median 3 531 ms, p90 5 256, worst 6 230 |
+| `make jury` J1–J29 | **29/29 invariants**, median 2 560 ms, worst 7 734. Two expected ⚠: J15 (two cards: the caller corrects her identity) and J23 (`festive_reserve` refused Wednesday, not his delivery day: the scenario's point) |
+| `make calls-test` | all checks correct in both directions |
+| `make chaos-check` | 7/7 sabotage cards OK |
+
+**Latency is creeping up:** median first word 3 058 ms (Claudio, 03:14) → 3 531 ms (here). The new steps:
+`cotation_semaine` on carcass orders (in parallel, but a longer first step) and `suggest_items` on « c'est tout ». No
+more features, please.
+
+**Still to do by hand (no tool can):** see Pablo's message to the team. A real voice call with a real mic, the pages
+on screen, and a fresh `make setup` from a clean clone on a second machine.
+
+## 2026-11-24 03:20 (real clock, `date`) · Claudio's session (lane D) · `main`
+**Alexander, Pablo — the replay you asked for (two « date courte » tools, Pablo's cotation line): green.** On `17ba118`
+(everything merged up to « Qui est servi d'abord »), 03:14, my machine, text mode, nothing else running.
+- `make calls` **7/7** (T1–T7: Jed's T7 too), median **3058 ms**, p90 5010, worst 5334. **Pablo: T1–T6 still pass with
+  your `BASE_RULES` cotation line.** Row added to `SCENARIOS.md`.
+- `make jury` **29/29 on the invariants** (J1–J29), median **2607 ms**, worst 7177.
+- **`short_date_brief`, `take_offer`, `truck_call_brief`, `add_to_truck`, `take_off_truck`: 0 calls** over 7 + 29
+  incoming calls.
+- The one `confirm_order✗` is J7 turn 2 (« mettez-m'en huit kilos »): `call_guard` refused, the caller heard the read-back
+  and « C'est bon pour vous ? ». The guard works; the model still tries to confirm on a request.
+
+## 2026-11-24 03:12 (real clock, `date`) · Claudio's session (lane D) · branch `d/allocation`, merged
+**Alexander — « Qui est servi d'abord » is built (your 02:55 items 1–5).** ERP API only, no model.
+- **`apps/ai/app/services/allocation.py`** (new): `propose(erp, product_id, available)` → both plans, each line with its
+  reason in words; `apply(erp, product_id, available, mode, why)` → stock written down to `available`, then each line's
+  `preparedQty` + a note « Répartition du stock restant : n° 2 : refuse les substitutions… → servi en partie : 4 sur
+  13,5 kg » (appended to the line's existing note, never replacing it). Priority = your order: refuse substitutions →
+  earliest departure → regulars (`avgQty × frequency` from `/usual`) → order number. Imports `substitution_rule`,
+  `truck_stops`, `day_orders`, `line_gap` from your `truck_calls.py`; **your files are untouched**.
+- **Routes for Jed** (`apps/ai/app/routers/allocation.py` + one import line in `routers/__init__.py`):
+  `GET /outbound/allocation?productId=&available=` (both plans + their cost: fully served, partly, nothing, toCall,
+  notDelivered €) and `POST /outbound/allocation/apply {productId, available, mode, why}`. Apply **recomputes** the plan
+  from the ERP (the page never sends quantities), writes as actor `user` (« Répartition approuvée »), and clears the
+  board cache.
+- **CLI:** `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--keep 20"` prints both plans and writes nothing; `--apply`
+  (`--mode prorata`) writes, then prints the board and checks it.
+- **Checks without a model, in `make chaos-check`: 7/7** (the 5 cards + 2 allocations: ribs 20 kg priority, entrecôte
+  30 kg prorata). Plan never above ordered nor available; applied, the board calls exactly the lines your `line_gap`
+  flags (note: that is « less than 95 % **and** ≥ 15 € », or absent, not just « < 95 % »); served in full = not called.
+- **Ribs, 20 kg left for 6 clients / 123 kg:** priority 1 full, 1 part (Aux Saveurs du Limousin 4 of 13,5), 4 nothing,
+  5 calls; prorata 16 % each, 6 calls (Le Petit Rouchaud gets 0,89 of 5,5 kg).
+- **Replay with the model, Aux Saveurs du Limousin (4 of 13,5):** complement for the rest only (9,5 kg of entrecôte
+  after « oui, allez-y », 228 €), figures right when asked (« quatre kilos partent ce matin sur les treize et demi »). ✅
+  **Two things for you (`truck_calls.py`):**
+  1. The opening says only « il manque neuf kilos et demi », not « quatre sur treize et demi »: he had to ask. For a
+     `short` the opening could say both numbers.
+  2. « Pourquoi moi ? » → « ce n'est pas un choix contre vous ». The real reason is on the line's note (the plan's
+     reason), but `truck_call_brief` doesn't read line notes. If the brief carried it, the agent could say « les
+     clients qui ne prennent pas de remplacement ont été servis d'abord ».
+- **My mistake, 03:08: I took the AI service down for ~1 min.** `routers/__init__.py` imported `allocation` first, which
+  loads `truck_calls` before the tools package: circular import with `short_dated` (`JOURS`). Fixed by importing it
+  after `outbound` (with a comment). 192 unit tests pass on the host. **It killed my `make calls`/`make jury` run** on
+  your 02:55 commit; I'm re-running it now, after this merge, with no more `apps/ai` edits in flight.
+
+**Jed:** after the truck board, a « Répartir » panel is the next piece for you: for a product and the kg left, show the
+two plans side by side (`GET /outbound/allocation`), with each line's reason, and one **Approuver** button per plan
+(`POST …/apply`). The truck board then fills by itself.
+**Pablo (slides):** Alexander's sentence for the pitch: « Stockline's site lists three agents: selling, pricing,
+purchasing. Ours makes the calls of two of them, and adds a fourth: delivery. A person approves, the agent phones. » And
+for « Qui est servi d'abord »: « Il reste 20 kilos pour six clients qui en ont commandé 123. L'agent propose qui est
+servi, une personne approuve, et chaque client apprend sa part avant le départ du camion. »
+
 ## 2026-11-24 02:59 (real clock, `date`) · Claudio's session (lane D, plus one page in lane C) · `d/cadran-tests` merged, `c/truck-board` pushed
 **Pablo — « Le cadran annoncé »: your five tests pass, 5/5.** They're jury calls **J25–J29** now (`make jury ARGS="J25 J26
 J27 J28 J29"`). Median first word 2847 ms, worst 4906 ms.
