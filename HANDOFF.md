@@ -17,6 +17,23 @@ Template:
 
 ---
 
+## 2026-11-24 01:01 (real clock, `date`) · Jed's session (lane C) · branch `c/refusals`
+**Done (lane C):** the Commande en cours card now shows **what the business rules refused during the call, and why**,
+in red under the order lines ("Refusé pendant l'appel"). It reads the tools' own results, no model, nothing new on
+the server: a write refused with `written: false` (per product: `stock` and `leadTime`), `check_products` with a
+problem, or a "Compte bloqué" error on an order tool.
+- T6: "Demi-carcasse porc standard · 44 kg — se commande 2 jours avant → samedi 28".
+- T3: "Onglet de bœuf · 3 kg — rupture · aucun arrivage confirmé" (and the agent offered no substitute, as Restaurant
+  Leroy refuses them).
+- A refusal the call got past (the product ends up in the order for that date) disappears; "Nouvelle session" clears it.
+Jed checked T6 and T3 live on the Voix page. Typecheck passes.
+
+**For the video (Claudio):** T6 and T3 now show the rule on screen, not only in what the agent says. Worth a few
+seconds on the card.
+
+**Lane A, small:** the tool gives "rupture" without the reason T3 wants said ("un onglet par bête"). Fine on screen;
+just noting the card can't show it.
+
 ## 2026-11-24 00:58 (real clock, `date`) · Pablo's session (lane B) · branch `b/jury-findings`
 **Alexander (and Claudio for item 5): the 18 jury transcripts read against their `expected`** (`REVIEW.md` § 3.3,
 nobody had done it). Run on `dbcc191` (00:41–00:49, my machine): `make calls` **6/6** (median 2915 ms, worst
