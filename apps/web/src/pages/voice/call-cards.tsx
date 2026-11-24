@@ -2,14 +2,16 @@
  * Call cards (right column of the Voix page, above "ERP en direct"):
  *  - Client en ligne: who is calling, as soon as the agent knows (identify_caller result, or any tool called with a clientId).
  *  - Commande en cours: the order being written during the call, line by line, with a stock badge for the delivery date.
- *    Removed lines stay visible, crossed out; changed quantities show the old one crossed out.
+ *    Removed lines stay visible, crossed out; changed quantities show the old one crossed out. Under them, in red, what
+ *    the business rules refused during the call and why (out of stock, ordered too late, blocked account), read from
+ *    the tools' results: the jury sees the rule applied, not just a sentence they might miss.
  *
  * Sources: the agent's tool calls of this session (args, and `result` when the AI service forwards it) and the live ERP
  * events written by the voice agent since the session started. Nothing here writes to the ERP.
  */
 import { useMemo, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Phone, ShoppingCart } from "lucide-react";
+import { ArrowUpRight, Ban, Phone, ShoppingCart } from "lucide-react";
 import type { ActivityEvent, ClientDetail, Id, OrderDetail, StockAvailability } from "@kit/shared";
 import type { VoiceTurn } from "@/features/assistant/useVoiceSession";
 import { cn } from "@/lib/cn";
@@ -24,15 +26,74 @@ const str = (x: unknown) => (typeof x === "string" && x ? x : undefined);
 
 interface Candidate { id: Id; name: string; city?: string }
 
+/** Something the business rules refused during the call (the tool wrote nothing), with the reason as the tool gave it. */
+export interface Refusal {
+  key: string;
+  productId?: Id;
+  product?: string;
+  qty?: number;
+  unit?: string;
+  reason: string;
+  date?: string; // delivery date asked, YYYY-MM-DD
+  day?: string; // "mercredi 25"
+}
+
 interface CallState {
   clientId?: Id;
   candidates: Candidate[];
   orderId?: Id;
+  refusals: Refusal[];
+}
+
+const ORDER_TOOLS = new Set(["create_draft_order", "add_order_line", "update_order_line", "update_order", "confirm_order"]);
+const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
+const fr = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");
+
+/** "Trop tard pour cette date : ce produit se commande 2 jours avant. Première livraison possible : samedi 28 (2026-11-28)."
+ *  → "se commande 2 jours avant → samedi 28" */
+export function shortLeadTime(text: string): string {
+  return text
+    .replace(/^Trop tard pour cette date\s*:\s*/i, "")
+    .replace(/^ce produit /i, "")
+    .replace(/\.?\s*Première livraison possible\s*:\s*([^(.]+?)\s*(\(\d{4}-\d{2}-\d{2}\))?\.?$/i, " → $1")
+    .trim();
+}
+
+/** What one tool result says was refused. Reads the tools' own words (tools/desk.py problems_of, tools/orders.py). */
+export function refusalsOf(name: string, ok: boolean | undefined, result: unknown): Refusal[] {
+  if (!isObj(result)) return [];
+  const err = str(result.error);
+  if (ok === false && err && /compte bloqué/i.test(err) && ORDER_TOOLS.has(name)) {
+    return [{ key: "blocked", reason: "Compte bloqué : aucune commande tant que la comptabilité n'a pas levé le blocage" }];
+  }
+  const refusedWrite = result.written === false && Array.isArray(result.problems);
+  if (!refusedWrite && name !== "check_products") return [];
+  const date = str(result.deliveryDate);
+  const day = str(result.jour);
+  const out: Refusal[] = [];
+  if (refusedWrite && str(result.deliveryDay)) out.push({ key: `day:${date}`, reason: String(result.deliveryDay), date, day });
+  for (const row of Array.isArray(result.items) ? result.items.filter(isObj) : []) {
+    const reasons: string[] = [];
+    const unit = str(row.unit);
+    if (row.stock === "rupture") reasons.push("rupture");
+    else if (row.stock === "insuffisant") reasons.push(`stock insuffisant (${fr(num(row.availableQty) ?? 0)} ${unit ?? ""} possibles)`.replace(" )", ")"));
+    if (reasons.length) {
+      const next = row.nextArrival;
+      if (isObj(next) && str(next.jour)) reasons.push(`prochain arrivage ${next.jour}`);
+      else if (typeof next === "string" && next) reasons.push(next);
+    }
+    if (str(row.leadTime)) reasons.push(shortLeadTime(String(row.leadTime)));
+    if (!reasons.length) continue;
+    const productId = str(row.productId);
+    out.push({ key: `${productId}:${date}`, productId, product: str(row.name), qty: num(row.qty), unit, reason: reasons.join(" · "), date, day });
+  }
+  return out;
 }
 
 /** Walk the session's tool runs (oldest first): the latest client / order the agent worked on wins. */
 function fromTools(turns: VoiceTurn[]): CallState {
-  const s: CallState = { candidates: [] };
+  const s: CallState = { candidates: [], refusals: [] };
+  const refused = new Map<string, Refusal>();
   for (const turn of turns) {
     for (const t of turn.agent.tools) {
       const a = t.args ?? {};
@@ -48,8 +109,10 @@ function fromTools(turns: VoiceTurn[]): CallState {
       const argOrder = str(a.orderId);
       if (argOrder) s.orderId = argOrder;
       if (r && t.ok && str(r.id) && typeof r.number === "string" && Array.isArray(r.lines)) s.orderId = r.id as Id;
+      for (const x of refusalsOf(t.name, t.ok, t.result)) { refused.delete(x.key); refused.set(x.key, x); } // latest reason wins
     }
   }
+  s.refusals = [...refused.values()];
   return s;
 }
 
@@ -69,7 +132,7 @@ export function CallCards({ turns, since }: { turns: VoiceTurn[]; since: string 
   return (
     <div className="flex flex-col">
       <ClientCard clientId={clientId} candidates={tools.candidates} />
-      <OrderCard orderId={orderId} order={order} session={since} />
+      <OrderCard orderId={orderId} order={order} session={since} refusals={tools.refusals} />
     </div>
   );
 }
@@ -196,7 +259,7 @@ function stockState(line: Line, order: OrderDetail, rows: Map<Id, StockAvailabil
   return before <= 0 ? "out" : "short";
 }
 
-function OrderCard({ orderId, order, session }: { orderId?: Id; order?: OrderDetail; session: string }) {
+function OrderCard({ orderId, order, session, refusals: all }: { orderId?: Id; order?: OrderDetail; session: string; refusals: Refusal[] }) {
   const mem = useRef<Memory>({ initial: new Set(), lines: new Map(), firstQty: new Map() });
   const memKey = order ? `${order.id}|${order.createdAt}|${session}` : undefined;
   if (order && mem.current.key !== memKey) {
@@ -212,6 +275,9 @@ function OrderCard({ orderId, order, session }: { orderId?: Id; order?: OrderDet
   const current = new Set(order?.lines.map(lineKey));
   // The order as it stands first (in the ERP's order), then what was taken off during the call, crossed out.
   const shown = [...(order?.lines ?? []), ...[...m.lines.values()].filter((l) => !current.has(lineKey(l)))];
+  // A refusal the call got past (the product is in the order for that date after all, e.g. a smaller quantity) is
+  // no longer news. The blocked account always stays.
+  const refusals = all.filter((x) => !(x.productId && order && x.date === order.deliveryDate && order.lines.some((l) => l.productId === x.productId)));
 
   return (
     <section className="border-b border-border">
@@ -221,7 +287,7 @@ function OrderCard({ orderId, order, session }: { orderId?: Id; order?: OrderDet
         right={order ? <StatusDot kind="order" value={order.status} /> : null}
       />
       {!orderId ? (
-        <div className="px-4 py-3 text-[12.5px] text-muted-foreground">Aucune commande pour l'instant : les lignes s'écrivent ici pendant l'appel.</div>
+        refusals.length ? null : <div className="px-4 py-3 text-[12.5px] text-muted-foreground">Aucune commande pour l'instant : les lignes s'écrivent ici pendant l'appel.</div>
       ) : !order ? (
         <div className="flex flex-col gap-1.5 px-4 py-3"><Skeleton className="h-3 w-[60%]" /><Skeleton className="h-3 w-[80%]" /></div>
       ) : (
@@ -265,6 +331,30 @@ function OrderCard({ orderId, order, session }: { orderId?: Id; order?: OrderDet
           </div>
         </div>
       )}
+      {refusals.length ? <RefusalList refusals={refusals} showDay={!order || refusals.some((x) => x.date && x.date !== order.deliveryDate)} /> : null}
     </section>
+  );
+}
+
+/** "Refusé pendant l'appel": one red line per product the rules refused, with the tool's reason. */
+function RefusalList({ refusals, showDay }: { refusals: Refusal[]; showDay: boolean }) {
+  return (
+    <div className="border-t border-destructive/20 bg-destructive/[.05] px-4 py-2 text-[12px]">
+      <div className={cn(SECTION_LABEL, "mb-1 flex items-center gap-1.5 text-destructive")}><Ban size={11} strokeWidth={2} />Refusé pendant l'appel</div>
+      <ul className="flex flex-col gap-1">
+        {refusals.map((x) => (
+          <li key={x.key} className="animate-flash leading-[16px]">
+            {x.product ? (
+              <span className="font-medium">
+                {x.product}
+                {x.qty != null ? <span className="num font-normal text-muted-foreground"> · {fr(x.qty)} {x.unit}</span> : null}
+                {showDay && x.day ? <span className="font-normal text-muted-foreground"> · pour {x.day}</span> : null}
+              </span>
+            ) : null}
+            <span className="block text-destructive">{x.reason}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
