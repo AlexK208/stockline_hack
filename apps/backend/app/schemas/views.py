@@ -149,6 +149,24 @@ class UsualBasketLine(Schema):
     last_ordered_at: IsoDate
 
 
+class ClientPurchaseLine(Schema):
+    """What a client bought of one product between two delivery dates (sales only: no drafts, no cancelled)."""
+
+    product_id: Id
+    product_name: str
+    category: str
+    unit: str
+    qty: float  # total over the period
+    orders: int  # number of orders that contained it
+    first_date: IsoDate
+    last_date: IsoDate
+
+
+class ClientPurchases(Schema):
+    orders: int  # orders delivered in the period (the denominator of "one delivery out of N")
+    products: list[ClientPurchaseLine]
+
+
 class ClientPriceView(Schema):
     product_id: Id
     product_name: str

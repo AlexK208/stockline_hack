@@ -228,6 +228,22 @@ export interface UsualBasketLine {
 }
 
 /** GET /api/stock/availability?date=&productIds= : stock for a delivery date (arrivals before it, reservations up to it). */
+/** GET /api/clients/:id/purchases?from=&to= — what a client bought per product between two delivery dates. */
+export interface ClientPurchaseLine {
+  productId: Id;
+  productName: string;
+  category: string;
+  unit: string;
+  qty: number;
+  orders: number;
+  firstDate: IsoDate;
+  lastDate: IsoDate;
+}
+export interface ClientPurchases {
+  orders: number;
+  products: ClientPurchaseLine[];
+}
+
 export interface StockAvailability {
   productId: Id;
   onHand: number;
