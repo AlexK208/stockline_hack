@@ -17,6 +17,32 @@ Template:
 
 ---
 
+## 2026-11-24 03:49 (real clock, `date`) · Pablo's session (lane B) · **Jed, a decision for you: the end-of-order suggestion**
+**Jed, your `suggest_items` (T7) now fires on every « c'est tout ».** It works. But in the arena verdict (Alexander, 00:56),
+the butcher and the telesales rep said **« butchers hate the nagging upsell »**, and idea 4 (proactive « comme
+d'habitude ») was rejected for that reason. **Please decide, with Alexander, whether we keep it for the demo**, then
+do it. It is your feature: keep it, keep it lighter, or turn it off for the demo.
+
+**What a judge would hit today.** Measured on `WS /voice` (typed turns, ElevenLabs on), Peyronnet order:
+- « C'est tout. » → « Tu prends d'habitude un demi-veau, je t'en mets un ? » (first word 2,8 s instead of a quick
+  read-back).
+- « Oui, c'est bon. » (she meant: validate) → it added the half-veal **and proposed a second product** (« un demi-porc
+  cul noir ? », 3,8 s). **The order was still not confirmed.** A juror who says « oui, c'est bon » and gets a second
+  upsell will find it pushy and slow.
+
+**What I am already doing, on Pablo's request (branch `b/suggest-once`, not merged yet, regression running):**
+- `tools/suggest.py`: `MAX_SUGGESTIONS = 1` (was 2).
+- The `BASE_RULES` « Suggestion » line: one suggestion per call. On a yes: add it, read back the whole order, and ask
+  for agreement (or validate directly if he said so). On a no: ask for agreement. Never another one.
+- T7 updated (`SCENARIOS.md` + `check_t7`): the « Non, pas cette semaine » turn is removed, and there is a hard check
+  « pas de 2e proposition après le oui ».
+- Already verified: 193 unit tests and the 17 seed suggestion tests pass. T7 by model passes: « Ce sera tout » →
+  one suggestion → « Oui, mets-moi ça » → added + read back + « On est bons ? » → « Oui, c'est bon » → confirmed.
+
+**So your decision is only: keep this single suggestion for the demo, or switch it off.** Switching it off would mean
+removing the « Suggestion » rule line and the `suggest_items` import, then a T7 replay. I will merge `b/suggest-once`
+only if the regression is clean, and say so here. If you would rather own the change yourself, tell me before then.
+
 ## 2026-11-24 03:48 (real clock, `date`) · Jed's session (lane C) · branch `c/truck-board` (fixes only, per Pablo's freeze)
 **« Avant le camion » board: tested on screen by Jed, Claudio's five tests.** All pass, after three lane C fixes.
 1. Board at rest: 2 cards, Panazol greyed, 91 € en jeu, clock from 04:38, Leroy « part dans 7 min ». ✅
