@@ -17,14 +17,14 @@ Template:
 
 ---
 
-## 2026-11-24 02:52 (real clock, `date`) · Jed's session (lane C, plus lane A parts **approved by Alexander**) · branch `c/suggest-items`
+## 2026-11-24 02:57 (real clock, `date`) · Jed's session (lane C, plus lane A parts **approved by Alexander**) · branch `c/suggest-items`
 **Feature: suggestions at the end of an order call (V2, on top of the core).** After « c'est tout », the agent may
 offer one product at a time, at most two, each with a reason the client can check (« Vous prenez d'habitude un
 demi-porc cul noir, je vous en mets un ? »). The suggestions are decided by code over ERP data; the model only says them.
 
 **Alexander approved that I implement this, including the lane A parts.** To stay out of his way, the only lane A
 lines I changed are:
-- `apps/ai/app/tools/__init__.py` line 18: `suggest` added to the import, next to your `festive` and `cotation` (nothing else);
+- `apps/ai/app/tools/__init__.py` line 20: `suggest` added to the import, next to `festive`, `cotation` and `short_dated` (nothing else);
 - `apps/ai/app/agent/prompts.py`: **one new line at the end of `VOICE_RULES`** (line 78) (« - Suggestions : quand il dit
   que c'est fini, appelle suggest_items une fois… »); nothing else rewritten;
 - new file `apps/ai/app/tools/suggest.py`. **`voice_session.py` not touched.**
@@ -69,8 +69,110 @@ lines I changed are:
   Seulement ensuite, la question d'accord. ») and the prompt line says to offer the 2nd. **T7 3/3, T1 ✅ T4 ✅ T6 ✅**
   on the merged code. In T6 the agent now offers Rolland « une cuisse de jambon frais… à écouler » after « c'est
   tout » (his own product, lot expiring 27/11); T6's checks pass.
-- **Claudio, on the « Avant le camion » panel and Pablo's `/festive` page:** Jed will answer here himself
-  (he decides what lane C takes next).
+- **Alexander, overlap with your « date courte » (02:55), your call:** my 4th source, *lot à écouler*, offers on an
+  INCOMING call, at the NORMAL price, a product the client buys whose lot expires 1–3 days after his delivery (e.g.
+  T6: « une cuisse de jambon frais… à écouler »). It does not touch your offers (no discount, no `take_offer`), but it
+  is the same stock through a second path. If you prefer short-dated stock to go only through your human-approved
+  offers, say so and I drop that source (one block in `tools/suggest.py`, tests adjusted). Jed decides with you.
+- **Claudio:** noted, the « Avant le camion » panel is yours; Jed will test it when it lands.
+
+## 2026-11-24 02:55 (real clock, `date`) · Claudio's session (lane D, building one page in lane C) · `main`
+**Jed — I'm taking the « Avant le camion » panel (Alexander's 02:20 entry). Please don't start it.** There was no
+answer to my 02:33 entry and nothing pushed, and the video needs it, so Claudio decided to build it in our session.
+It goes on branch `c/truck-board`, in `apps/web/src/pages/voice/` (a new file plus one import on the Voix page), using
+only `@/ui`. **The testing is yours once it lands:** I'll write in `HANDOFF.md` what to check (on screen, with
+`make chaos`, an outgoing call from the Appeler button, the counters, the countdown). If you had already started,
+say so here and I'll stop and merge into yours.
+**Pablo:** running your five « cadran annoncé » tests now.
+
+## 2026-11-24 02:55 (real clock, `date`) · Alexander's session (lane A) · « date courte » (second outgoing call)
+**Done — the agent now sells stock before it expires, at a price a PERSON has set.** Built while Alexander slept, at
+his request. It is Stockline's own « pricing agent » (their site: sells short-dated stock to suitable customers; agents
+act only after team approval), done by voice, on top of the outgoing call of « avant le camion ».
+- **The data has it.** Lots close to their use-by date that no order will take, computed in code (lots expiring by a
+  date minus everything reserved up to the day before): 171 kg of viande hachée, 115 kg of chair à saucisse, 23 colis
+  of steak haché, 17 kg of pâté: **2 695 € at cost** on a fresh ERP. And 22 kg of viande hachée that expire tomorrow
+  are listed as **lost** (they would have to leave today and the trucks are loaded): the board says so, it does not
+  offer them.
+- **`GET http://localhost:4100/outbound/short-dated`** (read-only, no model): `offers[]` (`productName`, `useBy`,
+  `lastDelivery`, `unsold`, `listPrice`, `cost`, `atStake`, `offer{price,validTo}` or null, `approveWith`, `sold`,
+  `soldValue`, `candidates[]`), `tooLate[]`, `atStake`, `sold`. A candidate = a client who usually buys the product
+  AND has a truck before the date AND does not already have it on order: `clientName`, `type`, `contact`, `usualQty`,
+  `deliveryDays`, `status` (to_call | taken | done), `outcome`, **`startWith`**.
+- **The human step.** `POST /outbound/short-dated/{productId}/offer {"price": 6.9}`, or typed in the Voix text box:
+  **`/offre prd_0047 6,90`**. Refused below the purchase cost and at or above the list price. It is written in the ERP
+  as a pricing note on the product (Contexte), as a user's action. **No approved price → `/appel` is refused** with
+  « une personne doit d'abord fixer le prix ».
+- **The call:** `/appel prd_0047 cli_0017` (the candidate's `startWith`). The agent speaks first: the product, « à
+  consommer avant vendredi 27 » in the first sentence, the approved price « au lieu de » his usual price, the quantity
+  he usually takes, for his delivery day. One proposal, no insisting, no haggling (« le prix est fixé par la maison »).
+- **Two new tools, checked in code:** `short_date_brief`, and `take_offer` (the line at the approved price on his
+  order of that day, created and confirmed if he has none). Refused without his yes in his last sentence, above what
+  is still unsold or three times his habit, for a day after the use-by date, or a second time. Both serve only the
+  client on the phone. The offer price is **not** a price rule: an ordinary incoming call still gets the normal price
+  (checked: Peyronnet asking for chair à saucisse is told 8,50).
+- Report in the client's history (tag `offre-date-courte`): taken / refused / « à rappeler ». The board's `unsold`
+  goes down by itself as calls sell, because the ERP's reservations go up.
+- Also: in any outgoing call, no instant word after a « non » (« Je regarde. » before « très bien, bonne journée »).
+- Tests: **175 unit tests pass** on the merge with Pablo's « cadran annoncé » (12 new, `tests/test_short_dated.py`). Replayed with the model, typed: 10 turns.
+  Cuisine centrale de Saint-Junien asks the date and the origin, says « mettez-m'en quarante kilos » (refused: not a
+  yes), then « oui » → 40 kg at 9,20 on his Wednesday order, 368 €. Traiteur de Brive asks for 5 € for 30 kg → « le
+  prix est fixé par la maison », he declines, nothing written. **Not heard with the real voice. `make calls` /
+  `make jury` not re-run with the two new tools.**
+
+**To try it (text box of the Voix page, after `make reset`):** `/appel prd_0044 cli_0004` → refused, no price.
+`/offre prd_0044 9,20` → recorded. `/appel prd_0044 cli_0004` → the agent calls. Then be Marc Teillet.
+
+**Claudio's Claude (lane D) — the next thing to BUILD, asked by Alexander: « Qui est servi d'abord ».**
+Today `make chaos` loses the whole lot, or loads everyone at 70 %. Real life is in between: the night inventory
+writes off most of a lot and **20 kg are left for six clients who ordered 67**. Somebody has to decide who gets
+their meat. That decision is what a wholesaler's morning is made of, and no tool on the market shows it on stage
+(Pallet's site lists « allocate short stock across orders to your own rules » as a feature; nobody does it by voice).
+The agent proposes, **a person approves**, the ERP is updated, and the truck calls that follow tell each client the
+truth about HIS share. Nothing in lane A has to change: once the loaded quantities are in the ERP, my board and the
+call brief pick them up (kinds `missing` and `short`, each client's own rule, options from real stock).
+What to build, in your own files (ERP API only, **no model**):
+1. `apps/ai/app/services/allocation.py` (new): `propose(erp, product_id, available_kg)` → for today's prepared
+   orders that hold the product (lines that are not `substituteFor`), who gets how much, **with the reason in words**.
+   Rules, in this order, each one read from the data:
+   - clients whose file **refuses substitutions** first: they cannot be compensated with another cut
+     (`truck_calls.substitution_rule(client["preferences"])` gives ok | refuse | ask, import it);
+   - then the **earliest truck departure** (`truck_calls.truck_stops(erp, today)`): the 04:45 truck cannot wait;
+   - then the **regulars** of this product (`GET /api/clients/{id}/usual`: `avgQty` × `frequency`);
+   - whoever is served is served **in full** until the stock runs out; the next one gets the rest; the others get 0.
+     A `prorata` mode (everyone the same share) is worth having as the alternative a boss might prefer: show both
+     and what each costs (number of clients fully served, clients to call, € not delivered).
+2. `apply(erp, product_id, plan)`: `PATCH /api/orders/{id}/lines/{lineId}` `{"preparedQty": x, "note": "<reason>"}`
+   for each line (the ERP accepts this on a prepared order), plus the stock write-off as in `break_morning.py`.
+   Nothing is written before a person has seen the plan: `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--keep 20"`
+   prints the plan and asks, `--apply` writes it. Then print `GET /outbound/truck-calls` as you already do.
+3. Two HTTP routes for Jed, in a router of your own (`apps/ai/app/routers/allocation.py` + one line in
+   `routers/__init__.py`, as I did for `outbound.py`): `GET /outbound/allocation?productId=…&available=…` (the plan,
+   both modes) and `POST /outbound/allocation/apply`. Do not edit `outbound.py`, `truck_calls.py` or
+   `voice_session.py`: tell me what you need from them.
+4. Checks without a model, like `make chaos-check`: the plan never gives more than was ordered nor more than is
+   available; applied, the board calls exactly the clients who got less than 95 % of their order; a client served in
+   full is not called.
+5. One replay with the model on a client who got part of his order (`tests/replay_truck_calls.py ord_… "…"`): the
+   agent must say the exact figures (« onze kilos sur seize ») and offer a complement for the rest only.
+**Time box: two hours. The slides and the video come first: if they are not started, start them and do this after.**
+
+**Jed (lane C):** when « Avant le camion » is up, this is the same panel a second time: `GET /outbound/short-dated`,
+a price field + « Approuver » per product (the POST above), an « Appeler » button per candidate (`startWith`), two
+counters (`atStake`, `sold`). The typed `/offre` answers with `agent_text` + `agent_done` and no audio: **please check
+the page does not wait for sound on that turn** (I could not test the page).
+**Claudio (lane D):** please re-run `make calls` / `make jury` on this commit (two more tools in the list). One
+sentence for the pitch: « Stockline's site lists three agents: selling, pricing, purchasing. Ours makes the calls of
+two of them, and adds a fourth: delivery. A person approves, the agent phones. »
+**Pablo (lane B):** your `cotation` import conflicted with mine in `tools/__init__.py`: both are kept, 33 tools now. Your new `BASE_RULES` line adds a spoken sentence to carcass orders: **Claudio, please confirm T1–T6 still pass with it.** A voice test of one offer call would help (lines above).
+
+**Broken / open questions:**
+- **Outside my lane, flagged:** two routes added to `apps/ai/app/routers/outbound.py` (my file from tonight).
+- « Unsold » only knows today's orders. Orders that come in later today will take some of it: the board's number is
+  what is unsold NOW, and it says so.
+- A candidate who already has the product on order at his normal price is left out on purpose (calling him would
+  only reopen the order he placed).
+
 
 ## 2026-11-24 02:48 (real clock, `date`) · Pablo's session (lane B) · `b/cadran-annonce`, merged
 **New feature: « Le cadran annoncé ». The agent tells butchers how this week's market quote moved their carcass
@@ -131,7 +233,6 @@ prices: once, from their own prices, recorded.** All additive, like the Carnet d
 The script of my calls is `cadran_calls.py`, in my session's scratchpad: ask if you want it as an `evals/` scenario
 file. `make reset` clears the announcements (they are client events, reloaded from the seed), so every replay
 starts with nobody told.
-
 ## 2026-11-24 02:45 (real clock, `date`) · Claudio's session (lane D) · `main`
 **Alexander — R2 and R4 replayed on `75b62ab` (your `e3f1aa0` included): both fixes hold.** Same staging and same
 lines as on `550a14b`, typed turns over WS /voice.
