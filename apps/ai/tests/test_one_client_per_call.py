@@ -145,6 +145,24 @@ def test_tu_or_vous_follows_the_caller():
     assert caller_register(said("Mets-moi dix kilos\n\n[Système : tu viens déjà de dire « Je note. » à voix haute.]")) == "tu"  # our own note does not count
 
 
+def test_register_note_lands_on_the_first_turn_even_after_the_prefetched_lookup():
+    """The bug: the caller's first sentence was followed by the prefetched identify_caller messages, so the note was
+    skipped on turn 1 and the agent said « vous » to Céline's « tu me remets comme l'an dernier ? »."""
+    from app.agent.loop import add_register_note
+
+    call = ToolCall(id="pre_1", name="identify_caller", arguments={"said": "Céline"})
+    messages = [
+        ChatMessage(role="user", content="Bonjour, c'est Céline, Boucherie Peyronnet. Pour les fêtes, tu me remets comme l'an dernier ?"),
+        ChatMessage(role="assistant", content="", tool_calls=[call]),
+        ChatMessage(role="tool", tool_call_id="pre_1", name="identify_caller", content='{"status": "found"}'),
+    ]
+    add_register_note(messages)
+    assert "l'appelant te tutoie" in messages[0].content
+    assert messages[1].content == "" and messages[2].content == '{"status": "found"}'  # the lookup is untouched
+    add_register_note(messages)
+    assert messages[0].content.count("[Système : l'appelant") == 1  # never twice
+
+
 def test_only_a_waiting_phrase_is_spoken_before_a_tool():
     from app.services.call_prep import is_waiting_phrase
 
