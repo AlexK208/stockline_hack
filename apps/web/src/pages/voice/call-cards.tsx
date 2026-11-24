@@ -11,13 +11,13 @@
  */
 import { useMemo, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Ban, Phone, ShoppingCart } from "lucide-react";
+import { ArrowUpRight, Ban, Phone, Repeat, ShoppingCart } from "lucide-react";
 import type { ActivityEvent, ClientDetail, Id, OrderDetail, StockAvailability } from "@kit/shared";
 import type { VoiceTurn } from "@/features/assistant/useVoiceSession";
 import { cn } from "@/lib/cn";
 import { entityPath } from "@/lib/links";
 import { WEEKDAY_LABEL, WEEKDAYS } from "@/lib/labels";
-import { useClient, useEvents, useOrder, useStockAvailability } from "@/lib/queries";
+import { useClient, useEvents, useOrder, useProduct, useStockAvailability } from "@/lib/queries";
 import { Badge, DateLabel, Money, Qty, SECTION_LABEL, Skeleton, StatusDot } from "@/ui";
 
 type Obj = Record<string, unknown>;
@@ -140,10 +140,14 @@ export function CallCards({ turns, since }: { turns: VoiceTurn[]; since: string 
 // ───────────────────────── Client en ligne ─────────────────────────
 
 /** The sentence of the preferences that talks about substitutions, and whether it is a refusal. */
-function substitutionRule(prefs: string | undefined): { text: string; refuses: boolean } | undefined {
-  const sentence = (prefs ?? "").split(/(?<=\.)\s+/).find((s) => /substitu/i.test(s));
+function substitutionRule(prefs: string | undefined): { label: string; rest: string; refuses: boolean } | undefined {
+  const sentence = (prefs ?? "").split(/(?<=\.)\s+/).find((s) => /substitu/i.test(s))?.trim();
   if (!sentence) return undefined;
-  return { text: sentence.trim(), refuses: /(refuse|aucune|jamais|sans l'appeler|appeler avant)/i.test(sentence) };
+  const refuses = /(refuse|aucune|jamais|sans l'appeler|appeler avant)/i.test(sentence);
+  const label = refuses ? "Refuse les substitutions" : "Substitutions";
+  // "Refuse les substitutions : appeler avant…" → label + "appeler avant…" (the label is not repeated).
+  const rest = sentence.toLowerCase().startsWith(label.toLowerCase()) ? sentence.slice(label.length).replace(/^[\s:·,-]+/, "") : sentence;
+  return { label, rest: rest ? rest[0].toUpperCase() + rest.slice(1) : "", refuses };
 }
 
 function CardHeader({ icon: Icon, title, right }: { icon: typeof Phone; title: string; right?: ReactNode }) {
@@ -210,8 +214,8 @@ function ClientBody({ c }: { c: ClientDetail }) {
       </dl>
       {sub ? (
         <div className={cn("rounded-[3px] border px-2 py-1.5 text-[11.5px] leading-[15px]", sub.refuses ? "border-destructive/25 bg-destructive/[.06]" : "border-border bg-muted/50")}>
-          <span className={cn("font-semibold", sub.refuses ? "text-destructive" : "text-foreground")}>{sub.refuses ? "Refuse les substitutions" : "Substitutions"}</span>
-          <span className="text-muted-foreground"> · {sub.text}</span>
+          <span className={cn("font-semibold", sub.refuses ? "text-destructive" : "text-foreground")}>{sub.label}</span>
+          {sub.rest ? <span className="text-muted-foreground"> · {sub.rest}</span> : null}
         </div>
       ) : null}
       {usual.length ? (
@@ -308,7 +312,10 @@ function OrderCard({ orderId, order, session, refusals: all }: { orderId?: Id; o
                 const st = removed ? undefined : stockState(l, order, rows);
                 return (
                   <li key={k} className={cn("flex items-center gap-2 px-4 py-1", !m.initial.has(k) && "animate-flash")}>
-                    <span className={cn("min-w-0 flex-1 truncate", removed && "text-muted-foreground line-through")} title={l.productName}>{l.productName}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className={cn("block truncate", removed && "text-muted-foreground line-through")} title={l.productName}>{l.productName}</span>
+                      {l.substituteFor && !removed ? <Replaces productId={l.substituteFor} /> : null}
+                    </span>
                     <span className={cn("flex shrink-0 items-baseline gap-1", removed && "line-through opacity-60")}>
                       {changed ? <span className="num text-[11px] text-muted-foreground line-through">{first}</span> : null}
                       <Qty value={l.qty} unit={l.unit} className="text-[12px]" />
@@ -356,5 +363,16 @@ function RefusalList({ refusals, showDay }: { refusals: Refusal[]; showDay: bool
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Under a substitute line: which product the client accepted it in place of ("remplace Onglet de bœuf"). */
+function Replaces({ productId }: { productId: Id }) {
+  const name = useProduct(productId).data?.name;
+  return (
+    <span className="flex items-center gap-1 text-[11px] text-success">
+      <Repeat size={10} strokeWidth={2} className="shrink-0" />
+      <span className="truncate">remplace {name ?? productId}</span>
+    </span>
   );
 }
