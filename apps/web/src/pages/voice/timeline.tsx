@@ -12,7 +12,8 @@ const clock = (at?: number) => (at ? new Date(at).toLocaleTimeString("fr-FR", { 
 
 const GRID = "grid grid-cols-[64px_minmax(0,1fr)_minmax(0,1fr)] gap-x-4";
 
-export function Timeline({ turns, activity, level }: { turns: VoiceTurn[]; activity: Activity; level: number }) {
+/** `demo`: the jury's view — no tool rows, no latency chips, larger text (see index.tsx, Mode démo). */
+export function Timeline({ turns, activity, level, demo = false }: { turns: VoiceTurn[]; activity: Activity; level: number; demo?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useLayoutEffect(() => {
@@ -44,7 +45,7 @@ export function Timeline({ turns, activity, level }: { turns: VoiceTurn[]; activ
       ) : (
         <ol className="relative flex flex-col gap-3 px-5 py-4">
           {turns.map((t, i) => (
-            <TurnRows key={t.id} t={t} last={i === turns.length - 1} activity={activity} level={level} />
+            <TurnRows key={t.id} t={t} last={i === turns.length - 1} activity={activity} level={level} demo={demo} />
           ))}
         </ol>
       )}
@@ -52,10 +53,12 @@ export function Timeline({ turns, activity, level }: { turns: VoiceTurn[]; activ
   );
 }
 
-function TurnRows({ t, last, activity, level }: { t: VoiceTurn; last: boolean; activity: Activity; level: number }) {
+function TurnRows({ t, last, activity, level, demo }: { t: VoiceTurn; last: boolean; activity: Activity; level: number; demo: boolean }) {
   const c = t.caller;
   const a = t.agent;
-  const agentStarted = a.text || a.tools.length || a.error;
+  const bubbleText = demo ? "text-[16px] leading-[23px]" : "text-[13px]";
+  // In the demo view the tool rows are hidden: "Réflexion…" stays until the agent's first words.
+  const agentStarted = a.text || (!demo && a.tools.length) || a.error;
   const thinking = !a.done && !agentStarted && c.status === "final";
   return (
     <li className="flex flex-col gap-2 animate-fade-in">
@@ -63,7 +66,7 @@ function TurnRows({ t, last, activity, level }: { t: VoiceTurn; last: boolean; a
       <div className={GRID}>
         <time className="num pt-1.5 font-mono text-[10.5px] text-muted-foreground">{clock(c.at)}</time>
         <div className="flex min-w-0 justify-start">
-          <div className="max-w-full rounded-[4px] border border-border bg-card px-3 py-2 text-[13px] shadow-sm">
+          <div className={cn("max-w-full rounded-[4px] border border-border bg-card px-3 py-2 shadow-sm", bubbleText)}>
             {c.status === "recording" ? (
               <span className="flex items-center gap-2">
                 <Dot tone="violet" pulse className="shrink-0" />
@@ -92,14 +95,15 @@ function TurnRows({ t, last, activity, level }: { t: VoiceTurn; last: boolean; a
           <time className="num pt-1.5 font-mono text-[10.5px] text-muted-foreground">{clock(a.at)}</time>
           <span />
           <div className="flex min-w-0 flex-col items-start gap-1.5">
-            {a.tools.map((tool) => <ToolRow key={tool.id} t={tool} className="w-full" />)}
+            {demo ? null : a.tools.map((tool) => <ToolRow key={tool.id} t={tool} className="w-full" />)}
             {thinking ? (
               <span className="flex h-8 items-center gap-2 text-[12px] text-violet"><Spinner size={12} />Réflexion…</span>
             ) : null}
             {a.text ? (
               <div
                 className={cn(
-                  "max-w-full whitespace-pre-wrap rounded-[4px] border border-violet/25 bg-violet/[.05] px-3 py-2 text-[13px]",
+                  "max-w-full whitespace-pre-wrap rounded-[4px] border border-violet/25 bg-violet/[.05] px-3 py-2",
+                  bubbleText,
                   !a.done && "after:ml-0.5 after:inline-block after:h-3 after:w-[2px] after:animate-pulse after:bg-violet after:align-middle after:content-['']",
                   last && activity === "speaking" && "ring-2 ring-violet/20",
                 )}
@@ -111,7 +115,7 @@ function TurnRows({ t, last, activity, level }: { t: VoiceTurn; last: boolean; a
               <span className="flex items-start gap-1.5 text-[12px] text-destructive"><CircleAlert size={13} strokeWidth={1.75} className="mt-[2px] shrink-0" />{a.error}</span>
             ) : null}
             {a.interrupted ? <span className="text-[11.5px] text-muted-foreground">Interrompu par l'appelant</span> : null}
-            <TurnChips t={t} />
+            {demo ? null : <TurnChips t={t} />}
           </div>
         </div>
       ) : null}

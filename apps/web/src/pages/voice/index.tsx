@@ -6,10 +6,13 @@
  * Appel: two-track push-to-talk lab on WS /ai/voice.
  * Hold Space (or the big button) to speak as the caller; the agent answers with streamed text, tool calls and audio.
  * Per-turn latency chips + running average; live ERP writes of the voice agent on the right.
+ *
+ * Mode démo (?demo=1, button in the header): for the projector and the video. Hides the lab details (providers,
+ * latency figures, tool rows, ERP event log) and enlarges the conversation and the two call cards.
  */
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useUrlState } from "@/lib/url-state";
-import { MicOff, Mic, RotateCcw, Send, VolumeX } from "lucide-react";
+import { FlaskConical, MicOff, Mic, Presentation, RotateCcw, Send, VolumeX } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, Dot, IconButton, Input, Kbd, Page, PageHeader, Spinner, Tabs } from "@/ui";
 import { useVoiceSession, type Activity, type Conn } from "@/features/assistant/useVoiceSession";
@@ -47,6 +50,8 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
   const vRef = useRef(v);
   vRef.current = v;
   const [text, setText] = useState("");
+  const [demoParam, setDemoParam] = useUrlState("demo", "", { keepPage: true });
+  const demo = demoParam === "1";
   // Start of the current call (business clock, like ERP events): the order card only follows orders written after it.
   const [since, setSince] = useState(() => businessNow().toISOString());
   const newSession = () => { setSince(businessNow().toISOString()); v.reset(); };
@@ -101,7 +106,7 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
         actions={
           <>
             {/* Active providers (not filters): informative chips, only where there is room. */}
-            {v.providers ? (
+            {v.providers && !demo ? (
               <div className="hidden items-center gap-1 xl:flex">
                 <Provider k="llm" v={v.providers.llm} />
                 <Provider k="stt" v={v.providers.stt} />
@@ -109,14 +114,23 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
               </div>
             ) : null}
             {v.activity === "speaking" ? <Button size="sm" variant="ghost" icon={VolumeX} kbd="Échap" onClick={v.stopPlayback}>Couper</Button> : null}
+            <Button
+              size="sm"
+              variant={demo ? "primary" : "default"}
+              icon={demo ? FlaskConical : Presentation}
+              onClick={() => setDemoParam(demo ? "" : "1")}
+              title={demo ? "Revenir à la vue labo (latences, outils, journal ERP)" : "Vue pour le jury et la vidéo : conversation et fiches en grand"}
+            >
+              {demo ? "Vue labo" : "Mode démo"}
+            </Button>
             <Button size="sm" icon={RotateCcw} onClick={newSession} disabled={!ready}>Nouvelle session</Button>
           </>
         }
       />
       <div className="flex min-h-0 flex-1">
         <section className="flex min-w-0 flex-1 flex-col">
-          <MetricsBar turns={v.turns} />
-          <Timeline turns={v.turns} activity={v.activity} level={v.level} />
+          {demo ? null : <MetricsBar turns={v.turns} />}
+          <Timeline turns={v.turns} activity={v.activity} level={v.level} demo={demo} />
 
           {v.mic === "denied" || v.mic === "unsupported" ? (
             <div className="flex shrink-0 items-center gap-2 border-t border-border bg-warning/[.08] px-5 py-2 text-[12px]">
@@ -155,13 +169,21 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
             </form>
           </div>
         </section>
-        <aside className="flex w-[300px] shrink-0 flex-col border-l border-border bg-card xl:w-[340px] 2xl:w-[400px]">
-          <div className="max-h-[65%] shrink-0 overflow-y-auto">
+        <aside
+          className={cn(
+            "flex shrink-0 flex-col border-l border-border bg-card",
+            demo ? "w-[360px] xl:w-[420px] 2xl:w-[480px]" : "w-[300px] xl:w-[340px] 2xl:w-[400px]",
+          )}
+        >
+          {/* zoom: the cards keep their compact sizes in the lab view and grow as one block in the demo. */}
+          <div className={cn("shrink-0 overflow-y-auto", demo ? "min-h-0 flex-1" : "max-h-[65%]")} style={demo ? { zoom: 1.2 } : undefined}>
             <CallCards turns={v.turns} since={since} />
           </div>
-          <div className="min-h-0 flex-1">
-            <LiveActivity />
-          </div>
+          {demo ? null : (
+            <div className="min-h-0 flex-1">
+              <LiveActivity />
+            </div>
+          )}
         </aside>
       </div>
     </Page>
