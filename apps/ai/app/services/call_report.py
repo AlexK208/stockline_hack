@@ -11,6 +11,7 @@ an order still in draft because the caller hung up before saying yes is the firs
 """
 
 import json
+import re
 
 from app.schemas import ChatMessage
 from app.tools.erp import ErpClient, enc
@@ -21,6 +22,30 @@ ORDER_TOOLS = {
     "add_to_truck",
 }  # fmt: skip
 TRUCK_TAG = "appel-camion"  # outgoing call before the truck leaves (services/truck_calls.py reads it back for the board)
+NOT_REACHED_TAG = "a-rappeler"  # … where the person who decides was not on the line: the call is still to make
+
+# The person who picked up says, in his own words, that he is not the one who decides. Read in code from what was
+# heard, like the yes before a confirmation: in a replay (Claudio's R4) a commis answered « le chef arrive à sept
+# heures », the agent rightly wrote nothing, and the report still said « client prévenu », resolved.
+ABSENT = re.compile(
+    r"\b(il|elle|le chef|la cheffe|le patron|la patronne|monsieur \w+|madame \w+) (n'|n )?est pas (encore )?(là|la|arrivée?|dispo\w*|joignable)\b"
+    r"|\b(le chef|la cheffe|le patron|la patronne) (arrive|revient|sera là|est absente?|dort)\b"
+    r"|\bpas encore (là|arrivée?)\b"
+    r"|\bc'?est pas (lui|elle|moi qui)\b"
+    r"|\bje (ne )?suis (pas le|pas la|que le|que la|qu'un|qu'une|le|la|un|une) (chef|cheffe|patron|patronne|commis|plongeur|plongeuse|second|seconde|serveur|serveuse|apprentie?|stagiaire)\b"
+    r"|\bc'?est (le|la) (commis|plongeur|plongeuse|serveur|serveuse|apprentie?|stagiaire)\b"
+    r"|\brappele[zr] (plus tard|tout à l'heure|vers|à|dans|après)\b",
+    re.I,
+)
+TO_CALL_BACK = re.compile(r"à rappeler|a rappeler|absente?\b|pas (là|joint|joignable)|non joint", re.I)  # the agent's own note
+
+
+def decider_absent(heard: list[str], contact: str | None, logged: list[str]) -> bool:
+    """True when the outgoing call reached someone who cannot decide: he said so, or the agent wrote it down."""
+    first = (contact or "").split()[0] if contact else ""
+    not_him = re.compile(rf"\bc'?est pas {re.escape(first)}\b", re.I) if first else None
+    said = any(ABSENT.search(h) or (not_him and not_him.search(h)) for h in heard)
+    return bool(said or any(TO_CALL_BACK.search(t) for t in logged))
 QUESTION_TOOLS = {"check_products": "stock ou délai", "get_price": "prix", "order_history": "livraison passée"}
 STATUS = {"draft": "en brouillon", "confirmed": "confirmée", "cancelled": "annulée", "prepared": "préparée"}
 WEEKDAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -86,9 +111,11 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
     questions: list[str] = []
     other_client = False
     turns = 0
+    heard: list[str] = []  # the caller's own sentences, without the notes added for the model
     for m in history[start:]:
         if m.role == "user":
             turns += 1
+            heard.append((m.content or "").split("\n\n[Système", 1)[0])
         if m.role != "assistant":
             continue
         for call in m.tool_calls or []:
@@ -121,7 +148,7 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
 
     blocked = bool(client.get("BLOCKED"))
     if brief:
-        return truck_report(client, brief, orders, complements, removed, refused, logged, turns)
+        return truck_report(client, brief, orders, complements, removed, refused, logged, turns, heard[1:])
     if not (orders or refused or other_client):
         return None  # only questions, or events the agent already logged itself: nothing to add
 
@@ -173,8 +200,9 @@ def order_line(o: dict) -> str:
 
 
 def truck_report(
-    client: dict, brief: dict, orders: dict, complements: list[dict], removed: list[str], refused: list[str], logged: list[str], turns: int
-) -> dict | None:
+    client: dict, brief: dict, orders: dict, complements: list[dict], removed: list[str], refused: list[str], logged: list[str], turns: int,
+    heard: list[str] | None = None,
+) -> dict | None:  # fmt: skip
     """The report of an outgoing call before the truck leaves, attached to the order the call was about. Written as
     soon as the client has answered, whatever he decided: the point of the call is that he was told."""
     problems = brief.get("problems") or []
@@ -187,6 +215,10 @@ def truck_report(
         return None  # he never said a word (the call was started twice, or cut at once): nothing happened, the call is still to make
     later = [o for o in orders.values() if o not in complements and o.get("status") != "cancelled"]
     drafts = [o for o in later if o.get("status") == "draft"]
+    # Nothing decided on the truck and the person on the line was not the one who decides: the client was NOT told.
+    absent = not complements and not removed and decider_absent(heard or [], (brief.get("askFor") or {}).get("name"), logged)
+    kinds = {p.get("kind") for p in problems}
+    state = "remplacé" if replaced and not removed else "en poids court" if kinds == {"short"} else "manquant"
 
     def gap(p: dict) -> str:
         text = f"{p.get('productName')} : {qty(p.get('ordered'))} {p.get('unit') or 'kg'} commandés, {qty(p.get('onTruck'))} dans le camion"
@@ -207,6 +239,10 @@ def truck_report(
         outcome = f"remplacé par {order_line(complements[0])}"
     elif removed:
         outcome = "remplacement refusé par le client, retiré du camion"
+    elif absent:
+        who = (brief.get("askFor") or {}).get("name") or "la personne qui décide"
+        lines.append(f"- ⚠ {who} n'était pas en ligne : le message a été laissé à la personne qui a décroché, rien n'a été décidé. À RAPPELER avant le départ du camion.")
+        outcome = f"{who} non joint, message laissé : à rappeler"
     elif replaced:
         lines.append("- Client prévenu du remplacement, qui reste dans le camion.")
         outcome = f"client prévenu, garde {qty(replaced[0].get('qty'))} {replaced[0].get('unit') or 'kg'} {replaced[0].get('productName')}"
@@ -223,14 +259,14 @@ def truck_report(
         lines.append("- Noté pour l'équipe : " + " ; ".join(logged[:6]) + ".")
     # Something the agent wrote down for the team and no decision on the truck (« le chef n'est pas là », « il veut
     # un geste ») : a human still has something to do, the report stays open and so does the ERP's own issue.
-    follow_up = bool(drafts or (logged and not complements and not removed))
+    follow_up = bool(drafts or absent or (logged and not complements and not removed))
     body = {
         "type": "call",
-        "title": f"Appel avant camion : {what} {'remplacé' if replaced and not removed else 'manquant'} — {outcome}",
+        "title": f"Appel avant camion : {what} {state} — {outcome}",
         "description": "\n".join(lines),
-        "severity": "medium" if follow_up else "low",
+        "severity": "high" if absent else "medium" if follow_up else "low",
         "status": "open" if follow_up else "resolved",
-        "tags": ["compte-rendu", "agent-vocal", TRUCK_TAG],
+        "tags": ["compte-rendu", "agent-vocal", TRUCK_TAG, *([NOT_REACHED_TAG] if absent else [])],
         "orderId": order.get("id"),
     }
     return {"clientId": client["id"], "body": without_none(body), "settles": None if follow_up else order.get("id")}
@@ -242,6 +278,10 @@ async def close_open_issue(erp: ErpClient, client_id: str, order_id: str, outcom
     events = await erp.get(f"/api/clients/{enc(client_id)}/events", {"status": "open", "limit": 12})
     events = events.get("items", events) if isinstance(events, dict) else events
     for e in events or []:
+        if e.get("orderId") == order_id and NOT_REACHED_TAG in (e.get("tags") or []):
+            # an earlier attempt that only reached the commis: the client has now been told himself
+            await erp.patch(f"/api/client-events/{enc(e['id'])}", {"status": "resolved"})
+            continue
         if e.get("channel") == "voice_agent":
             continue  # what the agent logged itself during the call (« il demande un geste ») stays open for the team
         if e.get("orderId") == order_id and e.get("type") in ("complaint", "delivery_issue", "quality_issue"):

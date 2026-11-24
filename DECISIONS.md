@@ -253,7 +253,64 @@ fermeture du socket Soniox, qui met 1,1 à 1,3 s à être acquittée, avant de r
 socket se ferme maintenant en arrière-plan : fin de parole → transcription finale **1,25–1,64 s → 0,15–0,60 s**
 (même enregistrement envoyé 6 fois par `WS /voice`, avant et après). Détail en § 3.2.
 
-### 2.12 Suggestions en fin de commande : décidées par du code, dites par le modèle (V2)
+### 2.12 « Avant le camion » : l'agent appelle le client, pas l'inverse (lane A)
+
+**Le problème vient des données, pas de nous.** À l'inventaire de nuit de 03:10, le lot d'onglet a été déclassé.
+Deux restaurants l'ont sur la commande du jour, le playbook dit « les appeler AVANT le départ du camion », et le
+camion de Corrèze part à **04:45**. À cette heure-là, personne n'a le temps de passer ces appels. L'agent les passe.
+
+- **Qui appeler se décide dans le code, sans modèle** (`services/truck_calls.py`, `GET /outbound/truck-calls`) :
+  chaque commande pesée du jour est relue ligne par ligne. Un produit absent du camion déclenche toujours un appel.
+  Un poids court déclenche un appel à partir de 5 % et 15 € ; un poids au-dessus, à partir de 5 % et 50 €. En
+  dessous, c'est une pesée normale : les 9,45 kg de bavette pour 9 commandés à Panazol ne réveillent personne.
+  Les appels sont triés par heure de départ du camion.
+- **Chaque appel suit la fiche du client, mot pour mot.** « Refuse les substitutions » : l'agent dit le fait et
+  demande ce qu'il veut, sans nommer de produit. « Accepte… si on prévient » : il propose le remplacement habituel
+  de la maison, depuis le stock réel, au prix du client. La raison donnée est la note de l'inventaire elle-même.
+- **Trois outils, chacun gardé par du code** : `truck_call_brief` (les faits seulement), `add_to_truck` (un
+  complément confirmé sur la tournée du jour, refusé sans un « oui » du client dans sa dernière phrase, sans stock,
+  au-delà du poids manquant plus 20 % (2 kg au minimum) ou une deuxième fois) et `take_off_truck` (seulement une ligne de
+  remplacement, jamais ce qu'il a commandé). Un appel = un client, comme pour les appels entrants.
+- **Les règles de l'appel sortant voyagent dans son premier message**, pas dans le prompt système : un appel
+  entrant tourne sur le même prompt qu'avant. Vérifié : sur 26 appels entrants rejoués (`550a14b`), les trois
+  outils camion n'ont jamais été appelés.
+
+**« Cassez le matin » : prouver que ce n'est pas un script.** Les données ne contiennent que deux appels, tous deux
+sur l'onglet. Un juré penserait à une démo répétée. Donc le juré choisit lui-même ce qui a cassé dans la nuit :
+`make chaos PRODUCT=… WHY="…"` déclasse le lot (la raison tapée devient la note que l'agent répète au client) et
+vide ce produit dans les camions du jour, par l'API de l'ERP seulement. Rien dans l'agent n'est propre à l'onglet.
+Cinq cartes sabotage (`DEMO.md` § 9) sont vérifiées sans modèle par `make chaos-check` : **5/5**, de 6 à 8 appels
+et de 441 à 3 902 € en jeu. Dix appels ont été rejoués avec le modèle sur des clients qu'il n'avait jamais vus.
+
+**Ce que ces rejeux ont trouvé, et ce que nous en avons fait** : quand un commis décrochait à la place du chef,
+rien n'était écrit, mais l'appel était enregistré « client prévenu » et sortait de la liste ; et la limite de
+l'époque, « deux fois le poids manquant », laissait passer « rajoutez vingt kilos » sur une grosse commande (seule
+la garde du « oui » l'arrêtait). Les deux sont corrigés (`e3f1aa0`) : une mauvaise personne laisse l'appel
+« à rappeler », toujours sur la liste, et la limite est devenue le manquant plus 20 %. Trouvé par nos rejeux le
+soir même, corrigé dans l'heure ; rejoué avec le modèle sur la nouvelle version (`75b62ab`) : les deux tiennent.
+
+### 2.13 Le carnet des fêtes : réserver Noël au téléphone (lane B)
+
+**Pourquoi celui-là.** Toutes les équipes reçoivent les mêmes idées génériques. La nôtre est la seule à avoir un
+chevillard fin novembre, et Noël est son pic, sur les pièces les plus rares. À Noël 2025, par rapport à une
+quinzaine normale : carré de veau ×6,5, filet ×5,3, demi-carcasses ×3,7, ris ×2,9. Or ces pièces sont limitées par
+l'animal : un ris par veau, un onglet par bête, des côtes maturées 21 jours. Aujourd'hui, la liste est sur papier
+chez Damien.
+
+- **« Comme l'an dernier »** relit le vrai panier de Noël 2025 du client, dit les pièces entières en pièces, et ne
+  propose que ses jours de livraison dans la fenêtre (19–24/12 ou 26–31/12).
+- **La capacité d'une pièce rare est le maximum livré par la maison sur cette fenêtre l'an dernier** : le seul
+  chiffre que les données peuvent défendre. Chaque client est garanti à hauteur de son propre volume de l'an
+  dernier ; au-delà, il n'a que ce qu'aucun habitué ne réclame encore. **Le reste va en liste d'attente, jamais
+  promise**, dite avec la raison (« trois kilos réservés, cinq en liste d'attente, il n'y a qu'un ris par veau »).
+- **Une réservation n'est pas une commande** : aucun stock, aucune commande, aucune facture. Toutes les règles sont
+  dans le backend (`services/festive.py`) : compte bloqué, jour non livré, hors fenêtre, délai dépassé.
+- **La page « Carnet des fêtes »** montre, par pièce rare, réservé / attente / capacité, et se remplit en direct
+  pendant l'appel.
+- Quatre appels jury le vérifient (J21–J24) : « comme l'an dernier » en « tu », un nouveau client qui veut 8 kg de
+  ris, un mercredi refusé à un client livré mardi-jeudi-vendredi, et un compte bloqué qui veut « juste réserver ».
+
+### 2.14 Suggestions en fin de commande : décidées par du code, dites par le modèle (V2)
 
 **Une fois la commande finie, l'agent peut proposer un ou deux produits, chacun avec une raison que le client peut
 vérifier : « Vous prenez d'habitude un demi-porc cul noir, je vous en mets un ? »**
@@ -264,8 +321,8 @@ d'historique, les lots, les règles de prix) ; un agent qui ne s'en sert pas lai
 
 *Pourquoi du code et pas le modèle.* Une suggestion inventée est pire que pas de suggestion : un produit en
 rupture, une promo pas encore active, un substitut proposé à un client qui les refuse. `suggest_items`
-(`tools/suggest.py`) est du Python sans appel au modèle : cinq sources (l'an dernier, réservation, habitude, promo,
-lot à écouler), puis les mêmes vérifications que les outils d'écriture (`check_items` : stock à la date, délai,
+(`tools/suggest.py`) est du Python sans appel au modèle : quatre sources (l'an dernier, habitude, promo, lot à
+écouler), puis les mêmes vérifications que les outils d'écriture (`check_items` : stock à la date, délai,
 jour de livraison). Le modèle ne fait que formuler. Les tests le vérifient sur les données du pack : rien pour un
 compte bloqué ; jamais le ris de veau ni l'onglet (à zéro) ; la promo chair à saucisse (`prl_0008`) pas avant le
 1er décembre ; seulement ses propres produits pour un client qui refuse les substitutions.
@@ -277,11 +334,14 @@ compte bloqué ; jamais le ris de veau ni l'onglet (à zéro) ; la promo chair �
 - « L'an dernier » listait d'abord les produits de base (« 866 kg de quartier arrière l'an dernier à cette
   période ») : vrai, mais ce n'est pas une raison, il en prend toute l'année. Un produit n'est « de saison » pour un
   client que s'il est dans une part nettement plus grande de ses livraisons à cette période que sur l'année (× 1,5).
-  Fin novembre, rien ne l'est pour Peyronnet ; à Noël, le ris de veau l'est × 5 (en rupture, donc filtré).
+  Fin novembre, rien ne l'est pour Peyronnet ; mi-décembre, le ris de veau l'est × 5 (en rupture, donc filtré).
 
 *Ce que nous n'avons pas fait.* « Le stock du client lui-même » (« il vous reste sûrement peu de veau ») : nous
 n'avons aucune donnée sur ce que le client a en chambre froide, donc rien de vérifiable. Et pas de suggestion
-quand le client dit lui-même de valider : il est pressé, on ne le retient pas.
+quand le client dit lui-même de valider : il est pressé, on ne le retient pas. **Ni du 19 au 31 décembre** : ces
+dates passent par le carnet des fêtes (§ 2.13), qui propose déjà le panier de l'an dernier ; nous avions une
+cinquième source, « réservation » (veau, agneau, côtes maturées à réserver une semaine avant Noël), retirée quand le
+carnet est arrivé pour ne pas faire deux fois le même travail par deux chemins.
 
 *Le risque, et la réponse.* Les trois juges de lane A avaient écarté l'idée « comme d'habitude proactif » (« les
 bouchers détestent la relance commerciale »). D'où les garde-fous : seulement après la fin de la commande, une à la
@@ -531,6 +591,7 @@ sans rien dire.
 | Latence texte | médiane **2696–2756 ms**, p90 3498–3777 ms, **pire 3513–4157 ms** (2 × 18 tours) — pire tour 8,0 s → 3,5 s depuis la référence |
 | Latence voix | **0,09 à 0,61 s** jusqu'au premier son sur une demande (8,7 s au départ) ; 1,2 à 1,7 s sur une phrase courte (avant `4ac4348`, devrait gagner ~1 s, non re-mesuré) ; « Très bien. » tout de suite après un « oui » ; STT fin de parole → transcription finale **0,15–0,60 s** (1,25–1,64 s avant `4ac4348`) |
 | Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache · **≈ $0,10–0,15 l'appel complet** (cache froid), ~$0,05 quand les appels s'enchaînent |
+| Appels sortants | « Avant le camion » : 2 appels dans les données, 6 à 8 avec `make chaos` (5/5 cartes vérifiées sans modèle). 10 appels rejoués avec le modèle. Mauvaise personne → « à rappeler » et limite manquant + 20 % corrigées (`e3f1aa0`) et **rejouées avec le modèle** (`75b62ab`) |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |

@@ -453,5 +453,99 @@
    "Next delivery day after Tuesday 24/11 for this client is Thursday 26/11. PAD pieces are ordered before 17:00 for the next morning, so Thursday is fine.",
    "The order line carries substituteFor (OrderLineView.substituteFor); create_draft_order, add_order_line and update_order_line all accept it."
   ]
+ },
+ {
+  "id": "J21",
+  "title": "« Pour les fêtes, comme l'an dernier ? » : Boucherie Peyronnet",
+  "client_id": "cli_0001",
+  "trap": "Céline asks for « the same as last year » for Christmas, in « tu ». The agent must read HER 2025 Christmas basket (festive_history), say whole pieces in pieces, offer only her delivery days inside the Christmas window, and RESERVE, not order: a reservation touches no stock and creates no order.",
+  "turns": [
+   "Salut, c'est Céline, Boucherie Peyronnet. Dis, pour les fêtes, tu me mets comme l'an dernier ?",
+   "Le mardi 22, c'est parfait.",
+   "Oui, c'est bon, vas-y."
+  ],
+  "expected": [
+   "Turn 1: the agent reads back last Christmas's basket: quartiers arrière, demi-veaux, agneaux said in PIECES (not 391 kg), and the ris (4,5 kg).",
+   "It offers only her delivery days inside 19–24/12: samedi 19, mardi 22, jeudi 24. No Monday, no Wednesday, no Friday.",
+   "It answers in « tu » (she says « Dis », « tu me mets »).",
+   "Nothing is written before her « oui » in turn 3, and the reservation is read back before.",
+   "Final ERP: festive reservations for cli_0001 on 2026-12-22 covering last year's basket; the ris 4,5 kg fully reserved (her own volume of last year is guaranteed), nothing on the waiting list. NO new order (create_draft_order not used for a holiday date).",
+   "The agent says it is a reservation and that the order is taken nearer the date."
+  ],
+  "facts": [
+   "cli_0001 Boucherie Peyronnet, delivered tue/thu/sat; contacts Christian Peyronnet (MOF) and Céline Peyronnet (« Épouse, caisse et commandes »), who uses « tu ».",
+   "Christmas 2025 basket (GET /api/festive/history/cli_0001): quartier arrière 391 kg, demi-veau 245,5 kg, agneau 82,5 kg, ris de veau 4,5 kg, foie de veau 3 kg, onglet 2,5 kg.",
+   "Christmas window 2026 = 19–24/12: her delivery days are Sat 19, Tue 22, Thu 24.",
+   "Pablo's F1 (02:26 entry): « Pour Noël l'an dernier vous aviez pris quatre arrières, trois demi-veaux, quatre agneaux et quatre kilos et demi de ris. Pour quel jour : samedi 19, mardi 22 ou jeudi 24 ? »"
+  ]
+ },
+ {
+  "id": "J22",
+  "title": "Huit kilos de ris pour Noël, un nouveau venu : Brasserie Le Saint-Martial",
+  "client_id": "cli_0008",
+  "trap": "A client who took no ris last Christmas asks 8 kg. Ris is a scarce piece (one per calf): he is guaranteed only 3 kg, the rest goes on a waiting list that is NEVER promised. Turn 2 pushes for a guarantee.",
+  "turns": [
+   "Bonjour, Fabien Roux, Brasserie Le Saint-Martial. Pour le réveillon de Noël, je voudrais réserver huit kilos de ris de veau, livrés le jeudi 24.",
+   "Et les cinq autres, vous pouvez vraiment pas me les garantir ? C'est le plat du réveillon.",
+   "Bon, d'accord, faites comme ça. Oui."
+  ],
+  "expected": [
+   "The agent says clearly: 3 kg reserved, 5 kg on the waiting list, with the reason (« un ris par veau »), and that the waiting list is not promised (« on vous rappelle si ça se libère »).",
+   "Turn 2: it holds. No promise, no « normalement ça ira », no invented capacity figure.",
+   "Thursday 24 is one of his delivery days (tue/thu/sat): accepted, not questioned.",
+   "Final ERP: a festive reservation for cli_0008, prd_0038, 2026-12-24, qtyReserved 3 and qtyWaitlist 5. No order created.",
+   "No substitute offered unless he asks (his file is silent on substitutions)."
+  ],
+  "facts": [
+   "cli_0008 Brasserie Le Saint-Martial, active, delivered tue/thu/sat, contact Fabien Roux (gérant). No holiday purchases in 2025.",
+   "GET /api/festive/availability?productIds=prd_0038&clientId=cli_0008: Noël capacity 18 kg, guaranteedForClient 3.",
+   "Pablo's F2: « trois kilos réservés, cinq en liste d'attente, il n'y a qu'un ris par veau »."
+  ]
+ },
+ {
+  "id": "J23",
+  "title": "Filet pour le Nouvel An, un mercredi : Maison Vergnaud",
+  "client_id": "cli_0002",
+  "trap": "Vergnaud asks whether there will be filet for New Year, then wants 20 kg on Wednesday 30, which is not one of his delivery days (tue/thu/fri). The refusal comes from the backend; the agent must offer his real days in the window (Tuesday 29, Thursday 31), then reserve 20 kg, all guaranteed.",
+  "turns": [
+   "Bonjour, Antoine Vergnaud. Pour le Nouvel An, il me faudra du filet. Vous en aurez assez ?",
+   "Réservez-moi vingt kilos, livrés le mercredi 30.",
+   "Alors le jeudi 31.",
+   "Oui, c'est bon."
+  ],
+  "expected": [
+   "Turn 1: an answer from the tool (festive_availability), not invented; no capacity figure of the house or of other clients is needed, his own guarantee may be said.",
+   "Turn 2: Wednesday 30 refused because he is not delivered that day, with his days offered: mardi 29 or jeudi 31. Nothing written on the 30th.",
+   "Turn 3–4: 20 kg of prd_0012 reserved for 2026-12-31, read back before his « oui ».",
+   "Final ERP: a festive reservation for cli_0002, prd_0012, 2026-12-31, qtyReserved 20, qtyWaitlist 0. No order created.",
+   "His file says « Jamais de substitution »: no other cut offered."
+  ],
+  "facts": [
+   "cli_0002 Maison Vergnaud, chef étoilé Antoine Vergnaud, delivered tue/thu/fri. 2026-12-30 is a Wednesday.",
+   "New Year 2025: filet 20 kg, côte maturée 28,5 kg, carré de veau 20,5 kg, ris 9 kg.",
+   "GET /api/festive/availability?productIds=prd_0012&clientId=cli_0002: Nouvel An capacity 207,5 kg, guaranteedForClient 31,5.",
+   "New Year window 2026 = 26–31/12: his delivery days are Tue 29 and Thu 31 (Sat 26 is not one of them)."
+  ]
+ },
+ {
+  "id": "J24",
+  "title": "Compte bloqué qui veut « juste réserver » pour Noël : Boucherie Lacour",
+  "client_id": "cli_0005",
+  "trap": "A blocked account argues that a holiday reservation is not an order. The backend refuses reservations for blocked accounts too: the agent must refuse kindly, say no amount, log the request, and point to the accounting team or his rep.",
+  "turns": [
+   "Bonjour, Gérard Lacour, boucherie Lacour à Tulle. Je voudrais réserver deux demi-veaux pour Noël, le mardi 22.",
+   "Mais c'est pas une commande, c'est juste une réservation ! Vous pouvez bien me la noter.",
+   "Bon. Au revoir."
+  ],
+  "expected": [
+   "The reservation is refused: the account is blocked, for reservations as for orders.",
+   "No amount owed, credit limit or overdue figure is said.",
+   "Turn 2: it holds, kindly; it may note the request for the accounting team or his salesperson.",
+   "Final ERP: no festive reservation and no order for cli_0005; the request logged as a client event."
+  ],
+  "facts": [
+   "cli_0005 Boucherie Lacour de Tulle, status blocked, delivered tue/thu, contact Gérard Lacour (boucher-patron).",
+   "Pablo's F4: « Lacour blocked → refused and logged ». Blocked accounts per CLAUDE.md: cli_0005, cli_0006, cli_0046."
+  ]
  }
 ]

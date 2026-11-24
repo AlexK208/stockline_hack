@@ -17,23 +17,22 @@ Template:
 
 ---
 
-## 2026-11-24 02:21 (real clock, `date`) · Jed's session (lane C, plus lane A parts **approved by Alexander**) · branch `c/suggest-items`
+## 2026-11-24 02:52 (real clock, `date`) · Jed's session (lane C, plus lane A parts **approved by Alexander**) · branch `c/suggest-items`
 **Feature: suggestions at the end of an order call (V2, on top of the core).** After « c'est tout », the agent may
 offer one product at a time, at most two, each with a reason the client can check (« Vous prenez d'habitude un
 demi-porc cul noir, je vous en mets un ? »). The suggestions are decided by code over ERP data; the model only says them.
 
 **Alexander approved that I implement this, including the lane A parts.** To stay out of his way, the only lane A
 lines I changed are:
-- `apps/ai/app/tools/__init__.py` line 17: `suggest` added to the import (and nothing else);
-- `apps/ai/app/agent/prompts.py`: **one new line at the end of `VOICE_RULES`** (line 76) (« - Suggestions : quand il dit
+- `apps/ai/app/tools/__init__.py` line 18: `suggest` added to the import, next to your `festive` (nothing else);
+- `apps/ai/app/agent/prompts.py`: **one new line at the end of `VOICE_RULES`** (line 77) (« - Suggestions : quand il dit
   que c'est fini, appelle suggest_items une fois… »); nothing else rewritten;
 - new file `apps/ai/app/tools/suggest.py`. **`voice_session.py` not touched.**
 
 **What's in it:**
 - **Tool `suggest_items(clientId, deliveryDate)`**, plain Python, 0.2–0.6 s. Five sources: *l'an dernier* (only
   products that are seasonal **for this client**: × 1.5 their usual share of deliveries in the same weeks of the last
-  two years), *réservation* (veal, lamb, matured ribs for Christmas deliveries, before the one-week deadline),
-  *habitude*, *promo* (a rule with an end date, valid on the delivery date: `prl_0008` not before 01/12), *lot à
+  two years), *habitude*, *promo* (a rule with an end date, valid on the delivery date: `prl_0008` not before 01/12), *lot à
   écouler* (expires 1–3 days after delivery, in a category the client buys). Then `desk.check_items` (stock, lead
   time, delivery day). Blocked → []. A client who refuses substitutions only gets products he has bought himself.
   **Returns at most 2**: with 3, the model offered a third one in a T7 run (the prompt rule alone did not hold).
@@ -42,11 +41,15 @@ lines I changed are:
   TS type in `packages/shared/src/api.ts`.
 - **Voix page:** "Suggestions" section under the order card: product, qty, reason as dot + word, evidence.
   Proposé → accepted (moves into the order card: "suggestion acceptée · habitude") → "Non retenu" (inferred).
-- **Tests:** `tests/test_suggest.py`, 16 tests (11 on crafted facts, 5 read-only on the seed: Peyronnet 26/11,
-  Lacour blocked → [], Leroy only own products, ris de veau and onglet never, promo not before 01/12). 150 pass.
+- **Tests:** `tests/test_suggest.py`, 17 tests (11 on crafted facts, 6 read-only on the seed: Peyronnet 26/11,
+  Lacour blocked → [], Leroy only own products, ris de veau and onglet never, promo not before 01/12, nothing on
+  22/12). **176 pass after merging `main`** (lane A's `idf` test passes now too).
+- **Carnet des fêtes (Pablo, 02:26):** merged in. My tool had a 5th source, *réservation* (veal, lamb, matured ribs
+  for Christmas deliveries). It is **removed**: 19–31 December go through the carnet, no order is taken there, and
+  `festive_history` already proposes last year's basket. `suggest_items` returns [] for those dates.
 - **T7** added to `SCENARIOS.md` and `evals/run_calls.py` (Claudio OK'd): T7 3/4, the one failure was the third
   suggestion, fixed by the cap; then 2/2. **T1 ✅ T4 ✅**: no suggestion when the client says to validate. Suggestion
-  turn: first word 2.0–3.5 s. `DECISIONS.md` § 2.12.
+  turn: first word 2.0–3.5 s. `DECISIONS.md` § 2.14 (after Alexander's 2.12 and Pablo's 2.13).
 
 **For Alexander:**
 - In one T7 run the model called `confirm_order` right after the client's « Non, pas cette semaine » (no to the
@@ -60,6 +63,196 @@ lines I changed are:
   la commande : ne valide pas) ». Jed heard the agent say « Ce non ne vaut pas accord sur la commande » twice live.
   Reworded as a plain instruction with nothing quotable; T7 2/2 again, clean « non » turns, no `confirm_order` attempt.
   **Optional, your call:** add `accord sur la commande` to `ASIDE` in `call_prep.py` as a safety net (I did not touch it).
+- **Claudio, on the « Avant le camion » panel and Pablo's `/festive` page:** Jed will answer here himself
+  (he decides what lane C takes next).
+
+
+## 2026-11-24 02:45 (real clock, `date`) · Claudio's session (lane D) · `main`
+**Alexander — R2 and R4 replayed on `75b62ab` (your `e3f1aa0` included): both fixes hold.** Same staging and same
+lines as on `550a14b`, typed turns over WS /voice.
+- **R4, the commis (La Table de Charlotte, filet):** the call report is **open**, tagged `a-rappeler`, « … — Yannick
+  Mazaud non joint, message laissé : à rappeler »; the board card stays **`to_call`** with `lastAttempt`; nothing
+  written on « mettez-lui du faux-filet, oui oui allez-y ». « Bonne journée à toi » is gone (« Merci, bonne journée et
+  à bientôt. »). ✅
+- **R2, « rajoutez vingt kilos » (Uzerche, 21 kg missing):** « Les vingt kilos de plus, je ne peux pas les mettre dans
+  ce camion », then 21 kg after « oui, allez-y », 483,84 € recovered. ✅ « Je corrige. » no longer said (« Un instant. »).
+**Three small things, none blocking:**
+1. R2: the agent says « je ne peux remplacer que les vingt et un kilos qui manquent », but the cap is 25,2 kg. It is
+   on the safe side, so it is harmless, but it doesn't match the rule.
+2. R2: its first `add_to_truck` (21 kg) went out on « mettez l'entrecôte, et rajoutez vingt kilos » and the yes guard
+   refused it. The model still tries before the yes, and the guard is what holds.
+3. R4: two events for one call: your report (« … non joint, message laissé : à rappeler ») plus the agent's own
+   `log_client_event` « À rappeler : filet manquant… ». The note is useful; the duplicate shows twice in the history.
+   And it offered the cheffe a callback « vers sept heures et quart », after the truck has passed (6:35).
+`DEMO.md` § 9 and `DECISIONS.md` § 2.12 / § 6 updated: fixed and replayed.
+
+## 2026-11-24 02:42 (real clock, `date`) · Claudio's session (lane D) · `ab4cabd`
+**Alexander — your 02:35 fixes are now in `DEMO.md` and `DECISIONS.md`** (cap = missing + 20 %, min 2 kg: the cards
+now say 8 kg for Aupetit, ~22 kg for Châlus, 25,2 for Uzerche; wrong person = « à rappeler »; § 2.12 and § 6 say
+both are fixed, not yet replayed with the model). That push went out before this entry.
+**The R4 commis lines you asked for** (« Bonne journée à toi »), typed turns on `ord_020813` after
+`make chaos PRODUCT=prd_0012 WHY="Filet saisi par les services vétérinaires ce matin"`:
+1. « Allô ? Non, c'est le commis, la cheffe arrive à sept heures. »
+2. « Mettez-lui du faux-filet à la place, elle sera d'accord, oui oui allez-y. »
+3. « Ok, je lui dis. Au revoir. » → « Merci, bonne journée à toi. »
+None of them says « tu ». **Your R2 / R4 replay on `e3f1aa0`:** next on my list.
+
+## 2026-11-24 02:39 (real clock, `date`) · Claudio's session (lane D) · branch `d/festive-and-cards`
+**Pablo — your four holiday calls are now jury calls J21–J24, and they pass.** Alexander — the six remaining client
+cards of « Cassez le matin » are replayed; one new point for you.
+
+**Carnet des fêtes, `make jury ARGS="J21 J22 J23 J24"`: 4/4 on the invariants**, median 2011 ms, worst 3826. Rebuilt
+from your 02:26 entry and the ERP (your script is not in the repo). `run_jury.py` now prints the client's festive
+reservations (« carnet des fêtes : prd_0038 2026-12-24 réservé 3 + attente 5 »), so they're gradeable at a glance.
+- **J21 Céline Peyronnet, « comme l'an dernier », in tu:** reads « quatre arrières, trois demi-veaux, quatre agneaux et
+  quatre kilos et demi de ris », offers only samedi 19 / mardi 22 / jeudi 24, says « ce n'est pas une commande ».
+  ERP: 4 reservations on 22/12, nothing on the waiting list, no order. ✅
+- **J22 Brasserie Le Saint-Martial, 8 kg of ris, new to the holidays:** 3 reserved + 5 on the waiting list, « il n'y a
+  qu'un ris par veau », holds when pushed for a guarantee. ✅
+- **J23 Vergnaud, New Year filet on Wednesday 30:** the backend refuses (not his day), the agent offers mardi 29 /
+  jeudi 31, then 20 kg reserved on 31/12. ✅ (the `festive_reserve✗` in the output is that expected refusal)
+- **J24 Lacour, blocked, « c'est juste une réservation » :** refused twice, kindly, no amount, request logged for the
+  accounting team. ✅
+- **One point, Pablo / Alexander: `festive_reserve` is final, and no yes guard covers it.** J21 reserved on turn 2
+  (« Le mardi 22, c'est parfait »), before the read-back, and Céline's « oui, c'est bon » came after it was written.
+  « c'est parfait » is an agreement, so it's correct this time. But unlike `confirm_order` and `add_to_truck`,
+  `call_guard` doesn't ask for a yes before a reservation. Your call whether it should.
+- J22 opens with « Il a demandé explicitement la réservation : je la fais. »: I checked, Jed's `is_aside` drops it on
+  the voice path. Only the text transcript shows it.
+
+**« Cassez le matin », the six cards not yet replayed: done, 6/6 behave as their card says** (`DEMO.md` § 9 updated):
+Aupetit (cap said aloud: « le maximum est de douze kilos »), Xavier et Fils (no product named, « attendu, pas
+garanti », no credit note), Supermarché du Palais (label read, no discount, price request logged for Aurélie),
+Charcuterie Esposito (« mettez-en pour mon cousin » refused), Le Petit Rouchaud (gesture logged), Châlus (short weight).
+**For Alexander, adding to my 02:19 entry:**
+- **The 2× cap again, on a real case:** Châlus, 18,3 kg short. « Mettez-en le double » then « bon, ce que vous
+  pouvez. Oui » → **36,6 kg loaded, 878 €**, exactly the cap. The rules held, but « ce que vous pouvez » became the
+  maximum.
+- **Liver has no house substitute,** so the opening said « je n'ai aucun produit de remplacement », then on « vous avez
+  quoi d'autre en abats ? » `find_alternatives` found rognon de veau. Maybe « pas de remplacement habituel » rather
+  than « aucun ».
+- Still seen: « Je corrige. » as the instant word where nothing is corrected (Supermarché du Palais turn 1), « Je
+  regarde. » before a goodbye (Le Petit Rouchaud), a callback from Nicolas Bouty promised on every gesture request,
+  and the report of a short weight says « manquant ».
+
+**`DECISIONS.md`:** new § 2.12 « Avant le camion » (with « Cassez le matin » and the two open defects, said plainly)
+and § 2.13 « Le carnet des fêtes », plus a row in § 6. Alexander, Pablo: please correct anything I got wrong about
+your features; that file is what the jury reads.
+
+**Next (lane D):** slides and video. **Broken:** nothing new.
+
+## 2026-11-24 02:35 (real clock, `date`) · Alexander's session (lane A) · fixes from Claudio's replays
+**Done — Claudio's four findings (02:19), all in lane A files. 159 unit tests pass. NOT replayed with the model.**
+1. **Wrong person no longer counts as « client prévenu ».** Two signals, either is enough: the person who picked up
+   says so in his own words (read in code from the transcript, like the yes: « c'est le commis », « le chef arrive à
+   sept heures », « c'est pas Hugo », « je suis que le plongeur », « rappelez vers… »), or the agent's own note
+   (« À rappeler : … », which the call's rules now ask for). Then the report is **open, severity high**, tagged
+   `a-rappeler`, title « … — Hugo Mazaud non joint, message laissé : à rappeler », the ERP's issue stays open, and
+   **the board card stays `to_call`** with a new field `lastAttempt` (the title of that report). When the chef is
+   reached later, the old attempt is closed with the rest. A decision on the truck (complement, take-off) always
+   means he was reached. Checked on the real data without a model.
+   About « it told the whole message before knowing who picked up »: kept on purpose. We dial the client's own
+   kitchen about his own delivery, and the commis is the one who will open the box.
+2. **Cap: what is missing + a margin**, no longer twice. Margin = 20 %, never less than 2 kg: 4,5 → 6,5 kg, 6 → 8,
+   21 → 25,2, 61 → 73,2. « Rajoutez vingt kilos » on 21 kg is now refused by the cap itself. The brief carries
+   `missingKg` and `maxComplementKg`. **Claudio: `DEMO.md` lines 161, 167 and 196 still say « twice » / « 12 kg » /
+   « le double »: with a 6 kg line the limit is now 8 kg.**
+3. A `short` call's report says « en poids court », not « manquant ». « Je corrige. » / « Je modifie ça. » are no
+   longer said in an outgoing call (they become « Un instant. » / « Je regarde. »).
+4. The call's rules now say: promise a callback from the sales rep ONLY when he asks for a gesture or for someone;
+   a plain complaint is logged without a promise.
+Not done: « Bonne journée à toi » to a commis who never said « tu » (R4). I could not find what triggered it
+without the transcript; send me the commis's exact lines if you have them.
+
+**Claudio:** thanks for the replay with the three tools (0 calls on 26 incoming calls). Please replay R4 (commis) and
+R2 (« rajoutez vingt kilos ») once on this commit: the wording of rules 6 and 7 changed and only you have run them.
+
+**Pablo, on « le carnet des fêtes »:** I read your two changes in my files. The `BASE_RULES` line and the `festive`
+import are fine as they are; the guard covers the four tools as you say. In my sandbox your branch runs **141/141**.
+The `KeyError: 'idf'` you see is not on `main`: `test_one_client_per_call.py` imports its `clients()` helper from
+`tests/test_call_prep.py`, and your `ai` image holds an old copy of that file (only `app/` is mounted, `tests/` is
+baked in at build time). `make rebuild`, or `make test` on the host, and it passes.
+
+**Broken / open questions:** none new.
+
+## 2026-11-24 02:33 (real clock, `date`) · Claudio's session (lane D) · `main`
+**Jed — have you started the « Avant le camion » panel (Alexander's 02:20 entry)?** It's not on `main` or on any
+pushed branch yet, and nothing in `apps/web` reads `GET /outbound/truck-calls`. I'm **not** building it, so we don't
+both do it. Please say here when you start and roughly when it lands: the video's main story (« 04:38, le camion de
+Corrèze part dans 7 minutes ») needs it on screen, and so does « Cassez le matin » (`make chaos`, `DEMO.md` § 9).
+For your testing, `make chaos PRODUCT=prd_0011 WHY="…"` puts 8 calls on the board; `make reset` brings back the 2 of
+the seed.
+**Pablo:** your « Carnet des fêtes » page is wired (`/festive`, board API answers). Nobody has looked at it in a
+browser yet, as you said: Jed, it's on your list too.
+
+## 2026-11-24 02:28 (real clock, `date`) · Claudio's session (lane D) · `93608dc`
+**Alexander — the replay you asked for at 02:20, with the three truck tools in the list: green.** On `550a14b`
+(your `834fb6e` + « Cassez le matin »), 02:23, my machine, text mode.
+- `make calls` **6/6**, first word median **2333 ms** (was 3062 on `8acd196`), p90 3621, worst **6780** = T6 turn 2,
+  a single `add_order_line`: I read it as a slow draw, not a tool-list effect.
+- `make jury` **20/20 on the invariants**, median **1970 ms**, worst **8221** = J7 turn 1 (identify + create, 6280 last
+  run, same turn). Final ERP identical to the 01:20 run, call by call.
+- **`truck_call_brief`, `add_to_truck`, `take_off_truck`: called 0 times** over 6 + 20 incoming calls. The new tools
+  don't leak into ordinary calls.
+Row added to `SCENARIOS.md` (already on `main`, `e96253b`: that push went out before this entry, my mistake). Your
+two findings from my 02:19 entry (wrong person → « client prévenu », the 2× cap) are still open on your side.
+
+## 2026-11-24 02:26 (real clock, `date`) · Pablo's session (lane B) · `b/carnet-des-fetes`, merged
+**New feature: « Le carnet des fêtes ». Christmas and New Year reservations by phone. Pablo asked for it to set us apart
+from the other teams. Everyone, please read: it touches several lanes, all additive.**
+
+**Why this one.** Every Claude session gives every team the same generic ideas (callbacks, truck, briefing). Only our
+pack has a chevillard in late November. Christmas is its peak, and it falls on the scarcest pieces. Christmas 2025
+against a normal fortnight in the history: carré de veau ×6.5, filet ×5.3, demi-carcasses ×3.7, ris ×2.9. Those
+pieces are limited by the animal: one ris per veal, one onglet per beef, ribs matured for 21 days. And the context
+says « Réservations des veaux sous la mère et des ris pour Noël en cours : la liste est chez Damien ». So today it is
+a paper list, and 15 clients' « réserver pour les fêtes » requests are free text in their history.
+
+**What the agent does now.**
+- « Pour les fêtes, comme l'an dernier ? » → « Pour Noël l'an dernier vous aviez pris quatre arrières, trois
+  demi-veaux, quatre agneaux et quatre kilos et demi de ris. Pour quel jour : samedi 19, mardi 22 ou jeudi 24 ? »
+  This is his real 2025 basket. Whole pieces are said in pieces, and only his delivery days are offered. Then it
+  reserves.
+- **Scarce pieces** (ris, rognon, onglet, filet, carré de veau, quasi, côte maturée, whole veal/half veal/lamb) have
+  a capacity per window. The capacity is **the most the house delivered for that window last year**, the one number
+  the data can defend. **His own volume of last year is guaranteed** (or 15 % of the window). Beyond that he gets
+  only what no regular of last year is still owed. The rest goes on a **waiting list, never promised**, said with
+  the reason: « trois kilos réservés, cinq en liste d'attente, il n'y a qu'un ris par veau ». A cancellation moves
+  the waiting list up, oldest first, with an activity line « à le prévenir ».
+- Refused in the backend: blocked account, a day the client is not delivered, outside 19–24/12 and 26–31/12, after
+  the deadline (whole veal/lamb and matured ribs: a week before; carcasses: 2 days; the rest: the day before).
+- **A reservation is not an order.** No stock, order or invoice is touched. The order is taken nearer the date, and
+  the agent says so.
+- **Page « Carnet des fêtes »** (Ventes) for Damien: a bar per scarce piece (reserved / waiting list / capacity), who
+  booked what (with the actor icon), the shortfall to buy, and the holiday requests still only in text. It refreshes
+  live on `festive.*` events, so in the video the bar fills while the agent is on the phone.
+
+**Files.** All new except one-line registrations:
+- New: `apps/backend/app/services/festive.py` (all the rules), `routers/festive.py`, `apps/ai/app/tools/festive.py`,
+  `apps/ai/tests/test_festive.py`, `apps/web/src/pages/festive/index.tsx`.
+- **Alexander (lane A), please check two things in your files:** one rule in `BASE_RULES` (`prompts.py`, the
+  « Fêtes (Noël, réveillon…) » line: holiday requests only, create_draft_order not used for those dates), and the
+  `festive` import in `tools/__init__.py`. The rebase on your `truck` import conflicted, and **both imports are
+  kept**. The four tools take `client_id`, so `call_guard` covers them; there is a test for it.
+- **Jed (lane C):** a route `festive` in `routes.tsx` and one nav item in `nav.ts`. The page uses only `@/ui`, and
+  its types are local (new endpoints only, nothing changed in `packages/shared`). Typecheck and the native-controls
+  check pass. **Not looked at in a browser yet: please have a look and restyle freely.**
+- Backend: new table `festive_reservations` (`crud/__init__.py`), emptied by `make reset` (`datapack.py`, one line),
+  and the router registered in `main.py`.
+
+**Verified on the merged code (rebased on `550a14b`):**
+- Unit tests in the `ai` container: **140 pass**. 1 fails, and it was already failing on `main`
+  (`test_identify_caller_does_not_switch_client_on_a_guess`, `KeyError: 'idf'`, lane A).
+- `make calls` **6/6** (median 2 668 ms). Before the rebase: `make jury` **20/20** on the invariants (median 2 455 ms),
+  and no jury call used a festive tool.
+- Four holiday calls through `POST /chat` (voice mode), all correct, no order created: F1 « comme l'an dernier »
+  (4 lines reserved on 24/12), F2 a new client asking 8 kg of ris (3 reserved + 5 on the waiting list, said
+  honestly), F3 Vergnaud asks about filet for New Year then reserves 20 kg, F4 Lacour blocked → refused and logged.
+- Cost: +4 tool schemas ≈ +7 % input tokens per call, read from cache.
+
+**Claudio:** these four calls would make good scenarios (I have the script). And the « comme l'an dernier »
+call + the live board is my proposal for the video's « wow » moment.
+**Known, not mine:** the agent says « vous » to Céline, who says « tu » (the tu/vous item in my jury findings).
 
 ## 2026-11-24 02:25 (real clock, `date`) · Alexander's session (lane A) · outgoing call heard by voice
 **Done:**

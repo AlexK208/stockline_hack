@@ -319,6 +319,7 @@ class VoiceConnection:
             if early and not opening:  # (an outgoing call opens with the agent's own first sentence, no instant word)
                 with suppress(Exception):
                     ack = await choose_ack(early, not conv.history, erp, conv.acks, blocked)
+            ack = outgoing_ack(ack, conv)
             if ack:
                 speaker.speak(ack)
                 await show()
@@ -342,6 +343,7 @@ class VoiceConnection:
             if not ack and utterance is not None:  # second chance, on the full sentence, while the model starts
                 with suppress(Exception):
                     ack = await choose_ack(heard, not conv.history, erp, conv.acks, blocked)
+                ack = outgoing_ack(ack, conv)
                 if ack:
                     speaker.speak(ack)
                     await show()
@@ -417,6 +419,15 @@ class VoiceConnection:
         finally:
             if utterance:
                 utterance.cancel()  # interrupted while transcribing: close the provider stream
+
+
+def outgoing_ack(ack: str, conv: Conversation) -> str:
+    """In an outgoing call nothing the client says « corrects » an order he is dictating: « Je corrige. » and « Je
+    modifie ça. » came out where nothing was being corrected. They become a neutral waiting word (not the one just said)."""
+    if ack not in ("Je corrige.", "Je modifie ça.") or not any(m.role == "tool" and m.name == "truck_call_brief" for m in conv.history):
+        return ack
+    last = next((a for a in reversed(conv.acks) if a), "")
+    return "Je regarde." if last == "Un instant." else "Un instant."
 
 
 class Speaker:

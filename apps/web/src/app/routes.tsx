@@ -19,6 +19,7 @@ import ReceivablesPage from "@/pages/receivables";
 import InvoiceDetailPage from "@/pages/invoice-detail";
 import PaymentsPage from "@/pages/payments";
 import RoutesPage from "@/pages/routes";
+import FestivePage from "@/pages/festive";
 import ActivityPage from "@/pages/activity";
 import VoicePage from "@/pages/voice";
 import HistoryPage from "@/pages/history";
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
       { path: "invoices/:id", element: <InvoiceDetailPage /> },
       { path: "payments", element: <PaymentsPage /> },
       { path: "routes", element: <RoutesPage /> },
+      { path: "festive", element: <FestivePage /> },
       { path: "activity", element: <ActivityPage /> },
       { path: "voice", element: <VoicePage /> },
       { path: "history", element: <HistoryPage /> },

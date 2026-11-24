@@ -409,7 +409,6 @@ function Replaces({ productId }: { productId: Id }) {
 const KIND_TONE: Record<string, Tone> = {
   "l'an dernier": "violet",
   "habitude": "info",
-  "réservation": "foreground",
   "promo": "success",
   "lot à écouler": "warning",
 };

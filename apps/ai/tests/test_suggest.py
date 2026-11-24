@@ -30,7 +30,6 @@ def facts(**over):
             {"productId": "prd_p", "category": "charcuterie", "unit": "kg", "qty": 60, "orders": 5},
         ]},
         "seasons": [{"from": "2025-11-16", "to": "2025-12-06", "orders": 6, "products": []}],
-        "christmas": [{"from": "2025-12-15", "to": "2025-12-24", "orders": 4, "products": []}],
     }
     f.update(over)
     return f
@@ -98,15 +97,11 @@ def test_permanent_discount_is_not_a_promo():
     assert rank(facts(usual=[], rules=[{**RULE, "validTo": None, "validFrom": "2025-01-01"}])) == []
 
 
-def test_reservation_only_for_christmas_deliveries_and_in_time():
-    xmas = [{"from": "2025-12-15", "to": "2025-12-24", "orders": 4, "products": [{"productId": "prd_0005", "unit": "kg", "qty": 300, "orders": 4}]}]
-    f = dict(usual=[], christmas=xmas, products=[product("prd_0005", category="carcasses", caliber="demi 65-80 kg")],
-             lastYear={"orders": 50, "products": [{"productId": "prd_0005", "category": "carcasses", "unit": "kg", "qty": 900, "orders": 12}]})
-    assert rank(facts(**f)) == []  # delivered 26/11: not for the holidays
-    out = rank(facts(**f, deliveryDate="2026-12-22"))
-    assert [(c["productId"], c["reasonKind"], c.get("pieces")) for c in out] == [("prd_0005", "réservation", 1)]
-    assert "15/12" in out[0]["reasonText"]
-    assert rank(facts(**f, deliveryDate="2026-12-22", today="2026-12-16")) == []  # past the booking deadline
+def test_nothing_on_the_carnet_des_fetes_dates():
+    """19–31 December go through the carnet des fêtes (tools/festive.py): no order there, so nothing to add to."""
+    assert rank(facts(deliveryDate="2026-12-22")) == []
+    assert rank(facts(deliveryDate="2026-12-31")) == []
+    assert [c["productId"] for c in rank(facts(deliveryDate="2026-12-18"))] == ["prd_a"]
 
 
 # ───────────────────────── suggest(): the seed data, through the ERP ─────────────────────────
@@ -155,10 +150,15 @@ async def test_seed_leroy_refuses_substitutes():
 
 @seed
 async def test_seed_zero_stock_is_never_suggested():
-    # ris de veau and onglet are at zero; at Christmas Peyronnet takes 5× more ris de veau than the rest of the year
-    for client_id, day in [("cli_0001", "2026-11-26"), ("cli_0001", "2026-12-22"), ("cli_0024", "2026-11-26"), ("cli_0008", "2026-11-26")]:
+    # ris de veau and onglet are at zero (Peyronnet takes 5× more ris de veau in mid-December than the rest of the year)
+    for client_id, day in [("cli_0001", "2026-11-26"), ("cli_0001", "2026-12-15"), ("cli_0024", "2026-11-26"), ("cli_0008", "2026-11-26")]:
         ids = {c["productId"] for c in await suggested(client_id, day)}
         assert not ids & {"prd_0015", "prd_0038"}, (client_id, day, ids)
+
+
+@seed
+async def test_seed_christmas_week_is_left_to_the_carnet_des_fetes():
+    assert await suggested("cli_0001", "2026-12-22") == []
 
 
 @seed

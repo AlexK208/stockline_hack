@@ -144,7 +144,7 @@ def run(coro):
 def test_brief_follows_the_clients_rule_and_caps_the_complement():
     brief = run(tc.truck_brief(FakeErp(leroy(), {"prd_0014": 400}), "ord_020800"))
     assert brief["substitution"] == "refuse" and "AUCUN produit" in brief["do"]
-    assert brief["maxComplementKg"] == 9.0 and brief["truck"]["etaSay"] == "vers 5 h 50"
+    assert brief["missingKg"] == 4.5 and brief["maxComplementKg"] == 6.5 and brief["truck"]["etaSay"] == "vers 5 h 50"
     assert brief["problems"][0]["options"][0]["productId"] == "prd_0014"
 
 
@@ -164,10 +164,17 @@ def test_complement_is_written_dated_today_and_confirmed():
     assert result["status"] == "confirmed" and result["truck"]["etaSay"] == "vers 5 h 50"
 
 
-def test_complement_is_refused_above_twice_what_is_missing():
+def test_complement_cap_is_what_is_missing_plus_a_margin():
+    assert tc.complement_cap(4.5) == 6.5 and tc.complement_cap(5) == 7.0  # never less than 2 kg of margin
+    assert tc.complement_cap(21) == 25.2 and tc.complement_cap(61) == 73.2  # 20 % on a big line
+    assert tc.complement_cap(0) == 0.0
+
+
+def test_complement_is_refused_above_the_cap():
     erp = FakeErp(leroy(), {"prd_0009": 400})
-    with pytest.raises(ValueError, match="Trop pour un complément"):
-        run(tc.add_complement(erp, "ord_020800", [{"productId": "prd_0009", "qty": 20}]))
+    for too_much in (20, 9, 7):  # 4,5 kg missing: 6,5 kg at most (« twice the missing weight » let 9 kg through)
+        with pytest.raises(ValueError, match="Trop pour un complément"):
+            run(tc.add_complement(erp, "ord_020800", [{"productId": "prd_0009", "qty": too_much}]))
     assert not erp.posts
 
 
@@ -267,3 +274,63 @@ def test_report_when_the_client_refuses_the_replacement_already_loaded():
     assert kept["title"] == "Appel avant camion : Onglet de bœuf remplacé — client prévenu, garde 5 kg Bavette d'aloyau PAD"
     gone = build_report(history(brief, ("take_off_truck", {"number": "CMD-2026-006238", "removed": "5 kg Bavette d'aloyau PAD"})))["body"]
     assert gone["title"].endswith("remplacement refusé par le client, retiré du camion") and "non facturé" in gone["description"]
+
+
+def test_report_when_the_person_who_decides_was_not_on_the_line():
+    # Claudio's replay R4: the commis answers, the agent writes nothing, and the report said « client prévenu », resolved.
+    brief = {**BRIEF, "askFor": {"name": "Hugo Mazaud", "role": "Chef-patron"}}
+    h = history(brief, answers=0) + [
+        ChatMessage(role="user", content="C'est le commis, le chef arrive à sept heures."),
+        ChatMessage(role="assistant", content="Très bien, je rappellerai."),
+        ChatMessage(role="user", content="Mettez-lui du faux-filet, oui oui allez-y."),
+        ChatMessage(role="assistant", content="Je ne peux rien ajouter sans lui."),
+    ]
+    report = build_report(h)
+    body = report["body"]
+    assert body["title"] == "Appel avant camion : Onglet de bœuf manquant — Hugo Mazaud non joint, message laissé : à rappeler"
+    assert body["status"] == "open" and body["severity"] == "high" and "a-rappeler" in body["tags"] and report["settles"] is None
+
+
+@pytest.mark.parametrize("said", [
+    "C'est pas Hugo, c'est le plongeur.", "Le chef n'est pas là.", "Il est pas encore arrivé.", "Je suis que le commis, moi.",
+    "Monsieur Mazaud n'est pas là, rappelez vers sept heures.", "C'est pas moi qui décide.", "La patronne arrive à six heures.",
+])  # fmt: skip
+def test_the_absent_decider_is_heard_in_the_callers_own_words(said):
+    from app.services.call_report import decider_absent
+
+    assert decider_absent([said], "Hugo Mazaud", [])
+
+
+@pytest.mark.parametrize("said", [
+    "Non, laissez tomber, je me débrouille.", "Il arrive quand le camion ?", "L'onglet n'est pas là, d'accord.",
+    "C'est pas possible ça.", "Oui, allez-y.", "Vous me faites un geste au moins ?",
+])  # fmt: skip
+def test_a_client_who_answers_himself_is_not_taken_for_absent(said):
+    from app.services.call_report import decider_absent
+
+    assert not decider_absent([said], "Hugo Mazaud", [])
+
+
+def test_the_agents_own_note_also_keeps_the_call_open_but_a_decision_closes_it():
+    from app.services.call_report import decider_absent
+
+    assert decider_absent([], None, ["À rappeler : chef absent jusqu'à 7 h"])
+    brief = {**BRIEF, "askFor": {"name": "Hugo Mazaud"}}
+    h = history(brief, ("add_to_truck", COMPLEMENT), answers=0) + [ChatMessage(role="user", content="C'est pas Hugo. Ah, le voilà, je vous le passe.")]
+    assert "a-rappeler" not in build_report(h)["body"]["tags"]  # the chef came to the phone and decided
+
+
+def test_report_of_a_short_weight_does_not_say_missing():
+    brief = {**BRIEF, "problems": [{**BRIEF["problems"][0], "kind": "short", "productName": "Côte de bœuf", "ordered": 16.0, "onTruck": 11.2}]}
+    assert build_report(history(brief))["body"]["title"] == "Appel avant camion : Côte de bœuf en poids court — client prévenu, pas de remplacement"
+
+
+def test_no_correction_word_in_an_outgoing_call():
+    from app.services.voice_session import Conversation, outgoing_ack
+
+    incoming = Conversation(id="a")
+    assert outgoing_ack("Je corrige.", incoming) == "Je corrige."  # an ordinary call keeps its words
+    outgoing = Conversation(id="b", history=[ChatMessage(role="tool", tool_call_id="x", name="truck_call_brief", content="{}")])
+    assert outgoing_ack("Je corrige.", outgoing) == "Un instant." and outgoing_ack("Très bien.", outgoing) == "Très bien."
+    outgoing.acks = ["Un instant."]
+    assert outgoing_ack("Je modifie ça.", outgoing) == "Je regarde."

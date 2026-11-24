@@ -3,20 +3,20 @@ suggest_items: at most 2 extra products worth offering at the end of an order ca
 check. Plain code over ERP data, no model: the model only phrases what comes back. [] is a valid answer.
 
     gather()  reads the facts from the ERP (one round of parallel reads)
-    rank()    pure: the five sources, the hard filters that need no ERP, the ranking (tested on crafted facts)
+    rank()    pure: the four sources, the hard filters that need no ERP, the ranking (tested on crafted facts)
     then check_items (desk.py) = the same stock / lead time / delivery-day checks as the order tools
 
 Sources (reasonKind), in this order of priority:
     l'an dernier  seasonal for THIS client: in those weeks of the last two years (±10 days) it was in a clearly larger
                   share of his deliveries than over the last 12 months (a staple bought all year is "habitude")
-    réservation   veal, lamb and matured ribs ordered for Christmas before: booked a week ahead
     habitude      in the usual basket (60 days, one delivery out of two or more) but not in this order
     promo         a temporary price rule (with an end date) valid ON the delivery date, for a product the client buys
     lot à écouler a lot expiring 1 to 3 days after the delivery (the client still has a day to sell it), in a
                   category the client buys
 Hard filters: blocked client → []; never a product already in the order; inactive products out; a client who
 refuses substitutions only gets products he has bought himself; then check_items: stock at the date, lead time,
-delivery day (a reservation skips the stock check: it is booked precisely because the stock is not there yet).
+delivery day. Deliveries from 19 to 31 December: [] (those dates go through the carnet des fêtes, tools/festive.py,
+which proposes last year's holiday basket itself; no order is taken for them).
 """
 
 from __future__ import annotations
@@ -40,10 +40,9 @@ CATEGORY_MIN_ORDERS = 2
 SEASON_LIFT = 1.5  # share of deliveries in those weeks ≥ 1.5 × the share over the last 12 months
 SEASON_MIN_ORDERS = 2  # and in at least two deliveries of those weeks (one is chance)  # "buys this category" = at least two orders with it in the last 12 months
 # Booked a week ahead (data/context/02-journee-type.md): whole and half veal, lamb carcass, 21-day matured ribs.
-RESERVE_DAYS = {"prd_0004": 7, "prd_0005": 7, "prd_0006": 7, "prd_0011": 7}
-CHRISTMAS = ("12-15", "12-24")  # deliveries for the holidays
+FESTIVE = ("12-19", "12-31")  # the carnet des fêtes' dates (tools/festive.py WINDOW_DAYS): no order, no suggestion
 REFUSES_SUBSTITUTES = re.compile(r"(refuse|aucune|jamais|sans l['’]appeler|appeler avant)", re.I)
-KIND_RANK = {"l'an dernier": 0, "réservation": 1, "habitude": 2, "promo": 3, "lot à écouler": 4}
+KIND_RANK = {"l'an dernier": 0, "habitude": 1, "promo": 2, "lot à écouler": 3}
 
 
 def refuses_substitutes(preferences: str | None) -> bool:
@@ -79,7 +78,6 @@ async def gather(erp: ErpClient, client_id: str, delivery_date: str) -> dict:
     """Every ERP fact the ranking needs, read in parallel."""
     day = date.fromisoformat(delivery_date)
     seasons = [(shift_year(delivery_date, y) - timedelta(days=SEASON_HALF_WINDOW), shift_year(delivery_date, y) + timedelta(days=SEASON_HALF_WINDOW)) for y in range(1, YEARS_BACK + 1)]
-    xmas = [(f"{day.year - y}-{CHRISTMAS[0]}", f"{day.year - y}-{CHRISTMAS[1]}") for y in range(1, YEARS_BACK + 1)]
     meta, client = await asyncio.gather(erp.get("/api/meta"), erp.get(f"/api/clients/{enc(client_id)}"))
     year_ago = (date.fromisoformat(meta["today"]) - timedelta(days=365)).isoformat()
     buy = lambda a, b: erp.get(f"/api/clients/{enc(client_id)}/purchases", {"from": str(a), "to": str(b)})  # noqa: E731
@@ -90,7 +88,6 @@ async def gather(erp: ErpClient, client_id: str, delivery_date: str) -> dict:
         erp.get("/api/price-rules", {"active": "true", "clientId": client_id}),
         buy(year_ago, meta["today"]),
         *(buy(a, b) for a, b in seasons),
-        *(buy(a, b) for a, b in xmas),
     )
     open_ids = [o["id"] for o in client.get("recentOrders") or [] if o["deliveryDate"] == delivery_date and o["status"] in ("draft", "confirmed")]
     orders = await asyncio.gather(*(erp.get(f"/api/orders/{enc(i)}") for i in open_ids))
@@ -104,16 +101,15 @@ async def gather(erp: ErpClient, client_id: str, delivery_date: str) -> dict:
         "stock": stock if isinstance(stock, list) else stock.get("items", []),
         "rules": rules if isinstance(rules, list) else rules.get("items", []),
         "lastYear": last_year,  # {orders, products}: last 12 months
-        "seasons": [{"from": str(a), "to": str(b), **got} for (a, b), got in zip(seasons, rest[:YEARS_BACK])],
-        "christmas": [{"from": a, "to": b, **got} for (a, b), got in zip(xmas, rest[YEARS_BACK:])],
+        "seasons": [{"from": str(a), "to": str(b), **got} for (a, b), got in zip(seasons, rest)],
     }
 
 
 def rank(f: dict) -> list[dict]:
     """The candidates, best first, one per product, before the stock / lead-time checks. Pure: facts in, list out."""
-    if f["client"].get("status") == "blocked":
+    if f["client"].get("status") == "blocked" or FESTIVE[0] <= f["deliveryDate"][5:] <= FESTIVE[1]:
         return []
-    day, today = f["deliveryDate"], f["today"]
+    day = f["deliveryDate"]
     product = {p["id"]: p for p in f["products"]}
     bought = {r["productId"]: r for r in f["lastYear"]["products"]}  # last 12 months
     cat_orders: dict[str, int] = {}
@@ -166,18 +162,6 @@ def rank(f: dict) -> list[dict]:
             f"à cette période les années d'avant : {round(share * 100)} % de ses livraisons, contre {round(usual_share * 100)} % sur l'année",
             " · ".join(e["years"]))
 
-    # réservation: booked a week ahead, ordered for Christmas before, delivery in the Christmas weeks, still in time
-    if CHRISTMAS[0] <= day[5:] <= CHRISTMAS[1]:
-        deadline = (date.fromisoformat(day) - timedelta(days=7)).isoformat()
-        for pid, days in RESERVE_DAYS.items():
-            years = [(x["from"][:4], r) for x in f["christmas"] for r in x["products"] if r["productId"] == pid]
-            if years and today <= deadline:
-                y, r = years[0]
-                add(pid, r["qty"] / r["orders"], "réservation",
-                    f"se réserve une semaine avant pour Noël : avant le {dd_mm(deadline)}",
-                    f"Noël {y} : {fmt(round(r['qty'], 1))} {r['unit']} · réserver avant le {dd_mm(deadline)}",
-                    booking=True)
-
     # habitude: in the usual basket, missing from this order
     for u in sorted(f["usual"], key=lambda u: -u["frequency"]):
         if u["frequency"] >= HABIT_MIN_FREQUENCY:
@@ -223,11 +207,8 @@ async def suggest(erp: ErpClient, client_id: str, delivery_date: str) -> list[di
         return []
     ok: list[dict] = []
     for c, row in zip(candidates, checked["items"]):
-        problems = problems_of({"items": [row]})
-        if c.get("booking"):  # booked ahead: the stock is not there yet, only the lead time counts
-            problems = [p for p in problems if "Trop tard" in p]
-        if not problems:
-            ok.append({k: v for k, v in c.items() if k != "booking"})
+        if not problems_of({"items": [row]}):
+            ok.append(c)
         if len(ok) == MAX_SUGGESTIONS:
             break
     return ok
