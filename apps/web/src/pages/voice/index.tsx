@@ -7,12 +7,15 @@
  * Hold Space (or the big button) to speak as the caller; the agent answers with streamed text, tool calls and audio.
  * Per-turn latency chips + running average; live ERP writes of the voice agent on the right.
  *
+ * « Avant le camion » (?camion=1, button in the header): a left column with the calls the agent must make before the
+ * trucks leave, each with an « Appeler » button that starts the outgoing call on this session. See ./truck-board.tsx.
+ *
  * Mode démo (?demo=1, button in the header): for the projector and the video. Hides the lab details (providers,
  * latency figures, tool rows, ERP event log) and enlarges the conversation and the two call cards.
  */
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useUrlState } from "@/lib/url-state";
-import { FlaskConical, MicOff, Mic, Presentation, RotateCcw, Send, VolumeX } from "lucide-react";
+import { FlaskConical, MicOff, Mic, Presentation, RotateCcw, Send, Truck, VolumeX } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, Dot, IconButton, Input, Kbd, Page, PageHeader, Spinner, Tabs } from "@/ui";
 import { useVoiceSession, type Activity, type Conn } from "@/features/assistant/useVoiceSession";
@@ -22,6 +25,7 @@ import { CommandMode } from "./command";
 import { LiveActivity } from "./live-activity";
 import { MetricsBar } from "./metrics";
 import { LevelBars, Timeline } from "./timeline";
+import { TruckBoard, type TruckCall } from "./truck-board";
 
 const isTypingTarget = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -52,9 +56,18 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
   const [text, setText] = useState("");
   const [demoParam, setDemoParam] = useUrlState("demo", "", { keepPage: true });
   const demo = demoParam === "1";
+  const [camionParam, setCamionParam] = useUrlState("camion", "", { keepPage: true });
+  const camion = camionParam === "1";
+  const [calling, setCalling] = useState<string | undefined>();
   // Start of the current call (business clock, like ERP events): the order card only follows orders written after it.
   const [since, setSince] = useState(() => businessNow().toISOString());
-  const newSession = () => { setSince(businessNow().toISOString()); v.reset(); };
+  const newSession = () => { setSince(businessNow().toISOString()); setCalling(undefined); v.reset(); };
+  // An outgoing call is a call of its own: fresh session (empty call cards), then « /appel ord_… », the agent speaks first.
+  const startTruckCall = (c: TruckCall) => {
+    newSession();
+    setCalling(c.orderId);
+    v.sendText(c.startWith);
+  };
   const spaceDown = useRef(false);
 
   // Space = push-to-talk (outside text fields), Esc = stop playback.
@@ -116,6 +129,15 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
             {v.activity === "speaking" ? <Button size="sm" variant="ghost" icon={VolumeX} kbd="Échap" onClick={v.stopPlayback}>Couper</Button> : null}
             <Button
               size="sm"
+              variant={camion ? "primary" : "default"}
+              icon={Truck}
+              onClick={() => setCamionParam(camion ? "" : "1")}
+              title="Les appels à passer avant le départ des camions (GET /ai/outbound/truck-calls)"
+            >
+              Avant le camion
+            </Button>
+            <Button
+              size="sm"
               variant={demo ? "primary" : "default"}
               icon={demo ? FlaskConical : Presentation}
               onClick={() => setDemoParam(demo ? "" : "1")}
@@ -128,6 +150,11 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
         }
       />
       <div className="flex min-h-0 flex-1">
+        {camion ? (
+          <aside className={cn("flex shrink-0 flex-col border-r border-border bg-card", demo ? "w-[340px] xl:w-[400px]" : "w-[300px] xl:w-[340px]")}>
+            <TruckBoard canCall={ready && v.activity === "idle"} onCall={startTruckCall} activeOrderId={calling} />
+          </aside>
+        ) : null}
         <section className="flex min-w-0 flex-1 flex-col">
           {demo ? null : <MetricsBar turns={v.turns} />}
           <Timeline turns={v.turns} activity={v.activity} level={v.level} demo={demo} />
