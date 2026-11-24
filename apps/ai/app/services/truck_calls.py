@@ -39,8 +39,13 @@ TOLERANCE = 0.05  # a weight within ±5 % of the order is a normal weighing
 SHORT_EUR = 15.0  # below this a short weight is not worth waking a chef up
 OVER_EUR = 50.0  # the client pays more than he ordered: we only call above this
 MAX_OPTIONS = 3
-COMPLEMENT_FACTOR = 2.0  # a complement never weighs more than twice what is missing
+# A complement repairs a delivery: it weighs what is missing, plus a margin because pieces do not come by the gram
+# (4,5 kg of onglet replaced by three bavettes of 1,5 to 2 kg). « Twice the missing weight » let « rajoutez vingt
+# kilos » through on a 21 kg line (Claudio's replay R2): the margin is now 20 %, and never less than 2 kg.
+COMPLEMENT_MARGIN = 0.20
+COMPLEMENT_MARGIN_MIN_KG = 2.0
 TAG = "appel-camion"
+NOT_REACHED_TAG = "a-rappeler"  # on the report of a call where the person who decides was not on the line
 COMPLEMENT_NOTE = "Complément camion"
 KIND_LABEL = {"missing": "absent du camion", "short": "poids court", "over": "poids au-dessus de la commande", "replaced": "remplacé dans le camion"}
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -48,6 +53,11 @@ JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
 
 def r2(x: float) -> float:
     return round(x + 0.0, 2)
+
+
+def complement_cap(missing_qty: float) -> float:
+    """The most a complement may weigh for this much missing: 4,5 → 6,5 kg, 21 → 25,2 kg."""
+    return r2(missing_qty + max(COMPLEMENT_MARGIN_MIN_KG, COMPLEMENT_MARGIN * missing_qty)) if missing_qty > 0 else 0.0
 
 
 def euros(x: float) -> str:
@@ -221,7 +231,8 @@ async def call_events(erp: ErpClient, client_id: str, order_id: str, today: str)
     events = await erp.get(f"/api/clients/{enc(client_id)}/events", {"limit": 12})
     events = events.get("items", events) if isinstance(events, dict) else events
     about = [e for e in events or [] if e.get("orderId") == order_id and str(e.get("at") or "")[:10] == today]
-    report = next((e for e in about if TAG in (e.get("tags") or [])), None)
+    reports = [e for e in about if TAG in (e.get("tags") or [])]  # newest first
+    report = next((e for e in reports if NOT_REACHED_TAG not in (e.get("tags") or [])), reports[0] if reports else None)
     issue = next((e for e in about if TAG not in (e.get("tags") or []) and e.get("status") == "open"), None)
     return report, issue
 
@@ -359,7 +370,8 @@ async def truck_brief(erp: ErpClient, order_id: str) -> dict:
         ),
         "substitution": rule,
         "substitutionRule": rule_text or "La fiche ne dit rien sur les substitutions : demande.",
-        "maxComplementKg": r2(missing_qty * COMPLEMENT_FACTOR),
+        "missingKg": r2(missing_qty),
+        "maxComplementKg": complement_cap(missing_qty),
         "alreadyAdded": [f"{o['number']} : " + ", ".join(f"{l['qty']:g} {l.get('unit', 'kg')} {l['productName']}" for l in o["lines"]) for o in done],
         "do": DO["replaced" if replaced else rule],
     }
@@ -379,8 +391,8 @@ async def add_complement(erp: ErpClient, order_id: str, lines: list[dict]) -> di
     (the ERP attaches it to the day's route). Everything is checked here, in code:
       - the order is on a truck of this morning and something is really missing on it;
       - each product is in stock today for the quantity asked;
-      - the complement weighs no more than twice what is missing (it repairs a delivery, it is not a way around the
-        order deadline);
+      - the complement weighs no more than what is missing plus a margin (see complement_cap: it repairs a delivery,
+        it is not a way around the order deadline);
       - one complement per order (said twice, written once).
     `lines`: [{"productId", "qty"}]. → the confirmed order."""
     brief = await truck_brief(erp, order_id)
@@ -397,8 +409,8 @@ async def add_complement(erp: ErpClient, order_id: str, lines: list[dict]) -> di
     total = sum(q for _, q in wanted)
     if total > brief["maxComplementKg"] + 1e-6:
         raise ValueError(
-            f"Trop pour un complément : il manque {brief['maxComplementKg'] / COMPLEMENT_FACTOR:g} kg, le complément est limité à "
-            f"{brief['maxComplementKg']:g} kg. Pour plus, c'est une commande normale pour sa prochaine livraison."
+            f"Trop pour un complément : il manque {brief.get('missingKg', 0):g} kg, le complément est limité à "
+            f"{brief['maxComplementKg']:g} kg. Ce qu'il veut en plus, c'est une commande normale pour sa prochaine livraison."
         )
     today = brief["order"]["deliveryDate"]
     levels = await erp.get("/api/stock/availability", {"date": today, "productIds": ",".join(i for i, _ in wanted)})
@@ -474,8 +486,9 @@ OPENING_NOTE = """[Système : APPEL SORTANT. C'est TOI qui appelles ce client, a
 3. Rien ne s'ajoute sans son oui. Après son oui sur le produit et la quantité : add_to_truck (jamais create_draft_order pour aujourd'hui), puis dis le total et l'heure de passage prévue (etaSay : une prévision, dis « prévu vers »).
 4. Ne dis rien qui ne soit pas dans le brief ou dans sa fiche. S'il demande le lot, l'origine, la date limite ou le calibre du remplacement : c'est dans l'option, réponds précisément. Ce qui n'y est pas (quelle bête, qui a préparé), tu ne le sais pas et tu le dis.
 5. S'il veut le produit d'origine plus tard : dis ce que dit backInStock, sans promettre de date, et rien de plus. Ne propose pas de toi-même de prendre une commande ; s'il en demande une pour sa prochaine livraison, prends-la avec les outils habituels.
-6. Aucune remise, aucun avoir, aucun geste commercial : seul ce qui est livré est facturé (invoice). S'il réclame un geste, propose que son commercial le rappelle et enregistre-le (log_client_event).
-7. S'il ne veut rien, ou si la personne ne peut pas décider : le reste part normalement. Remercie en une phrase et termine, n'écris rien.
+6. Aucune remise, aucun avoir, aucun geste commercial : seul ce qui est livré est facturé (invoice). Ne promets un rappel de son commercial QUE s'il réclame un geste ou demande à parler à quelqu'un, et enregistre-le alors (log_client_event). Une simple plainte s'enregistre sans rien promettre.
+7. Si la personne qui a décroché n'est pas celle qui décide (commis, plongeur, « le chef n'est pas là ») : n'ajoute et ne retire rien, même si elle dit oui. Dis en une phrase ce qui manque pour qu'elle le transmette, demande à quelle heure rappeler, et enregistre-le avec log_client_event (type call, titre qui commence par « À rappeler : »). L'appel reste à faire.
+   S'il ne veut rien (c'est bien lui, et il dit non) : le reste part normalement. Remercie en une phrase et termine, n'écris rien.
 8. Il est très tôt et il n'a rien demandé : sois bref et concret, jamais commercial. Une question à la fois.]"""
 
 
@@ -566,7 +579,9 @@ async def truck_board(erp: ErpClient) -> dict:
                 "substitution": rule,
                 "substitutionRule": rule_text,
                 "openIssue": pick(issue, "id", "title", "description") if issue else None,
-                "status": "done" if report else "to_call",
+                # done = the client himself was told. A call that only reached someone who cannot decide is still to make.
+                "status": "done" if report and NOT_REACHED_TAG not in (report.get("tags") or []) else "to_call",
+                "lastAttempt": report.get("title") if report and NOT_REACHED_TAG in (report.get("tags") or []) else None,
                 "followUp": bool(report and report.get("status") == "open"),  # called, but a human still has something to do
                 "outcome": pick(report, "id", "title", "description", "status") if report else None,
                 "complements": [pick(c, "id", "number", "totalHt") | {"lines": [f"{l['qty']:g} {l.get('unit', 'kg')} {l['productName']}" for l in c["lines"]]} for c in added],

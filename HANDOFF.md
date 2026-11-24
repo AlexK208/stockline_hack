@@ -17,6 +17,40 @@ Template:
 
 ---
 
+## 2026-11-24 02:35 (real clock, `date`) · Alexander's session (lane A) · fixes from Claudio's replays
+**Done — Claudio's four findings (02:19), all in lane A files. 159 unit tests pass. NOT replayed with the model.**
+1. **Wrong person no longer counts as « client prévenu ».** Two signals, either is enough: the person who picked up
+   says so in his own words (read in code from the transcript, like the yes: « c'est le commis », « le chef arrive à
+   sept heures », « c'est pas Hugo », « je suis que le plongeur », « rappelez vers… »), or the agent's own note
+   (« À rappeler : … », which the call's rules now ask for). Then the report is **open, severity high**, tagged
+   `a-rappeler`, title « … — Hugo Mazaud non joint, message laissé : à rappeler », the ERP's issue stays open, and
+   **the board card stays `to_call`** with a new field `lastAttempt` (the title of that report). When the chef is
+   reached later, the old attempt is closed with the rest. A decision on the truck (complement, take-off) always
+   means he was reached. Checked on the real data without a model.
+   About « it told the whole message before knowing who picked up »: kept on purpose. We dial the client's own
+   kitchen about his own delivery, and the commis is the one who will open the box.
+2. **Cap: what is missing + a margin**, no longer twice. Margin = 20 %, never less than 2 kg: 4,5 → 6,5 kg, 6 → 8,
+   21 → 25,2, 61 → 73,2. « Rajoutez vingt kilos » on 21 kg is now refused by the cap itself. The brief carries
+   `missingKg` and `maxComplementKg`. **Claudio: `DEMO.md` lines 161, 167 and 196 still say « twice » / « 12 kg » /
+   « le double »: with a 6 kg line the limit is now 8 kg.**
+3. A `short` call's report says « en poids court », not « manquant ». « Je corrige. » / « Je modifie ça. » are no
+   longer said in an outgoing call (they become « Un instant. » / « Je regarde. »).
+4. The call's rules now say: promise a callback from the sales rep ONLY when he asks for a gesture or for someone;
+   a plain complaint is logged without a promise.
+Not done: « Bonne journée à toi » to a commis who never said « tu » (R4). I could not find what triggered it
+without the transcript; send me the commis's exact lines if you have them.
+
+**Claudio:** thanks for the replay with the three tools (0 calls on 26 incoming calls). Please replay R4 (commis) and
+R2 (« rajoutez vingt kilos ») once on this commit: the wording of rules 6 and 7 changed and only you have run them.
+
+**Pablo, on « le carnet des fêtes »:** I read your two changes in my files. The `BASE_RULES` line and the `festive`
+import are fine as they are; the guard covers the four tools as you say. In my sandbox your branch runs **141/141**.
+The `KeyError: 'idf'` you see is not on `main`: `test_one_client_per_call.py` imports its `clients()` helper from
+`tests/test_call_prep.py`, and your `ai` image holds an old copy of that file (only `app/` is mounted, `tests/` is
+baked in at build time). `make rebuild`, or `make test` on the host, and it passes.
+
+**Broken / open questions:** none new.
+
 ## 2026-11-24 02:33 (real clock, `date`) · Claudio's session (lane D) · `main`
 **Jed — have you started the « Avant le camion » panel (Alexander's 02:20 entry)?** It's not on `main` or on any
 pushed branch yet, and nothing in `apps/web` reads `GET /outbound/truck-calls`. I'm **not** building it, so we don't

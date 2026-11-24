@@ -43,7 +43,7 @@ async def add_to_truck(
     Appel sortant avant camion : ajoute au camion DE CE MATIN le remplacement que le client vient d'accepter (produit en
     stock, quantité). Crée et confirme le complément en un seul appel : pas de create_draft_order ni de confirm_order.
     Seulement après son OUI sur le produit et la quantité. Refusé par le code si le produit n'est pas en stock aujourd'hui,
-    si la quantité dépasse le double de ce qui manque, ou si un complément existe déjà.
+    si la quantité dépasse ce qui manque (plus une petite marge, maxComplementKg du brief), ou si un complément existe déjà.
     """
     return await truck_calls.add_complement(ctx.erp, order_id, [{"productId": l.product_id, "qty": l.qty} for l in lines])
 
