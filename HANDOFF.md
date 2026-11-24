@@ -17,6 +17,128 @@ Template:
 
 ---
 
+## 2026-11-24 02:20 (real clock, `date`) · Alexander's session (lane A) · « avant le camion » (outgoing calls)
+**Done — the headline feature. The agent now CALLS the client before the truck leaves.**
+Stockline's last message says: build the coolest thing on top of what exists. Three arenas of judges picked this one,
+and the seed data turns out to contain the exact situation: the onglet lot was written off at the 03:10 night
+inventory, two restaurants have it on today's order, the playbook says « les appeler AVANT le départ du camion », and
+the Corrèze truck leaves at **04:45**. Nobody has time for those calls at that hour. The agent makes them.
+
+- **`GET http://localhost:4100/outbound/truck-calls`** (new, read-only, no model). The morning check, built in code
+  from the ERP: 39 weighed orders, 154 lines. Returns `checked`, `calls[]`, `tolerated[]`, `atStake` (€ missing on the
+  trucks), `recovered` (€ put back by the calls), `toCall`. Each call: `orderId`, `orderNumber`, `clientName`, `city`,
+  `contact{name,role,phone}`, `truck{route,driver,departure,eta,etaSay,stop,stops}`, `problems[]` (`kind` =
+  missing | short | over | replaced, `productName`, `ordered`, `onTruck`, `amount`, `replacedBy`), `substitution`
+  (ok | refuse | ask) + `substitutionRule` (the sentence of the client's file), `openIssue` (the ERP's own open event),
+  `status` (to_call | done), `followUp`, `outcome{title,description}`, `complements[]`, `recovered`, **`startWith`**.
+  `tolerated[]` is the judgement part: Les Saveurs de Panazol got 9,45 kg of bavette for 9 ordered (+5 %, +7,69 €) and
+  is NOT called (« écart de pesée normal »). Call rules are at the top of `services/truck_calls.py`.
+- **Starting a call:** send the call's `startWith` (`/appel ord_020800`) as a normal `text` message on WS /voice.
+  **It already works from the text box of the Voix page, with no front-end change.** The agent speaks first; then
+  push-to-talk as usual. The page receives a `transcript` line « Appel sortant → Restaurant Leroy (Nicolas Peyrat) ·
+  Onglet de bœuf absent du camion », then `agent_tool` for `identify_caller` (client card) and `truck_call_brief`
+  (the facts), then the agent's text and audio.
+- **Two real calls in the seed, two different conversations, because the two clients' files differ:**
+  - `ord_020800` Restaurant Leroy (Ussel, truck 04:45) : 4,5 kg of onglet missing, file says « Refuse les
+    substitutions ». The agent states the fact and asks what he wants. It names no product unless he asks.
+  - `ord_020798` Le Bœuf Limousin (Ambazac, truck 05:00) : the team already put 5 kg of bavette on the truck in place
+    of the onglet; file says « accepte… si on prévient ». The agent tells him, reads the label if asked (origin, size,
+    lot received 18/11, use-by 09/12, and says the exact lot number is on the box), and takes the bavette off the truck
+    if he refuses it.
+- **Three new tools, all checked in code:** `truck_call_brief` (facts only: reason = the stock movement's own note,
+  real stock, his price, when it comes back = the draft purchase order, « sans garantie »), `add_to_truck` (a
+  complement order dated today, confirmed at once, attached to the day's route; refused without the client's yes in
+  his last sentence, without stock today, above twice the missing weight, or a second time), `take_off_truck` (only a
+  replacement line, never what he ordered). One call = one client still applies to all three.
+- **After the call** the report goes to the client's history (tag `appel-camion`, attached to the order), and the
+  ERP's own open issue (« il faut le prévenir avant le départ du camion ») is closed with the outcome. If the agent
+  left something for a human (« chef absent », « demande un geste »), the report and the issue stay open.
+- The rules of the outgoing call travel in the call's first message, not in the system prompt: `prompts.py` is
+  untouched, an ordinary incoming call runs on the same prompt as before. **Voice freeze respected.**
+- Tests: 134 unit tests pass (23 new, `tests/test_truck_calls.py`; Jed's 3 aside tests included); `tests/replay_truck_calls.py` replays a call by typed turns. Replayed with the model by typed turns: 27 turns
+  over 6 calls (complement accepted, « vous me faites un geste ? » refused and logged for Nicolas Bouty, wrong person
+  answers and asks for 20 kg of faux-filet = nothing written, bavette refused then rumsteck added). **Not heard with
+  the real voice, and `make calls` / `make jury` not re-run with the three new tools in the list.**
+
+**Jed, on your 01:26 entry:** the aside filter in my files is fine, kept as is, merged with this change (one import
+line conflicted, nothing else). I ran the outgoing calls' sentences through `is_aside`: none is dropped.
+
+**Jed (lane C) — this is your page now, it replaces the callback board as priority.**
+- A panel « Avant le camion » that polls `GET /outbound/truck-calls` every 3 to 5 s: one card per call (client,
+  contact, what is missing, €, truck + departure time, the client's rule in his file's words), a big **Appeler** button
+  that sends `startWith` as a `text` message on the open voice socket, the `tolerated` lines greyed with their reason,
+  and two counters: `atStake` and `recovered`. After the call the card turns to `done` with `outcome.title`.
+- A countdown to `truck.departure` sells the story (04:45 for Corrèze). The ERP's clock is frozen at 05:00, so use
+  a fake clock that starts at 04:38 when the page opens. Say so in the demo.
+- The `truck_call_brief` tool result (sent as `agent_tool`) has everything for a « fiche d'appel » card.
+
+**Claudio (lane D) — the single story for slides and video:** « 04:38. L'inventaire de nuit a déclassé l'onglet.
+Le camion de Corrèze part dans 7 minutes. Le chef Peyrat refuse les substitutions et a l'onglet à la carte ce midi.
+Personne n'a le temps de l'appeler. L'agent appelle. » Then the call, then the ERP: complement order on the route,
+issue closed, report in the history. Script that worked in replay, for the video:
+`/appel ord_020800` → « Vous vous foutez de moi ? J'ai l'onglet à la carte ce midi. Vous me faites un geste au
+moins ? » → « Bon. Vous avez quoi qui pourrait remplacer ? » → « Mettez-moi quatre kilos et demi de bavette alors. »
+→ « Oui, allez-y. » → « Merci, au revoir. » Lines a juror can try to break it: « rajoutez vingt kilos de faux-filet
+dans le camion » (refused: twice the missing weight at most), « faites-moi un avoir » (no, logged for his rep),
+« c'est quel lot ? ». `make reset` between two runs brings both calls back. DECISIONS.md needs a paragraph; I can
+give you the text.
+
+**Claudio's Claude (lane D) — one thing to BUILD, and it is the most creative part of our demo: « Cassez le matin ».**
+The weak point of the feature above: the seed holds only two calls, both about onglet. A juror will think it is
+scripted. So we let the JURY break the morning. A juror picks a product and types a reason (« chambre froide 2 en
+panne »); we write the lot off; the agent finds by itself every client hit, sorts the calls by truck departure, and
+on each call says the juror's own reason back to the client, follows that client's own substitution rule, and offers
+the house's usual replacement from real stock. The juror then plays one of those clients. Nothing in the agent is
+specific to onglet: **I verified it without a model** on a fresh ERP: writing off `prd_0011` (côte maturée) gives 6
+new calls on the board (8 in all, 3 902 € at stake), the brief says « Chambre froide 2 en panne cette nuit : lot
+écarté par précaution », proposes the entrecôte (the glossary's « Substitutions habituelles ») at the client's
+price, and reads « arrivage attendu mercredi 25 » from the supplier order. **No lane A change is needed.**
+What to build, all in your lane (ERP API only, no model):
+1. `apps/ai/evals/break_morning.py` + a `make chaos PRODUCT=prd_0011 WHY="…"` target. Two kinds of ERP calls:
+   - `POST /api/stock/adjust` `{"productId", "qty": -<onHand>, "reason": "adjustment", "note": WHY}` (the note is
+     what the agent will say as the reason; `GET /api/products/{id}` gives `onHand`; skip if already 0);
+   - for every order of `GET /api/orders?status=prepared&date=<today>&limit=500`, each line of that product that is
+     not a `substituteFor` line: `PATCH /api/orders/{id}/lines/{lineId}` `{"preparedQty": 0}` (the ERP allows this
+     on a prepared order). A `--short 30` option that loads 70 % instead of 0 gives the « poids court » case
+     (called only when the gap is ≥ 5 % and ≥ 15 €).
+   Then print `GET http://localhost:4100/outbound/truck-calls`: who is called, in which order, who is left alone.
+   `make reset` undoes everything.
+2. **Do not stage an overweight** (kind `over`): the board shows it, but the call has no tool to fix it yet. And
+   keep to products with 4 to 6 clients on today's trucks: `prd_0011` côte maturée (6), `prd_0010` entrecôte (5),
+   `prd_0012` filet (4), `prd_0037` foie de veau (4). Paleron hits 17 clients: keep that one for a slide
+   (« 17 clients, 3 camions, 15 minutes : un commercial n'y arrive pas, l'agent passe les appels en même temps »).
+3. Five « cartes sabotage » for the jurors (product + a reason to type) and, for each, two « cartes client » (who
+   you are, your rule in your file's words, one honest line, one line that tries to cheat: « rajoutez vingt kilos »,
+   « mettez-en aussi pour la boucherie d'à côté », « faites-moi un avoir »). Put them in `DEMO.md`.
+4. One eval per staged case. Without a model: the board lists exactly the orders you broke, in departure order.
+   With the model: `apps/ai/tests/replay_truck_calls.py` (mine, typed turns over WS /voice, one model call per turn;
+   `uv run python tests/replay_truck_calls.py ord_… "ligne 1" "ligne 2"` keeps your staging). Invariants to read
+   in the output: no product named first to a client whose file refuses substitutions; no `add_to_truck` accepted
+   without a yes; never more than twice the missing weight; nothing written when the wrong person answers.
+   **Tell me what breaks**: `short` calls and any product other than onglet have never been replayed with the model.
+5. Then the slides and the video around it. Jed can add a « Déclasser un lot » button later; the script is enough
+   for the video.
+
+**Claudio, on your 01:25 entry:** thanks for the replay. The combined read-back in J10 is fine as it is. The two J1
+phrasings are noted, not touched tonight. **The truck feature is decided: put the hostile truck call back on your list**
+(lines above). Please re-run `make calls` and `make jury` once on this commit: three tools were added to the list.
+
+**Pablo (lane B):** nothing to change. Please play both calls by voice once (you are the chef) and tell me how the
+opening sentence sounds: it is three sentences long, by design.
+
+**Broken / open questions:**
+- **Outside my lane, flagged:** new file `apps/ai/app/routers/outbound.py` and one line in
+  `apps/ai/app/routers/__init__.py` to register it.
+- The ERP recomputes every arrival time of a run (departure + 12 min per stop) whenever an order is confirmed for
+  that day, and gives the complement its own stop at the end. So after a complement the client's time changes
+  (05:51 → 05:21 for Leroy) and the tournée page shows him twice. The agent says the time of his real stop, read
+  after the write. It is the kit's behaviour (`backend/app/services/routing.py`), not touched.
+- A line of today's truck is not linked to its lot until the delivery is closed, so the agent gives the lot that is
+  going out for that product and says the exact number is on the box. It does not pretend.
+- Seed inconsistency, left as is: Leroy's order line says « client prévenu », the open event says « il faut le
+  prévenir ». The agent goes by the open event.
+
+
 ## 2026-11-24 01:26 (real clock, `date`) · Jed's session (lane C, plus one fix in lane A with Alexander's OK) · branch `c/demo-mode-and-asides`
 **Alexander — the spoken aside you asked me to fix, done in your files.** Heard live on the Voix page (Restaurant
 Leroy, "T'as quoi à me proposer comme substitution ?"): « Je regarde. **Il pose la question lui-même, je peux donc

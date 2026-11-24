@@ -58,6 +58,7 @@ from app.tools import ErpClient, all_tools
 from app.clients.mock_speech import silent_wav
 from app.schemas import MOCK_TTS_MIME
 
+from . import truck_calls
 from .call_prep import ack_note, choose_ack, is_aside, is_waiting_phrase, said_goodbye
 from .call_report import write_report
 from .warmup import WARM_EVERY_S, Warmer, warm_prompt_cache
@@ -77,6 +78,9 @@ TTS_RETRY_AFTER_S = 60
 TTS_HEALTH = {"down_until": 0.0}  # time.monotonic() until which the provider is considered down
 # A live transcript shorter than this is not trusted to choose the instant words (see run_turn).
 MIN_PARTIAL_WORDS = 4
+# A typed turn « /appel ord_020798 » (the page's "Appeler" button sends exactly that): the agent calls that client
+# about his delivery of this morning and speaks first (services/truck_calls.py).
+OUTGOING = re.compile(r"^\s*/appel\s+(ord_\w+)\s*$", re.I)
 
 
 @dataclass
@@ -214,7 +218,10 @@ class VoiceConnection:
                     self.start_turn(utterance=utterance, partial=self.last_partial)
             case TextMessage(text=text):
                 await self.interrupt()
-                self.start_turn(text=text)
+                if order := OUTGOING.match(text or ""):
+                    await self.call_out(order.group(1))
+                else:
+                    self.start_turn(text=text)
             case ResetMessage():
                 await self.interrupt()
                 await self.report_call()  # "Nouvelle session": the call is over
@@ -222,6 +229,19 @@ class VoiceConnection:
                 self.conversation.acks = []
                 self.conversation.reported = 0
                 await self.open(self.conversation.id)
+
+    async def call_out(self, order_id: str) -> None:
+        """Outgoing call before the truck leaves: a new call starts (the previous one is reported and closed), the
+        client's file and the facts of the call are fetched in code, and the agent speaks first."""
+        conv = self.conversation
+        await self.report_call()
+        conv.history, conv.acks, conv.reported = [], [], 0
+        try:
+            opening = await truck_calls.opening(ErpClient("voice_agent", conv.actor_name), order_id)
+        except Exception as e:  # unknown order, nothing missing on it, ERP down: say why, start nothing
+            await self.send(VoiceErrorMessage(message=str(e) or type(e).__name__))
+            return
+        self.start_turn(text=opening.label, opening=opening)
 
     async def send_partial(self, update: STTUpdate) -> None:
         self.last_partial = update.text
@@ -263,6 +283,7 @@ class VoiceConnection:
         text: str | None = None,
         utterance: Utterance | None = None,  # spoken: already being transcribed since audio_start
         partial: str = "",  # spoken: the live transcript at the moment the key was released
+        opening: "truck_calls.Opening | None" = None,  # outgoing call: nobody spoke yet, the agent opens (see call_out)
     ) -> None:
         t0 = time.perf_counter()  # end of caller speech
         timings = TurnTimings()
@@ -295,7 +316,7 @@ class VoiceConnection:
             # few words is trusted at once; otherwise we choose again below, on the final transcript.
             early = text or (partial if len(partial.split()) >= MIN_PARTIAL_WORDS else "")
             ack = ""
-            if early:
+            if early and not opening:  # (an outgoing call opens with the agent's own first sentence, no instant word)
                 with suppress(Exception):
                     ack = await choose_ack(early, not conv.history, erp, conv.acks, blocked)
             if ack:
@@ -314,6 +335,10 @@ class VoiceConnection:
                 await self.send(VoiceErrorMessage(message="Rien entendu — réessayez."))
                 return
             await self.send(TranscriptMessage(text=heard, final=True))
+            if opening:  # the client's card and the facts of the call go to the page like any tool result
+                for name, args, result in opening.tools:
+                    await self.send(AgentToolMessage(name=name, args=args))
+                    await self.send(AgentToolMessage(name=name, ok=True, ms=0, result=result))
             if not ack and utterance is not None:  # second chance, on the full sentence, while the model starts
                 with suppress(Exception):
                     ack = await choose_ack(heard, not conv.history, erp, conv.acks, blocked)
@@ -325,6 +350,8 @@ class VoiceConnection:
             # 2. Agent, on a working copy of the history (committed at the end). The model is told what was already
             #    said aloud. (The agent loop identifies the caller in code before the first model step.)
             working = [*conv.history, ChatMessage(role="user", content=f"{heard}\n\n{ack_note(ack)}" if ack else heard)]
+            if opening:
+                working = list(opening.messages)
             llm_start = time.perf_counter()
             async for ev in run_agent(working, llm=get_llm_client(), tools=all_tools(), mode="voice", actor_name=conv.actor_name):
                 match ev:

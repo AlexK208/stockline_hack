@@ -18,7 +18,9 @@ from app.tools.history import without_none
 
 ORDER_TOOLS = {
     "create_draft_order", "add_order_line", "update_order_line", "remove_order_line", "update_order", "confirm_order", "cancel_order",
+    "add_to_truck",
 }  # fmt: skip
+TRUCK_TAG = "appel-camion"  # outgoing call before the truck leaves (services/truck_calls.py reads it back for the board)
 QUESTION_TOOLS = {"check_products": "stock ou délai", "get_price": "prix", "order_history": "livraison passée"}
 STATUS = {"draft": "en brouillon", "confirmed": "confirmée", "cancelled": "annulée", "prepared": "préparée"}
 WEEKDAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -42,6 +44,13 @@ def qty(value) -> str:
         return str(value)
 
 
+def money(value) -> str:
+    try:
+        return f"{float(value):.2f} €".replace(".", ",")
+    except (TypeError, ValueError):
+        return f"{value} €"
+
+
 def parsed(content: str | None):
     try:
         return json.loads(content or "")
@@ -62,7 +71,16 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
     if not client.get("id"):
         return None
 
+    brief: dict = {}  # outgoing call « avant le camion »: the facts the agent called about
+    for m in history:
+        if m.role == "tool" and m.name == "truck_call_brief":
+            r = parsed(m.content)
+            if isinstance(r, dict) and r.get("outgoingCall"):
+                brief = r
+
     orders: dict[str, dict] = {}  # order id → the order as the last tool left it
+    complements: list[dict] = []  # what add_to_truck put on today's truck
+    removed: list[str] = []  # replacements take_off_truck took back off the truck
     refused: list[str] = []
     logged: list[str] = []
     questions: list[str] = []
@@ -83,9 +101,14 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
                 other_client = True
             elif err.startswith("Refusé"):
                 pass  # the agent tried a tool before knowing the caller: internal, not for the report
+            elif call.name == "take_off_truck":
+                if r.get("removed"):
+                    removed.append(str(r["removed"]))
             elif call.name in ORDER_TOOLS:
                 if r.get("number"):
                     orders[r.get("id") or r["number"]] = r
+                    if call.name == "add_to_truck":
+                        complements.append(r)
                 for p in r.get("problems") or []:
                     if p not in refused:
                         refused.append(p)
@@ -97,6 +120,8 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
                 questions.append(QUESTION_TOOLS[call.name])
 
     blocked = bool(client.get("BLOCKED"))
+    if brief:
+        return truck_report(client, brief, orders, complements, removed, refused, logged, turns)
     if not (orders or refused or other_client):
         return None  # only questions, or events the agent already logged itself: nothing to add
 
@@ -143,9 +168,98 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
     return {"clientId": client["id"], "body": without_none(body)}
 
 
+def order_line(o: dict) -> str:
+    return ", ".join(f"{qty(l.get('qty'))} {l.get('unit') or ''} {l.get('productName') or l.get('productId')}".replace("  ", " ") for l in o.get("lines") or [])
+
+
+def truck_report(
+    client: dict, brief: dict, orders: dict, complements: list[dict], removed: list[str], refused: list[str], logged: list[str], turns: int
+) -> dict | None:
+    """The report of an outgoing call before the truck leaves, attached to the order the call was about. Written as
+    soon as the client has answered, whatever he decided: the point of the call is that he was told."""
+    problems = brief.get("problems") or []
+    what = ", ".join(str(p.get("productName")) for p in problems) or "écart sur la livraison"
+    replaced = [p["replacedBy"] for p in problems if p.get("kind") == "replaced" and p.get("replacedBy")]
+    order = brief.get("order") or {}
+    truck = brief.get("truck") or {}
+    answered = turns >= 2  # the first "turn" is the client picking up
+    if not answered:
+        return None  # he never said a word (the call was started twice, or cut at once): nothing happened, the call is still to make
+    later = [o for o in orders.values() if o not in complements and o.get("status") != "cancelled"]
+    drafts = [o for o in later if o.get("status") == "draft"]
+
+    def gap(p: dict) -> str:
+        text = f"{p.get('productName')} : {qty(p.get('ordered'))} {p.get('unit') or 'kg'} commandés, {qty(p.get('onTruck'))} dans le camion"
+        if p.get("replacedBy"):
+            by = p["replacedBy"]
+            text += f", remplacé par {qty(by.get('qty'))} {by.get('unit') or 'kg'} {by.get('productName')}"
+        return text + (f" ({p['why']})" if p.get("why") else "")
+
+    lines = [
+        f"Appel SORTANT de l'agent vocal avant le départ du camion ({truck.get('route') or 'tournée du jour'}, départ {truck.get('departure') or '?'}).",
+        f"- Motif : {' ; '.join(gap(p) for p in problems)}. Commande {order.get('number')}.",
+    ]
+    if removed:
+        lines.append(f"- Le client ne veut pas du remplacement : {', '.join(removed)} retiré(s) du camion, non facturé(s).")
+    for c in complements:
+        lines.append(f"- Accord du client : complément {c.get('number')} ajouté au camion de ce matin : {order_line(c)} ({money(c.get('totalHt'))} HT).")
+    if complements:
+        outcome = f"remplacé par {order_line(complements[0])}"
+    elif removed:
+        outcome = "remplacement refusé par le client, retiré du camion"
+    elif replaced:
+        lines.append("- Client prévenu du remplacement, qui reste dans le camion.")
+        outcome = f"client prévenu, garde {qty(replaced[0].get('qty'))} {replaced[0].get('unit') or 'kg'} {replaced[0].get('productName')}"
+    else:
+        lines.append("- Client prévenu. Pas de remplacement dans le camion de ce matin : seul ce qui est livré sera facturé.")
+        outcome = "client prévenu, pas de remplacement"
+    for o in later:
+        lines.append(f"- Commande {o.get('number')} {STATUS.get(o.get('status'), o.get('status'))} pour {day(o.get('deliveryDate'))} : {order_line(o) or 'aucune ligne'}.")
+    if drafts:
+        lines.append("- ⚠ Restée en brouillon à la fin de l'appel : à rappeler pour valider.")
+    if refused:
+        lines.append("- Refusé pendant l'appel : " + " ; ".join(refused[:4]) + ".")
+    if logged:
+        lines.append("- Noté pour l'équipe : " + " ; ".join(logged[:6]) + ".")
+    # Something the agent wrote down for the team and no decision on the truck (« le chef n'est pas là », « il veut
+    # un geste ») : a human still has something to do, the report stays open and so does the ERP's own issue.
+    follow_up = bool(drafts or (logged and not complements and not removed))
+    body = {
+        "type": "call",
+        "title": f"Appel avant camion : {what} {'remplacé' if replaced and not removed else 'manquant'} — {outcome}",
+        "description": "\n".join(lines),
+        "severity": "medium" if follow_up else "low",
+        "status": "open" if follow_up else "resolved",
+        "tags": ["compte-rendu", "agent-vocal", TRUCK_TAG],
+        "orderId": order.get("id"),
+    }
+    return {"clientId": client["id"], "body": without_none(body), "settles": None if follow_up else order.get("id")}
+
+
+async def close_open_issue(erp: ErpClient, client_id: str, order_id: str, outcome: str) -> None:
+    """The ERP held an open issue about this order (« il faut le prévenir avant le départ du camion »): the call did
+    exactly that, so the issue is closed with what was decided. Only issues about this very order, opened today."""
+    events = await erp.get(f"/api/clients/{enc(client_id)}/events", {"status": "open", "limit": 12})
+    events = events.get("items", events) if isinstance(events, dict) else events
+    for e in events or []:
+        if e.get("channel") == "voice_agent":
+            continue  # what the agent logged itself during the call (« il demande un geste ») stays open for the team
+        if e.get("orderId") == order_id and e.get("type") in ("complaint", "delivery_issue", "quality_issue"):
+            await erp.patch(
+                f"/api/client-events/{enc(e['id'])}",
+                {"status": "resolved", "description": f"{e.get('description') or ''}\n\n→ Traité par l'agent vocal avant le départ du camion : {outcome}".strip()},
+            )
+
+
 async def write_report(erp: ErpClient, history: list[ChatMessage], start: int = 0) -> dict | None:
     """Posts the report to the client's history. → the created event, or None when there was nothing to report."""
     report = build_report(history, start)
     if not report:
         return None
-    return await erp.post(f"/api/clients/{enc(report['clientId'])}/events", report["body"])
+    event = await erp.post(f"/api/clients/{enc(report['clientId'])}/events", report["body"])
+    if report.get("settles"):
+        try:
+            await close_open_issue(erp, report["clientId"], report["settles"], report["body"]["title"].split(" — ", 1)[-1])
+        except Exception:
+            pass  # the report is written: a leftover open issue is only one more line on the to-do list
+    return event
