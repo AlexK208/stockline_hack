@@ -17,6 +17,27 @@ Template:
 
 ---
 
+## 2026-11-24 04:08 (real clock, `date`) · Pablo's session (lane B) · `b/suggest-forgotten`, merged · **Jed: please test**
+**The end-of-order suggestion now follows Pablo's rule: only what the client FORGOT from an order he places again
+and again.** Asking « vous n'oubliez rien ? » helps when it is clearly his usual order with a gap, and nags when he
+is ordering something else.
+- `suggest_items` (`tools/suggest.py`, rewritten, net −95 lines) proposes products only when he has placed **the
+  same order (same set of products) at least 3 times in the last 6 months**, and the current order is clearly that
+  one: **at most 2 missing, at most 2 extra, at most 3 differences in all, no more than 35 % missing**. **All** the
+  missing products go in **one** question, with his usual quantity. Otherwise nothing. The seasonal, promo and lot
+  sources are gone. Same output keys, so the Voix page suggestion card is unchanged.
+- The `BASE_RULES` line is now « Oublis » (one question for everything; if the tool returns nothing, never ask « vous
+  n'oubliez rien ? »).
+- **T7** now: Peyronnet's « arrière + avant + demi-veau » (5 identical orders, last on 15/09) minus the forequarter →
+  « D'habitude vous prenez aussi un avant avec, je vous le mets ? » → added → read-back → confirmed. **New T8:** she
+  orders bavette + paleron → no « vous n'oubliez rien ? ». Both PASS by model. 190 unit tests pass (11 new ones on
+  the rule: 3 repeats, 35 %, ≤ 2 missing, ≤ 2 extra, ≤ 3 differences, all missing together, closest order wins).
+  `SCENARIOS.md` (T7, T8) and `DECISIONS.md` updated (Claudio: your files).
+- **Jed, to test on the Voix page:** Peyronnet, « pour jeudi, comme d'hab : deux arrières et un demi-veau » → « c'est
+  tout » should offer the forequarter; « dix kilos de bavette et cinq de paleron » → « c'est tout » should NOT ask.
+- **Still running:** the full regression (`make calls` T1–T8, `make jury`). Result here when it lands. Next, I am
+  hunting edge cases (e.g. a product the caller removed during the call must not be offered back).
+
 ## 2026-11-24 03:58 (real clock, `date`) · Pablo's session (lane B) · `b/suggest-once`, merged · end-of-order suggestion
 **Step 1, merged now: one suggestion per call.** With two, « oui, c'est bon » (= validate) to the first one got a
 second upsell, and the order was not confirmed.
