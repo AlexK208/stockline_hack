@@ -1,7 +1,8 @@
 /**
  * Call cards (right column of the Voix page, above "ERP en direct"):
  *  - Client en ligne: who is calling, as soon as the agent knows (identify_caller result, or any tool called with a clientId).
- *  - Commande en cours: the order being written during the call, line by line, with a stock badge for the delivery date.
+ *  - Commande en cours: the order being written during the call, line by line, with a stock badge for the delivery date
+ *    (or, once the order is prepared, what went into the truck: Chargé / Poids court / Absent, from preparedQty).
  *    Removed lines stay visible, crossed out; changed quantities show the old one crossed out. Under them, in red, what
  *    the business rules refused during the call and why (out of stock, ordered too late, blocked account), read from
  *    the tools' results: the jury sees the rule applied, not just a sentence they might miss.
@@ -278,6 +279,16 @@ interface Memory {
   firstQty: Map<string, number>;
 }
 
+/** A weight within ±5 % of the order is a normal weighing (same rule as the truck board, services/truck_calls.py). */
+const WEIGHING_TOLERANCE = 0.05;
+
+/** Once an order is prepared, what matters is what went into the truck, not the stock left for that date. */
+function loadedState(line: Line): "loaded" | "short" | "missing" | undefined {
+  if (line.preparedQty == null) return undefined;
+  if (line.preparedQty <= 0) return "missing";
+  return line.preparedQty < line.qty * (1 - WEIGHING_TOLERANCE) ? "short" : "loaded";
+}
+
 function stockState(line: Line, order: OrderDetail, rows: Map<Id, StockAvailability>): "ok" | "short" | "out" | undefined {
   const r = rows.get(line.productId);
   if (!r) return undefined;
@@ -334,7 +345,8 @@ function OrderCard({ orderId, order, session, refusals: all, accepted }: { order
                 const removed = !current.has(k) || order.status === "cancelled";
                 const first = m.firstQty.get(k);
                 const changed = !removed && first != null && first !== l.qty;
-                const st = removed ? undefined : stockState(l, order, rows);
+                const loaded = removed ? undefined : loadedState(l);
+                const st = removed || loaded ? undefined : stockState(l, order, rows);
                 return (
                   <li key={k} className={cn("flex items-center gap-2 px-4 py-1", !m.initial.has(k) && "animate-flash")}>
                     <span className="min-w-0 flex-1">
@@ -346,8 +358,11 @@ function OrderCard({ orderId, order, session, refusals: all, accepted }: { order
                       {changed ? <span className="num text-[11px] text-muted-foreground line-through">{first}</span> : null}
                       <Qty value={l.qty} unit={l.unit} className="text-[12px]" />
                     </span>
-                    <span className="w-[62px] shrink-0 text-right">
+                    <span className="w-[76px] shrink-0 text-right">
                       {removed ? <Badge>Retirée</Badge>
+                        : loaded === "loaded" ? <Badge tone="success">Chargé</Badge>
+                        : loaded === "short" ? <Badge tone="warning">Poids court</Badge>
+                        : loaded === "missing" ? <Badge tone="destructive">Absent</Badge>
                         : st === "ok" ? <Badge tone="success">En stock</Badge>
                         : st === "short" ? <Badge tone="warning">Insuffisant</Badge>
                         : st === "out" ? <Badge tone="destructive">Rupture</Badge>

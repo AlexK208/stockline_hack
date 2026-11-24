@@ -11,6 +11,9 @@ import { TurnChips } from "./metrics";
 const clock = (at?: number) => (at ? new Date(at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
 
 const GRID = "grid grid-cols-[64px_minmax(0,1fr)_minmax(0,1fr)] gap-x-4";
+// Mode démo: one thread, like a messaging app (caller left, agent right, each up to 85 % of the width), no time
+// column. Two fixed halves left ~130 px per bubble once the truck board was open on a projector's width.
+const THREAD = "flex";
 
 /** `demo`: the jury's view — no tool rows, no latency chips, larger text (see index.tsx, Mode démo). */
 export function Timeline({ turns, activity, level, demo = false }: { turns: VoiceTurn[]; activity: Activity; level: number; demo?: boolean }) {
@@ -30,8 +33,8 @@ export function Timeline({ turns, activity, level, demo = false }: { turns: Voic
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
       }}
     >
-      <div className={cn(GRID, "sticky top-0 z-10 border-b border-border bg-background px-5 py-2")}>
-        <span />
+      <div className={cn(demo ? "flex justify-between" : GRID, "sticky top-0 z-10 border-b border-border bg-background px-5 py-2")}>
+        {demo ? null : <span />}
         <span className={cn(SECTION_LABEL, "flex items-center gap-1.5")}><Phone size={12} strokeWidth={1.75} />Appelant</span>
         <span className={cn(SECTION_LABEL, "flex items-center gap-1.5 text-violet")}><AudioLines size={12} strokeWidth={1.75} />Agent</span>
       </div>
@@ -63,9 +66,9 @@ function TurnRows({ t, last, activity, level, demo }: { t: VoiceTurn; last: bool
   return (
     <li className="flex flex-col gap-2 animate-fade-in">
       {/* Caller */}
-      <div className={GRID}>
-        <time className="num pt-1.5 font-mono text-[10.5px] text-muted-foreground">{clock(c.at)}</time>
-        <div className="flex min-w-0 justify-start">
+      <div className={demo ? THREAD : GRID}>
+        {demo ? null : <time className="num pt-1.5 font-mono text-[10.5px] text-muted-foreground">{clock(c.at)}</time>}
+        <div className={cn("flex min-w-0 justify-start", demo && "max-w-[85%]")}>
           <div className={cn("max-w-full rounded-[4px] border border-border bg-card px-3 py-2 shadow-sm", bubbleText)}>
             {c.status === "recording" ? (
               <span className="flex items-center gap-2">
@@ -86,15 +89,15 @@ function TurnRows({ t, last, activity, level, demo }: { t: VoiceTurn; last: bool
             )}
           </div>
         </div>
-        <span />
+        {demo ? null : <span />}
       </div>
 
       {/* Agent */}
       {agentStarted || thinking || a.done ? (
-        <div className={GRID}>
-          <time className="num pt-1.5 font-mono text-[10.5px] text-muted-foreground">{clock(a.at)}</time>
-          <span />
-          <div className="flex min-w-0 flex-col items-start gap-1.5">
+        <div className={demo ? cn(THREAD, "justify-end") : GRID}>
+          {demo ? null : <time className="num pt-1.5 font-mono text-[10.5px] text-muted-foreground">{clock(a.at)}</time>}
+          {demo ? null : <span />}
+          <div className={cn("flex min-w-0 flex-col gap-1.5", demo ? "max-w-[85%] items-end" : "items-start")}>
             {demo ? null : a.tools.map((tool) => <ToolRow key={tool.id} t={tool} className="w-full" />)}
             {thinking ? (
               <span className="flex h-8 items-center gap-2 text-[12px] text-violet"><Spinner size={12} />Réflexion…</span>
