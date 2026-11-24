@@ -58,7 +58,7 @@ from app.tools import ErpClient, all_tools
 from app.clients.mock_speech import silent_wav
 from app.schemas import MOCK_TTS_MIME
 
-from . import truck_calls
+from . import short_dated, truck_calls
 from .call_prep import ack_note, choose_ack, is_aside, is_waiting_phrase, said_goodbye
 from .call_report import write_report
 from .warmup import WARM_EVERY_S, Warmer, warm_prompt_cache
@@ -81,6 +81,11 @@ MIN_PARTIAL_WORDS = 4
 # A typed turn « /appel ord_020798 » (the page's "Appeler" button sends exactly that): the agent calls that client
 # about his delivery of this morning and speaks first (services/truck_calls.py).
 OUTGOING = re.compile(r"^\s*/appel\s+(ord_\w+)\s*$", re.I)
+# « /appel prd_0047 cli_0030 » : the agent calls that client to offer that short-dated product (services/short_dated.py).
+# It only starts once a person has set the price: « /offre prd_0047 6,90 ».
+OFFER_CALL = re.compile(r"^\s*/appel\s+(prd_\w+)\s+(cli_\w+)\s*$", re.I)
+APPROVE_OFFER = re.compile(r"^\s*/offre\s+(prd_\w+)\s+([0-9]+(?:[.,][0-9]+)?)\s*(?:€|euros?)?\s*$", re.I)
+OUTGOING_BRIEFS = ("truck_call_brief", "short_date_brief")
 
 
 @dataclass
@@ -219,7 +224,11 @@ class VoiceConnection:
             case TextMessage(text=text):
                 await self.interrupt()
                 if order := OUTGOING.match(text or ""):
-                    await self.call_out(order.group(1))
+                    await self.call_out(lambda erp: truck_calls.opening(erp, order.group(1)))
+                elif offer := OFFER_CALL.match(text or ""):
+                    await self.call_out(lambda erp: short_dated.opening(erp, offer.group(1), offer.group(2)))
+                elif price := APPROVE_OFFER.match(text or ""):
+                    await self.approve_offer(text.strip(), price.group(1), float(price.group(2).replace(",", ".")))
                 else:
                     self.start_turn(text=text)
             case ResetMessage():
@@ -230,18 +239,35 @@ class VoiceConnection:
                 self.conversation.reported = 0
                 await self.open(self.conversation.id)
 
-    async def call_out(self, order_id: str) -> None:
-        """Outgoing call before the truck leaves: a new call starts (the previous one is reported and closed), the
-        client's file and the facts of the call are fetched in code, and the agent speaks first."""
+    async def call_out(self, make_opening: Callable[[ErpClient], Awaitable["truck_calls.Opening"]]) -> None:
+        """Outgoing call (before the truck leaves, or a short-dated offer): a new call starts (the previous one is
+        reported and closed), the client's file and the facts of the call are fetched in code, and the agent speaks first."""
         conv = self.conversation
         await self.report_call()
         conv.history, conv.acks, conv.reported = [], [], 0
         try:
-            opening = await truck_calls.opening(ErpClient("voice_agent", conv.actor_name), order_id)
-        except Exception as e:  # unknown order, nothing missing on it, ERP down: say why, start nothing
+            opening = await make_opening(ErpClient("voice_agent", conv.actor_name))
+        except Exception as e:  # unknown order, nothing to say, no approved price, ERP down: say why, start nothing
             await self.send(VoiceErrorMessage(message=str(e) or type(e).__name__))
             return
         self.start_turn(text=opening.label, opening=opening)
+
+    async def approve_offer(self, typed: str, product_id: str, price: float) -> None:
+        """The human step of a short-dated offer: the person at this screen sets the price. No model, no voice: the
+        ERP gets the approved price (as that person, not as the agent) and the page shows what was recorded."""
+        await self.send(TranscriptMessage(text=typed, final=True))
+        erp = ErpClient("voice_agent", self.conversation.actor_name)
+        erp.headers.pop("x-actor", None)  # a person decides the price: the ERP records it as a user's action
+        try:
+            ok = await short_dated.approve(erp, product_id, price)
+            text = (
+                f"Offre enregistrée : {ok['product']} à {truck_calls.euros(price)}, pour une livraison au plus tard "
+                f"{truck_calls.jour(ok['validTo'])} (à consommer avant {truck_calls.jour(ok['useBy'])}). Les appels peuvent partir."
+            )
+        except Exception as e:
+            text = str(e) or type(e).__name__
+        await self.send(AgentTextMessage(delta=text))
+        await self.send(AgentDoneMessage(text=text, timings=TurnTimings()))
 
     async def send_partial(self, update: STTUpdate) -> None:
         self.last_partial = update.text
@@ -319,7 +345,7 @@ class VoiceConnection:
             if early and not opening:  # (an outgoing call opens with the agent's own first sentence, no instant word)
                 with suppress(Exception):
                     ack = await choose_ack(early, not conv.history, erp, conv.acks, blocked)
-            ack = outgoing_ack(ack, conv)
+            ack = outgoing_ack(ack, conv, early or "")
             if ack:
                 speaker.speak(ack)
                 await show()
@@ -343,7 +369,7 @@ class VoiceConnection:
             if not ack and utterance is not None:  # second chance, on the full sentence, while the model starts
                 with suppress(Exception):
                     ack = await choose_ack(heard, not conv.history, erp, conv.acks, blocked)
-                ack = outgoing_ack(ack, conv)
+                ack = outgoing_ack(ack, conv, heard)
                 if ack:
                     speaker.speak(ack)
                     await show()
@@ -421,10 +447,18 @@ class VoiceConnection:
                 utterance.cancel()  # interrupted while transcribing: close the provider stream
 
 
-def outgoing_ack(ack: str, conv: Conversation) -> str:
-    """In an outgoing call nothing the client says « corrects » an order he is dictating: « Je corrige. » and « Je
-    modifie ça. » came out where nothing was being corrected. They become a neutral waiting word (not the one just said)."""
-    if ack not in ("Je corrige.", "Je modifie ça.") or not any(m.role == "tool" and m.name == "truck_call_brief" for m in conv.history):
+REFUSAL = re.compile(r"^\W*(non\b|pas (cette|pour|aujourd)|ça ira\b|laisse[zr]?\b|rien\b)", re.I)
+
+
+def outgoing_ack(ack: str, conv: Conversation, heard: str = "") -> str:
+    """The instant word in an OUTGOING call. Nothing the client says there « corrects » an order he is dictating, so
+    « Je corrige. » / « Je modifie ça. » become a neutral waiting word (not the one just said). And after a « non »
+    nothing is said at all: « Je regarde. » before « très bien, bonne journée » sounded like the agent had not heard."""
+    if not ack or not any(m.role == "tool" and m.name in OUTGOING_BRIEFS for m in conv.history):
+        return ack
+    if REFUSAL.search(heard or ""):
+        return ""
+    if ack not in ("Je corrige.", "Je modifie ça."):
         return ack
     last = next((a for a in reversed(conv.acks) if a), "")
     return "Je regarde." if last == "Un instant." else "Un instant."

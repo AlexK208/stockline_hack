@@ -10,13 +10,14 @@ The tools the model can call, grouped by domain. Each one wraps ERP API endpoint
                  confirm_order, get_order
     desk.py      identify_caller, check_products, order_history (composite: one call per turn)
     truck.py     truck_call_brief, add_to_truck, take_off_truck (the outgoing call before the truck leaves)
+    short_dated.py  short_date_brief, take_offer (the outgoing call that sells stock before its use-by date)
     festive.py   festive_history, festive_availability, festive_reserve, festive_cancel (le carnet des fêtes)
     cotation.py  cotation_semaine (le cadran annoncé : la variation de la semaine sur ses carcasses)
 
 A new file needs one more line: import it below so its @tool functions get registered.
 """
 
-from . import desk, catalog, context, history, orders, truck, festive, cotation  # noqa: F401  (importing registers the tools)
+from . import desk, catalog, context, history, orders, truck, festive, cotation, short_dated  # noqa: F401  (importing registers the tools)
 from .erp import ErpClient
 from .registry import TOOLS, Tool, ToolContext, tool
 

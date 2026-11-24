@@ -19,8 +19,9 @@ from app.tools.history import without_none
 
 ORDER_TOOLS = {
     "create_draft_order", "add_order_line", "update_order_line", "remove_order_line", "update_order", "confirm_order", "cancel_order",
-    "add_to_truck",
+    "add_to_truck", "take_offer",
 }  # fmt: skip
+OFFER_TAG = "offre-date-courte"  # outgoing call that offers short-dated stock (services/short_dated.py reads it back)
 TRUCK_TAG = "appel-camion"  # outgoing call before the truck leaves (services/truck_calls.py reads it back for the board)
 NOT_REACHED_TAG = "a-rappeler"  # … where the person who decides was not on the line: the call is still to make
 
@@ -97,14 +98,16 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
         return None
 
     brief: dict = {}  # outgoing call « avant le camion »: the facts the agent called about
+    offer: dict = {}  # outgoing call « date courte »: the offer the agent called about
     for m in history:
-        if m.role == "tool" and m.name == "truck_call_brief":
+        if m.role == "tool" and m.name in ("truck_call_brief", "short_date_brief"):
             r = parsed(m.content)
             if isinstance(r, dict) and r.get("outgoingCall"):
-                brief = r
+                brief, offer = (r, {}) if m.name == "truck_call_brief" else ({}, r)
 
     orders: dict[str, dict] = {}  # order id → the order as the last tool left it
     complements: list[dict] = []  # what add_to_truck put on today's truck
+    taken: list[dict] = []  # what take_offer wrote (short-dated offer accepted)
     removed: list[str] = []  # replacements take_off_truck took back off the truck
     refused: list[str] = []
     logged: list[str] = []
@@ -136,6 +139,8 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
                     orders[r.get("id") or r["number"]] = r
                     if call.name == "add_to_truck":
                         complements.append(r)
+                    if call.name == "take_offer":
+                        taken.append(r)
                 for p in r.get("problems") or []:
                     if p not in refused:
                         refused.append(p)
@@ -147,6 +152,8 @@ def build_report(history: list[ChatMessage], start: int = 0) -> dict | None:
                 questions.append(QUESTION_TOOLS[call.name])
 
     blocked = bool(client.get("BLOCKED"))
+    if offer:
+        return offer_report(client, offer, taken, orders, logged, turns, heard[1:])
     if brief:
         return truck_report(client, brief, orders, complements, removed, refused, logged, turns, heard[1:])
     if not (orders or refused or other_client):
@@ -270,6 +277,46 @@ def truck_report(
         "orderId": order.get("id"),
     }
     return {"clientId": client["id"], "body": without_none(body), "settles": None if follow_up else order.get("id")}
+
+
+def offer_report(client: dict, offer: dict, taken: list[dict], orders: dict, logged: list[str], turns: int, heard: list[str]) -> dict | None:
+    """The report of an outgoing call that offered short-dated stock: what was offered, at which approved price, and
+    what the client decided. Nothing when he never said a word (the call is still to make)."""
+    if turns < 2:
+        return None
+    product = offer.get("product") or {}
+    price = (offer.get("offer") or {}).get("pricePerUnit")
+    absent = not taken and decider_absent(heard, (offer.get("askFor") or {}).get("name"), logged)
+    lines = [
+        "Appel SORTANT de l'agent vocal : offre date courte.",
+        f"- Offre : {product.get('name')}, à consommer {product.get('useBySay')}, à {money(price)} par {product.get('unit') or 'kg'} (prix approuvé par l'équipe).",
+    ]
+    if taken:
+        t = taken[0]
+        lines.append(f"- Accord du client : {t.get('offerLine')}, sur la commande {t.get('number')} ({STATUS.get(t.get('status'), t.get('status'))}) pour {day(t.get('deliveryDate'))}.")
+        took = next((l for l in t.get("lines") or [] if l.get("productId") == product.get("id")), {})
+        outcome = f"{qty(took.get('qty'))} {product.get('unit') or 'kg'} pris à {money(price)} pour {day(t.get('deliveryDate'))}"
+    elif absent:
+        lines.append("- ⚠ La personne qui décide n'était pas en ligne : rien n'a été écrit. À rappeler si l'offre tient encore.")
+        outcome = "personne qui décide non jointe : à rappeler"
+    else:
+        lines.append("- Le client ne prend pas l'offre. Rien n'a été écrit.")
+        outcome = "refusée par le client"
+    others = [o for o in orders.values() if o not in taken and o.get("status") != "cancelled"]
+    for o in others:
+        lines.append(f"- Commande {o.get('number')} {STATUS.get(o.get('status'), o.get('status'))} pour {day(o.get('deliveryDate'))} : {order_line(o) or 'aucune ligne'}.")
+    if logged:
+        lines.append("- Noté pour l'équipe : " + " ; ".join(logged[:6]) + ".")
+    body = {
+        "type": "call",
+        "title": f"Offre date courte : {product.get('name')} — {outcome}",
+        "description": "\n".join(lines),
+        "severity": "medium" if absent else "low",
+        "status": "open" if absent else "resolved",
+        "tags": ["compte-rendu", "agent-vocal", OFFER_TAG, *([NOT_REACHED_TAG] if absent else [])],
+        "orderId": taken[0].get("id") if taken else None,
+    }
+    return {"clientId": client["id"], "body": without_none(body)}
 
 
 async def close_open_issue(erp: ErpClient, client_id: str, order_id: str, outcome: str) -> None:

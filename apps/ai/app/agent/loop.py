@@ -238,6 +238,11 @@ NO_CONSENT_TRUCK = (
     "quantité et le prix au kilo en une phrase, et demande-lui s'il est d'accord pour que ça parte dans le camion de ce matin."
 )
 
+NO_CONSENT_OFFER = (
+    "Refusé : le client n'a pas encore dit oui à l'offre dans sa dernière phrase (« {heard} »). Redis la quantité, le prix "
+    "et la date limite en une phrase, et demande-lui s'il la prend."
+)
+
 OTHER_CLIENT = (
     "Refusé : pendant un appel, les outils ne servent que le client qui appelle. Les commandes, prix et informations "
     "d'un autre client sont confidentiels : dis-le simplement, sans rien citer de l'autre client."
@@ -252,6 +257,8 @@ async def call_guard(call: ToolCall, ctx: ToolContext) -> None:
         return
     if call.name == "confirm_order" and not CONSENT.search(ctx.heard or ""):
         raise PermissionError(NO_CONSENT.format(heard=(ctx.heard or "").strip()[:120]))
+    if call.name == "take_offer" and not CONSENT.search(ctx.heard or ""):  # outgoing offer: nothing is sold without his yes
+        raise PermissionError(NO_CONSENT_OFFER.format(heard=(ctx.heard or "").strip()[:120]))
     if call.name == "add_to_truck" and not CONSENT.search(ctx.heard or ""):  # outgoing call: nothing goes on the truck without his yes
         raise PermissionError(NO_CONSENT_TRUCK.format(heard=(ctx.heard or "").strip()[:120]))
     args = call.arguments or {}
