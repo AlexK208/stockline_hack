@@ -401,5 +401,56 @@
    "aucun nom de client, aucun statut, aucun prix d'un autre client"
   ],
   "facts": []
+ },
+ {
+  "id": "J19",
+  "title": "Substitution ACCEPTÉE : onglet en rupture, le client prend de la bavette",
+  "client_id": "cli_0008",
+  "trap": "Every other scenario tests a client who REFUSES a substitution. This one accepts. The order must end up with the substitute, at the right quantity, marked as replacing the missing product — and nothing must be written before the caller says yes.",
+  "turns": [
+   "Bonjour, Fabien Roux, Brasserie Le Saint-Martial à Limoges. Pour jeudi, mettez-moi quinze kilos d'onglet pour le plat du jour.",
+   "Bon, mettez-moi de la bavette à la place, même quantité.",
+   "Oui c'est bon, validez."
+  ],
+  "expected": [
+   "Turn 1: the agent says the onglet is out of stock for Thursday and proposes alternatives. It does NOT substitute on its own, and does not write a bavette line yet.",
+   "No line for prd_0015 (onglet) anywhere in the final order.",
+   "Final ERP: one new order for cli_0008, delivery 2026-11-26, confirmed, with exactly one line: prd_0014 (bavette) at 15 kg.",
+   "That line carries substituteFor = prd_0015. This is the point of the scenario: an accepted substitution must be traceable to what it replaced, or the preparer cannot see why the bavette is there.",
+   "The engineer's failure mode to watch: the caller accepts and the order keeps the original product, the original price or the original weight.",
+   "The agent does not promise onglet later and does not offer a credit note."
+  ],
+  "facts": [
+   "cli_0008 Brasserie Le Saint-Martial, Limoges, Fabien Roux (gérant), active, delivered tue/thu/sat, no open order (the last is from June). Its preferences say « Bavette et tende de tranche pour le plat du jour, tête de veau le jeudi » and say NOTHING about substitution: this is one of only 4 active clients out of 92 that do not refuse one.",
+   "prd_0015 Onglet de bœuf is out of stock: availableOn = 0 for 2026-11-26, no confirmed arrival.",
+   "prd_0014 Bavette d'aloyau PAD has 568 kg available for 2026-11-26, and is in the official alternatives of prd_0015 (GET /api/products/prd_0015/alternatives).",
+   "Next delivery day after Tuesday 24/11 for this client is Thursday 26/11. PAD pieces are ordered before 17:00 for the next morning, so Thursday is fine.",
+   "The order line carries substituteFor (OrderLineView.substituteFor); create_draft_order, add_order_line and update_order_line all accept it."
+  ]
+ },
+ {
+  "id": "J20",
+  "title": "Substitution acceptée SOUS CONDITION : bavette, mais dix kilos au lieu de quinze",
+  "client_id": "cli_0008",
+  "trap": "The caller accepts the substitute AND changes the quantity in the same sentence. Taking only half the sentence gives 15 kg of bavette, which is the wrong order and the easiest mistake to make here.",
+  "turns": [
+   "Bonjour, Fabien Roux, Brasserie Le Saint-Martial à Limoges. Pour jeudi, quinze kilos d'onglet s'il vous plaît.",
+   "D'accord pour la bavette, mais seulement dix kilos au lieu de quinze.",
+   "Oui, validez."
+  ],
+  "expected": [
+   "Final ERP: one new order for cli_0008, delivery 2026-11-26, confirmed, with exactly one line: prd_0014 (bavette) at 10 kg — NOT 15.",
+   "That line carries substituteFor = prd_0015.",
+   "No line for prd_0015 (onglet).",
+   "The agent reads back ten kilos, not fifteen, before or while confirming.",
+   "Failure mode: the agent hears the « d'accord » and keeps the quantity of the original request."
+  ],
+  "facts": [
+   "cli_0008 Brasserie Le Saint-Martial, Limoges, Fabien Roux (gérant), active, delivered tue/thu/sat, no open order (the last is from June). Its preferences say « Bavette et tende de tranche pour le plat du jour, tête de veau le jeudi » and say NOTHING about substitution: this is one of only 4 active clients out of 92 that do not refuse one.",
+   "prd_0015 Onglet de bœuf is out of stock: availableOn = 0 for 2026-11-26, no confirmed arrival.",
+   "prd_0014 Bavette d'aloyau PAD has 568 kg available for 2026-11-26, and is in the official alternatives of prd_0015 (GET /api/products/prd_0015/alternatives).",
+   "Next delivery day after Tuesday 24/11 for this client is Thursday 26/11. PAD pieces are ordered before 17:00 for the next morning, so Thursday is fine.",
+   "The order line carries substituteFor (OrderLineView.substituteFor); create_draft_order, add_order_line and update_order_line all accept it."
+  ]
  }
 ]

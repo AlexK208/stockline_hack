@@ -123,7 +123,13 @@ def erp_delta(st, client_id: str) -> dict:
             "number": o["number"],
             "status": o["status"],
             "deliveryDate": o.get("deliveryDate"),
-            "lines": [f"{l['productId']} × {l['qty']:g} {l.get('unit', '')}".strip() for l in o.get("lines", [])],
+            # substituteFor is printed because an accepted substitution (J19, J20) is only correct if the line
+            # says what it replaces: without it the preparer cannot see why a bavette is on an onglet order.
+            "lines": [
+                f"{l['productId']} × {l['qty']:g} {l.get('unit', '')}".strip()
+                + (f" (remplace {l['substituteFor']})" if l.get("substituteFor") else "")
+                for l in o.get("lines", [])
+            ],
         }
         for o in st.new_orders(client_id)
     ]
