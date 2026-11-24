@@ -201,6 +201,31 @@ def usual_basket(client_id: str) -> list[Doc]:
     return usual_basket_of(recent, lambda o: o["deliveryDate"])
 
 
+def purchases(client_id: str, date_from: str, date_to: str) -> Doc:
+    """What this client bought per product between two delivery dates (inclusive), most bought first, and how many
+    orders that period had. Read-only.
+    Used by the voice agent's suggestions: "same weeks last year" and "categories this client buys"."""
+    crud.clients.require(client_id)
+    rows: dict[str, Doc] = {}
+    found = crud.orders.filter(lambda o: o["clientId"] == client_id and is_sale(o) and date_from <= o["deliveryDate"] <= date_to)
+    for o in found:
+        seen: set[str] = set()
+        for l in o["lines"]:
+            p = crud.products.get(l["productId"]) or {}
+            r = rows.setdefault(l["productId"], {"productId": l["productId"], "productName": p.get("name", l["productId"]),
+                                                 "category": p.get("category", ""), "unit": p.get("unit", "kg"), "qty": 0.0,
+                                                 "orders": 0, "firstDate": o["deliveryDate"], "lastDate": o["deliveryDate"]})
+            r["qty"] += l["qty"]
+            if l["productId"] not in seen:
+                seen.add(l["productId"])
+                r["orders"] += 1
+            r["firstDate"] = min(r["firstDate"], o["deliveryDate"])
+            r["lastDate"] = max(r["lastDate"], o["deliveryDate"])
+    for r in rows.values():
+        r["qty"] = round3(r["qty"])
+    return {"orders": len(found), "products": sorted(rows.values(), key=lambda r: -r["qty"])}
+
+
 # ───────── Writes ─────────
 
 

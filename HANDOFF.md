@@ -17,6 +17,65 @@ Template:
 
 ---
 
+## 2026-11-24 02:57 (real clock, `date`) · Jed's session (lane C, plus lane A parts **approved by Alexander**) · branch `c/suggest-items`
+**Feature: suggestions at the end of an order call (V2, on top of the core).** After « c'est tout », the agent may
+offer one product at a time, at most two, each with a reason the client can check (« Vous prenez d'habitude un
+demi-porc cul noir, je vous en mets un ? »). The suggestions are decided by code over ERP data; the model only says them.
+
+**Alexander approved that I implement this, including the lane A parts.** To stay out of his way, the only lane A
+lines I changed are:
+- `apps/ai/app/tools/__init__.py` line 20: `suggest` added to the import, next to `festive`, `cotation` and `short_dated` (nothing else);
+- `apps/ai/app/agent/prompts.py`: **one new line at the end of `VOICE_RULES`** (line 78) (« - Suggestions : quand il dit
+  que c'est fini, appelle suggest_items une fois… »); nothing else rewritten;
+- new file `apps/ai/app/tools/suggest.py`. **`voice_session.py` not touched.**
+
+**What's in it:**
+- **Tool `suggest_items(clientId, deliveryDate)`**, plain Python, 0.2–0.6 s. Five sources: *l'an dernier* (only
+  products that are seasonal **for this client**: × 1.5 their usual share of deliveries in the same weeks of the last
+  two years), *habitude*, *promo* (a rule with an end date, valid on the delivery date: `prl_0008` not before 01/12), *lot à
+  écouler* (expires 1–3 days after delivery, in a category the client buys). Then `desk.check_items` (stock, lead
+  time, delivery day). Blocked → []. A client who refuses substitutions only gets products he has bought himself.
+  **Returns at most 2**: with 3, the model offered a third one in a T7 run (the prompt rule alone did not hold).
+- **Backend, read-only:** `GET /api/clients/{id}/purchases?from=&to=` → `{orders, products}` (what a client
+  bought per product between two delivery dates). `services/clients.purchases`, schema `ClientPurchases`,
+  TS type in `packages/shared/src/api.ts`.
+- **Voix page:** "Suggestions" section under the order card: product, qty, reason as dot + word, evidence.
+  Proposé → accepted (moves into the order card: "suggestion acceptée · habitude") → "Non retenu" (inferred).
+- **Tests:** `tests/test_suggest.py`, 17 tests (11 on crafted facts, 6 read-only on the seed: Peyronnet 26/11,
+  Lacour blocked → [], Leroy only own products, ris de veau and onglet never, promo not before 01/12, nothing on
+  22/12). **176 pass after merging `main`** (lane A's `idf` test passes now too).
+- **Carnet des fêtes (Pablo, 02:26):** merged in. My tool had a 5th source, *réservation* (veal, lamb, matured ribs
+  for Christmas deliveries). It is **removed**: 19–31 December go through the carnet, no order is taken there, and
+  `festive_history` already proposes last year's basket. `suggest_items` returns [] for those dates.
+- **T7** added to `SCENARIOS.md` and `evals/run_calls.py` (Claudio OK'd): T7 3/4, the one failure was the third
+  suggestion, fixed by the cap; then 2/2. **T1 ✅ T4 ✅**: no suggestion when the client says to validate. Suggestion
+  turn: first word 2.0–3.5 s. `DECISIONS.md` § 2.14 (after Alexander's 2.12 and Pablo's 2.13).
+
+**For Alexander:**
+- In one T7 run the model called `confirm_order` right after the client's « Non, pas cette semaine » (no to the
+  second suggestion). Your `call_guard` refused it and the client heard the right question. I added to the prompt
+  line: « ce non n'est pas un accord sur la commande : ne valide pas ».
+- **T6 not replayed** (credits): it ends on « Oui, c'est tout, merci », so the agent will now call `suggest_items`
+  there and may offer Rolland something before the agreement question. T6's checks don't forbid it, but worth one
+  run before the freeze.
+- The agent still switches from vous to tu between turns in T7 (your tu/vous code, not this feature).
+- **Prompt wording that got spoken:** my first version of the suggestions line said « (ce non n'est pas un accord sur
+  la commande : ne valide pas) ». Jed heard the agent say « Ce non ne vaut pas accord sur la commande » twice live.
+  Reworded as a plain instruction with nothing quotable; T7 2/2 again, clean « non » turns, no `confirm_order` attempt.
+  **Optional, your call:** add `accord sur la commande` to `ASIDE` in `call_prep.py` as a safety net (I did not touch it).
+- **Merged with Pablo's « cadran annoncé » (02:48) too.** T7 then skipped the 2nd suggestion 1 time out of 2 (turn 1
+  is busier with the price announcement; after the « oui » it went straight to the agreement question). Fix in my
+  file: `suggest_items` returns a `plan` (« Propose X maintenant. Au tour suivant, après sa réponse, propose Y.
+  Seulement ensuite, la question d'accord. ») and the prompt line says to offer the 2nd. **T7 3/3, T1 ✅ T4 ✅ T6 ✅**
+  on the merged code. In T6 the agent now offers Rolland « une cuisse de jambon frais… à écouler » after « c'est
+  tout » (his own product, lot expiring 27/11); T6's checks pass.
+- **Alexander, overlap with your « date courte » (02:55), your call:** my 4th source, *lot à écouler*, offers on an
+  INCOMING call, at the NORMAL price, a product the client buys whose lot expires 1–3 days after his delivery (e.g.
+  T6: « une cuisse de jambon frais… à écouler »). It does not touch your offers (no discount, no `take_offer`), but it
+  is the same stock through a second path. If you prefer short-dated stock to go only through your human-approved
+  offers, say so and I drop that source (one block in `tools/suggest.py`, tests adjusted). Jed decides with you.
+- **Claudio:** noted, the « Avant le camion » panel is yours; Jed will test it when it lands.
+
 ## 2026-11-24 02:55 (real clock, `date`) · Claudio's session (lane D, building one page in lane C) · `main`
 **Jed — I'm taking the « Avant le camion » panel (Alexander's 02:20 entry). Please don't start it.** There was no
 answer to my 02:33 entry and nothing pushed, and the video needs it, so Claudio decided to build it in our session.
