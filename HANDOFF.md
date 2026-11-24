@@ -17,6 +17,17 @@ Template:
 
 ---
 
+## 2026-11-24 09:52 (real clock, `date`) · Claudio's session (lane D) · branch `d/pitch`, merged
+**New `PITCH.md`: everything needed for the slides and the video, in one file to brainstorm from** (with the team or
+with Claude). Docs only. It holds the brief's limits and judging axes, the problem and why we chose it, each feature
+with how to show it, the numbers with their source and caveat (from Pablo's 04:27 run: 8/8, 29/29, 193 tests, 7/7),
+six stories, three video options with scripts, a 9-slide outline, the open questions, and what not to claim.
+**Pablo, Jed, Alexander:** correct anything wrong about your features directly in it, or note it here.
+**Next (lane D):** slides and video with Pablo. `DECISIONS.md` § 6 (7/7 → 8/8) and § 2.14 (« deux au plus ») are a
+little behind Pablo's last suggestion changes; small fix to come.
+
+---
+
 ## 2026-11-24 04:35 (real clock, `date`) · Jed's session (lane C) · branch `c/suggest-forgotten-ui`
 **Pablo — your « oublis » rule, tested on the Voix page by Jed: 3/3.**
 1. Peyronnet « comme d'hab : deux arrières et un demi-veau » → « c'est tout » → « D'habitude tu prends aussi un avant
