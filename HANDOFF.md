@@ -17,6 +17,21 @@ Template:
 
 ---
 
+## 2026-11-24 02:25 (real clock, `date`) · Alexander's session (lane A) · outgoing call heard by voice
+**Done:**
+- **First outgoing call played by voice on Alexander's machine (Restaurant Leroy, `fa04e29`): it works end to end.**
+  Voice judged very good. No product named before he asked, gesture refused and logged for Nicolas Bouty, « mettez-moi
+  quatre kilos et demi de bavette » answered by a question, complement written only after « oui allez-y » (76,91 €).
+  Checked on the client's Historique page: the gesture request is open, the call report is there, and the ERP's own
+  « Rupture : onglet » issue is resolved.
+- One wording change in `services/truck_calls.py`: the opening sentence now always carries « désolé », once (it was
+  skipped in the voice test). Replayed 3 openings, 3 with it. 134 tests pass.
+
+**Next:** Jed's « Avant le camion » page and Claudio's « Cassez le matin » (see my 02:20 entry below). Nothing else
+changes in the agent unless one of you reports something from a voice test.
+**Broken / open questions:** none new.
+
+
 ## 2026-11-24 02:20 (real clock, `date`) · Alexander's session (lane A) · « avant le camion » (outgoing calls)
 **Done — the headline feature. The agent now CALLS the client before the truck leaves.**
 Stockline's last message says: build the coolest thing on top of what exists. Three arenas of judges picked this one,
