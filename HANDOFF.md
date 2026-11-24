@@ -17,6 +17,41 @@ Template:
 
 ---
 
+## 2026-11-24 01:17 (real clock, `date`) · Alexander's session (lane A) · `536a2bf`
+**Pablo — your jury reading, item by item. Thank you: this is the review nobody had done, and item 1 was a real
+defect.** 108 unit tests pass; none of this has been replayed with the model yet, so **Claudio, one `make calls` and
+one `make jury` on this commit, please**: it changes when the agent may confirm.
+
+1. **J7, confirmed without a yes: fixed in code, not only in the prompt.** `call_guard` (`agent/loop.py`) now refuses
+   `confirm_order` on a phone call unless the caller's own last sentence carries an agreement (« oui », « c'est bon »,
+   « valide », « vas-y », « ça marche », « je te fais confiance »…). « Mettez-m'en huit kilos », « mettez-les quand
+   même », or an order restated without a yes are requests: the tool answers "relis et demande s'il valide". The
+   prompt says the same. Expect one extra turn where the model used to confirm on its own (J6 last turn, J8, J11).
+2. **Slow first turns** (identification + creation in one turn): no change. Two model steps and a long tool call are
+   what they are; on the phone the instant word covers it, and Stockline said tonight that speed is not measured as
+   such. Noted, not fixed.
+3. **« tu » / « vous »: now read in code.** `caller_register` looks at the caller's own sentences and adds a one-line
+   note to his turn (« l'appelant te tutoie »), and the rule is now: his way of speaking in this call wins over the
+   file, no switching mid-call.
+4. **J15, order content volunteered on the first sentence: prompt rule added.** First turn: answer what was asked,
+   never detail an open or past order before the caller mentions it.
+5. **J10 (matured ribs): Claudio, option A from your 01:08 entry. The scenario is the one to change.** Decision stands (Alexander): accepted when the
+   ageing room covers the date, with the one-week rule said. `evals/jury_calls.json` → J10 `expected` should read
+   that way.
+6. **Notes spoken by accident (« Paleron: 17 kg. »): fixed.** Text before a tool is spoken only if it is one of
+   our waiting phrases or a bare greeting (`is_waiting_phrase`), whatever its length.
+
+**The failing test you saw (`test_identify_caller_does_not_switch_client_on_a_guess`, `KeyError: 'idf'`) is not on
+`main`.** I rebuilt exactly `614e3df` outside the container (your `clients/` files and `test_ws_close.py` included):
+105 of 105 pass, that test too. Jed's 23:30 note explains it: the `ai` container only mounts `app/`, so its `tests/`
+folder is an old copy running against new code. Run the suite on the host, or rebuild the image.
+
+**Soniox close: confirmed as the cause by your numbers, and both my suspects were wrong.** Good catch.
+
+**Claudio:** substitution passing with no fix is the best possible answer. The truck tool is on hold: Stockline's
+message tonight (build the coolest feature, speed is not measured as such) changes what the remaining hours are for,
+and Alexander is deciding the feature next.
+
 ## 2026-11-24 01:08 (real clock, `date`) · Claudio's session (lane D) · branch `d/decisions-numbers`
 **Alexander — J10 (matured ribs) needs one decision from the two of us before the jury reads it.** Today the
 scenario and the agent disagree, so a juror who opens `evals/jury_calls.json` sees a failure that is really a choice.
