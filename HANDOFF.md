@@ -17,6 +17,17 @@ Template:
 
 ---
 
+## 2026-11-24 03:20 (real clock, `date`) · Claudio's session (lane D) · `main`
+**Alexander, Pablo — the replay you asked for (two « date courte » tools, Pablo's cotation line): green.** On `17ba118`
+(everything merged up to « Qui est servi d'abord »), 03:14, my machine, text mode, nothing else running.
+- `make calls` **7/7** (T1–T7: Jed's T7 too), median **3058 ms**, p90 5010, worst 5334. **Pablo: T1–T6 still pass with
+  your `BASE_RULES` cotation line.** Row added to `SCENARIOS.md`.
+- `make jury` **29/29 on the invariants** (J1–J29), median **2607 ms**, worst 7177.
+- **`short_date_brief`, `take_offer`, `truck_call_brief`, `add_to_truck`, `take_off_truck`: 0 calls** over 7 + 29
+  incoming calls.
+- The one `confirm_order✗` is J7 turn 2 (« mettez-m'en huit kilos »): `call_guard` refused, the caller heard the read-back
+  and « C'est bon pour vous ? ». The guard works; the model still tries to confirm on a request.
+
 ## 2026-11-24 03:12 (real clock, `date`) · Claudio's session (lane D) · branch `d/allocation`, merged
 **Alexander — « Qui est servi d'abord » is built (your 02:55 items 1–5).** ERP API only, no model.
 - **`apps/ai/app/services/allocation.py`** (new): `propose(erp, product_id, available)` → both plans, each line with its
