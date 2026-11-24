@@ -5,6 +5,7 @@
     make chaos PRODUCT=prd_0011 WHY="Chambre froide 2 en panne cette nuit : lot écarté par précaution"
     make chaos PRODUCT=prd_0012 WHY="…" ARGS="--short 30"     # 70 % loaded instead of 0 (« poids court »)
     python3 evals/break_morning.py --list                     # products on today's trucks, clients hit by each
+    make chaos-check                                          # the five cards of DEMO.md § 9, reset before each
 
 What it does, through the ERP API only (no model, no credits):
   1. writes the product's whole stock off (POST /api/stock/adjust, reason "adjustment", note = WHY: the agent says
@@ -29,6 +30,15 @@ import urllib.parse
 import urllib.request
 
 ERP, AI = "http://localhost:4000", "http://localhost:4100"
+
+# The five sabotage cards of DEMO.md § 9: (product, reason the juror types, percent short).
+CARDS = [
+    ("prd_0011", "Chambre froide 2 en panne cette nuit : lot écarté par précaution", 0),
+    ("prd_0010", "La palette de lundi a cassé la chaîne du froid", 0),
+    ("prd_0012", "Filet saisi par les services vétérinaires ce matin", 0),
+    ("prd_0037", "Lot refusé au contrôle qualité de 3 h", 0),
+    ("prd_0011", "Une partie du lot n'a pas atteint ses 21 jours", 30),
+]
 
 
 def call(base: str, path: str, method: str = "GET", body: dict | None = None, params: dict | None = None):
@@ -112,7 +122,21 @@ def main() -> int:
     ap.add_argument("--why", default="Lot écarté cette nuit par précaution")
     ap.add_argument("--short", type=int, default=0, help="percent missing (0 = absent from the truck)")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--cards", action="store_true", help="run the five sabotage cards, ERP reset before and after each")
     a = ap.parse_args()
+    if a.cards:
+        results = []
+        for product, why, short in CARDS:
+            print(f"\n════ {product} {'--short ' + str(short) if short else ''} · {why}")
+            call(ERP, "/api/admin/reset", "POST", {})
+            orders = today_orders()
+            time.sleep(3.2)
+            before = {c["orderId"] for c in call(AI, "/outbound/truck-calls")["calls"]}
+            broken = stage(product, why, short, orders)
+            results.append(bool(broken) and show_and_check(broken, before))
+        call(ERP, "/api/admin/reset", "POST", {})
+        print(f"\nCartes sabotage : {sum(results)}/{len(results)} OK (ERP remis à zéro)")
+        return 0 if all(results) else 1
     orders = today_orders()
     if a.list or not a.product:
         list_products(orders)
