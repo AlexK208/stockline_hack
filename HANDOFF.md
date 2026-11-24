@@ -17,6 +17,27 @@ Template:
 
 ---
 
+## 2026-11-24 03:58 (real clock, `date`) · Pablo's session (lane B) · `b/suggest-once`, merged · end-of-order suggestion
+**Step 1, merged now: one suggestion per call.** With two, « oui, c'est bon » (= validate) to the first one got a
+second upsell, and the order was not confirmed.
+- `tools/suggest.py` `MAX_SUGGESTIONS = 1`; the `BASE_RULES` « Suggestion » line: on a yes, add it + read back +
+  agreement question; on a no, agreement question; never another one.
+- T7 updated (`SCENARIOS.md`, `check_t7`: hard check « pas de 2e proposition après le oui »). `DECISIONS.md`
+  suggestion bullet updated (two → one, with the measurement). **Claudio:** your files, small edits, please read.
+- Regression on this branch: unit tests 193 + 17 seed suggestion tests; `make calls` **7/7** (median 3 149 ms);
+  `make jury` **29/29** (median 2 808 ms; expected ⚠ J1, J15, J23); `WS /voice`, 9 typed turns with ElevenLabs:
+  first sound 133–243 ms, **answer median 2,4 s (was 3,8 s)**, and « oui, c'est bon » now gets the read-back + « On
+  est bons ? ».
+
+**Correction of my 03:38 entry:** « latency is creeping up » was wrong. Single runs on different machines are noise.
+Overall speed is unchanged within noise. Only the « c'est tout » turn was slower, and step 1 shortened it.
+
+**Step 2, next (Pablo's rule, replaces the current sources):** suggest only the products FORGOTTEN from an order the
+client has placed **the same at least 3 times**, and only if the current order is clearly that order: **at most 2
+missing, at most 2 extra, at most 3 differences in all, and no more than 35 % of it missing**. All the missing
+products go in **one** sentence. Otherwise nothing. Seasonal, promo and lot sources go away. **Jed: nothing to do**
+(my 03:49 request is withdrawn). I will post the result here.
+
 ## 2026-11-24 03:50 (real clock, `date`) · Claudio's session (lane D, my file in lane C) · `main`
 **Jed — your three points on the truck board (03:48) are fixed in `truck-board.tsx`, display only:**
 1. The counter is now **« Reste en jeu »** = `atStake − recovered` (91 € → 14 € after Leroy's 77 €).
@@ -68,31 +89,9 @@ Feature freeze respected: docs and checks only.
 - Small: `CLAUDE.md` still says « Lane A is working on next: instant acknowledgement, caller lookup », both done long
   ago. Shared file, left as is.
 
-## 2026-11-24 03:49 (real clock, `date`) · Pablo's session (lane B) · **Jed, a decision for you: the end-of-order suggestion**
-**Jed, your `suggest_items` (T7) now fires on every « c'est tout ».** It works. But in the arena verdict (Alexander, 00:56),
-the butcher and the telesales rep said **« butchers hate the nagging upsell »**, and idea 4 (proactive « comme
-d'habitude ») was rejected for that reason. **Please decide, with Alexander, whether we keep it for the demo**, then
-do it. It is your feature: keep it, keep it lighter, or turn it off for the demo.
-
-**What a judge would hit today.** Measured on `WS /voice` (typed turns, ElevenLabs on), Peyronnet order:
-- « C'est tout. » → « Tu prends d'habitude un demi-veau, je t'en mets un ? » (first word 2,8 s instead of a quick
-  read-back).
-- « Oui, c'est bon. » (she meant: validate) → it added the half-veal **and proposed a second product** (« un demi-porc
-  cul noir ? », 3,8 s). **The order was still not confirmed.** A juror who says « oui, c'est bon » and gets a second
-  upsell will find it pushy and slow.
-
-**What I am already doing, on Pablo's request (branch `b/suggest-once`, not merged yet, regression running):**
-- `tools/suggest.py`: `MAX_SUGGESTIONS = 1` (was 2).
-- The `BASE_RULES` « Suggestion » line: one suggestion per call. On a yes: add it, read back the whole order, and ask
-  for agreement (or validate directly if he said so). On a no: ask for agreement. Never another one.
-- T7 updated (`SCENARIOS.md` + `check_t7`): the « Non, pas cette semaine » turn is removed, and there is a hard check
-  « pas de 2e proposition après le oui ».
-- Already verified: 193 unit tests and the 17 seed suggestion tests pass. T7 by model passes: « Ce sera tout » →
-  one suggestion → « Oui, mets-moi ça » → added + read back + « On est bons ? » → « Oui, c'est bon » → confirmed.
-
-**So your decision is only: keep this single suggestion for the demo, or switch it off.** Switching it off would mean
-removing the « Suggestion » rule line and the `suggest_items` import, then a T7 replay. I will merge `b/suggest-once`
-only if the regression is clean, and say so here. If you would rather own the change yourself, tell me before then.
+## 2026-11-24 03:49 (real clock, `date`) · Pablo's session (lane B) · ~~Jed, a decision for you: the end-of-order suggestion~~
+**Superseded (03:58): Jed, nothing to do.** Pablo decided the suggestion rule himself and I am changing it (see my
+03:58 entry). This entry used to ask you to decide whether to keep `suggest_items` for the demo.
 
 ## 2026-11-24 03:48 (real clock, `date`) · Jed's session (lane C) · branch `c/truck-board` (fixes only, per Pablo's freeze)
 **« Avant le camion » board: tested on screen by Jed, Claudio's five tests.** All pass, after three lane C fixes.
