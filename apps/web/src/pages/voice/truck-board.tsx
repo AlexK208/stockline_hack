@@ -113,7 +113,8 @@ export function TruckBoard({ canCall, onCall, activeOrderId }: { canCall: boolea
         {data ? (
           <div className="grid grid-cols-3 gap-2">
             <Counter label="À appeler" value={<span className="num">{data.toCall}</span>} tone={data.toCall ? "warning" : undefined} />
-            <Counter label="En jeu" value={<Money value={data.atStake} compact />} tone="destructive" />
+            {/* What is still missing on the trucks: atStake counts every gap of the morning, recovered what calls put back. */}
+            <Counter label="Reste en jeu" value={<Money value={Math.max(data.atStake - data.recovered, 0)} compact />} tone="destructive" />
             <Counter label="Récupéré" value={<Money value={data.recovered} compact />} tone={data.recovered ? "success" : undefined} />
           </div>
         ) : null}
@@ -134,7 +135,8 @@ export function TruckBoard({ canCall, onCall, activeOrderId }: { canCall: boolea
             {data.calls.length === 0 ? (
               <p className="px-1 py-6 text-center text-[12px] text-muted-foreground">Rien ne manque dans les camions ce matin.</p>
             ) : null}
-            {data.calls.map((c) => (
+            {/* Calls still to make first (in departure order), then the ones done, folded to one line. */}
+            {[...data.calls.filter((c) => c.status !== "done"), ...data.calls.filter((c) => c.status === "done")].map((c) => (
               <CallCard key={c.orderId} call={c} clock={clock} active={c.orderId === activeOrderId} canCall={canCall} onCall={() => onCall(c)} />
             ))}
             {data.tolerated.length ? (
@@ -193,6 +195,20 @@ function Departure({ departure, clock }: { departure?: string; clock: number }) 
 function CallCard({ call, clock, active, canCall, onCall }: { call: TruckCall; clock: number; active: boolean; canCall: boolean; onCall: () => void }) {
   const done = call.status === "done";
   const rule = RULE[call.substitution];
+  if (done) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-[6px] border border-border bg-background px-3 py-1.5 text-[12px] opacity-80">
+        <span className="min-w-0 truncate">
+          <span className="font-semibold">{call.clientName}</span>
+          <span className="text-muted-foreground"> · {call.outcome?.title?.replace(/^Appel avant camion\s*:\s*/i, "") ?? "appel fait"}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {call.recovered ? <Money value={call.recovered} tone="success" compact /> : null}
+          <Badge tone="success"><CheckCircle2 size={11} strokeWidth={2} className="mr-0.5 inline" />fait</Badge>
+        </span>
+      </div>
+    );
+  }
   return (
     <div
       className={cn(
@@ -228,7 +244,8 @@ function CallCard({ call, clock, active, canCall, onCall }: { call: TruckCall; c
                 <span className="block text-muted-foreground">⇄ {fr(p.replacedBy.qty)} {p.replacedBy.unit ?? ""} {p.replacedBy.productName}</span>
               ) : null}
             </span>
-            <Money value={p.amount} tone={p.amount < 0 ? "destructive" : undefined} className="shrink-0" />
+            {/* A replaced line is already on the truck: its amount is the invoice difference, not money at stake. */}
+            <Money value={p.amount} tone={p.kind === "replaced" ? "muted" : p.amount < 0 ? "destructive" : undefined} className="shrink-0" />
           </div>
         ))}
       </div>
