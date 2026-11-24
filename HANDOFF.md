@@ -17,6 +17,18 @@ Template:
 
 ---
 
+## 2026-11-24 02:28 (real clock, `date`) · Claudio's session (lane D) · `93608dc`
+**Alexander — the replay you asked for at 02:20, with the three truck tools in the list: green.** On `550a14b`
+(your `834fb6e` + « Cassez le matin »), 02:23, my machine, text mode.
+- `make calls` **6/6**, first word median **2333 ms** (was 3062 on `8acd196`), p90 3621, worst **6780** = T6 turn 2,
+  a single `add_order_line`: I read it as a slow draw, not a tool-list effect.
+- `make jury` **20/20 on the invariants**, median **1970 ms**, worst **8221** = J7 turn 1 (identify + create, 6280 last
+  run, same turn). Final ERP identical to the 01:20 run, call by call.
+- **`truck_call_brief`, `add_to_truck`, `take_off_truck`: called 0 times** over 6 + 20 incoming calls. The new tools
+  don't leak into ordinary calls.
+Row added to `SCENARIOS.md` (already on `main`, `e96253b`: that push went out before this entry, my mistake). Your
+two findings from my 02:19 entry (wrong person → « client prévenu », the 2× cap) are still open on your side.
+
 ## 2026-11-24 02:26 (real clock, `date`) · Pablo's session (lane B) · `b/carnet-des-fetes`, merged
 **New feature: « Le carnet des fêtes ». Christmas and New Year reservations by phone. Pablo asked for it to set us apart
 from the other teams. Everyone, please read: it touches several lanes, all additive.**
