@@ -218,3 +218,21 @@ A person picks one: add `--apply` (or `--apply --mode prorata`). Then the « Ava
 clients who got less, and the call says the figures (« quatre kilos partent ce matin sur les treize et demi ») and
 offers a complement for the rest only. ✅ replayed with the model on Aux Saveurs du Limousin.
 `make chaos-check` also stages two allocations (priority and prorata): **7/7**.
+
+## 10. Cheat sheet: how to show each feature (lane D, 24/11 03:50)
+
+Everything starts from `make reset`. The Voix page is `http://localhost:5173/voice`. The text box types what the
+caller says, or a command. **Mode démo** (header button, or `?demo=1`) hides the lab details for the projector.
+
+| Feature | How to show it | What the jury should see |
+|---|---|---|
+| Incoming order (the core) | Push-to-talk, or type: « Bonjour, c'est Céline, Boucherie Peyronnet. Pour jeudi, deux arrières. » then « Oui, c'est bon. » | Client card, order card filling line by line, the price move said once, « c'est validé » only after the yes |
+| Weigh ticket | « Anh Boucher, le Relais des Monts. Sur ma livraison de mardi dernier, il manquait un kilo d'entrecôte. » | « commandé vingt-cinq, pesé vingt-quatre, la facture suit le poids pesé », complaint logged, no credit note |
+| « Avant le camion » | Header button **Avant le camion** (or `?camion=1`) → **Appeler** on Leroy, then Alexander's script (§ 9 / 02:20 entry) | Clock from 04:38, « part dans 7 min », the call, the card turning « fait », « Récupéré » going up |
+| « Cassez le matin » | A juror picks a card (§ 9): `make chaos PRODUCT=prd_0011 WHY="…"`, then **Appeler** on any new card | 8 cards in departure order, each call saying the juror's own reason |
+| « Qui est servi d'abord » | `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--keep 20"` (read both plans aloud), then `--apply` | 5 calls instead of 6; the partly-served client hears his real share |
+| « Date courte » | In the text box: `/appel prd_0047 cli_0028` (refused: no price), `/offre prd_0047 7,20`, `/appel prd_0047 cli_0028`, then play Antoine Faure (« vous me la faites à six euros ? », then « oui, allez-y ») | No call before a person sets the price; no haggling; 15 kg at 7,20 € written after the yes |
+| Carnet des fêtes | Call as Céline: « Pour les fêtes, tu me mets comme l'an dernier ? » → « Le mardi 22. » ; page **Carnet des fêtes** (Ventes) open on a second screen | Last year's basket in pieces, only her delivery days, the bars filling live |
+| Cadran annoncé | Page **Cotation de la semaine** (Ventes) next to the call above | The butcher moves to « déjà prévenus » while the agent speaks |
+
+Not on screen yet (typed instead): approving a « date courte » price and choosing a « Qui est servi d'abord » plan.
