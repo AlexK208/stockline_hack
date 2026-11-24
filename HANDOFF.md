@@ -34,6 +34,41 @@ seconds on the card.
 **Lane A, small:** the tool gives "rupture" without the reason T3 wants said ("un onglet par bête"). Fine on screen;
 just noting the card can't show it.
 
+## 2026-11-24 01:01 (real clock, `date`) · Claudio's session (lane D) · branch `d/substitution-scenarios`
+**Idea 5 done — and the headline is that lane A has nothing to fix. The agent already passes both variants.**
+`make jury ARGS="J19 J20 -v"`, invariants 2/2, and the ERP is right in both.
+
+**J19, straight acceptance.** Fabien Roux, Brasserie Le Saint-Martial, asks 15 kg of onglet for Thursday; the
+onglet is out; he takes bavette, same quantity.
+→ `CMD-2026-006259 confirmed 2026-11-26 [prd_0014 × 15 kg (remplace prd_0015)]`, one line, no onglet line, and
+the onglet request logged as a client event. **`substituteFor` is set**, which was the whole point.
+
+**J20, acceptance with a condition** — the one the engineer called the easy mistake: « D'accord pour la bavette,
+mais seulement dix kilos au lieu de quinze. »
+→ `prd_0014 × 10 kg (remplace prd_0015)`. It took the condition, not the original 15.
+
+**Why I could use this client.** 84 of our 92 clients explicitly refuse substitutions; only 4 active ones are
+silent on it. `cli_0008` is one, its preferences already mention bavette for the plat du jour, and it has **no
+open order** (last from June), so nothing interferes. Onglet is at 0 available on 26/11 and bavette is in the
+official alternatives list. Facts are recorded inside each scenario.
+
+**Also:** `run_jury.py` now prints `(remplace prd_XXXX)` on an order line, so a substitution is gradeable at a
+glance instead of by opening the JSON.
+
+**One thing I checked and it is NOT a defect, flagging so nobody re-finds it.** Both turns open with the model
+thinking aloud: « Onglet est en rupture d'après le contexte, mais je vérifie par l'outil. » On the voice path
+that is dropped — `MAX_WAIT_WORDS = 5` and `speaker.drop()` in `voice_session.py` — so the caller never hears
+it, exactly as your 23:55 entry said. It only shows over `POST /chat`. Two places it still bites:
+1. My spoken-output checks read `turn.answer`, which is the unfiltered text, so any future check on wording can
+   judge a sentence that is never spoken.
+2. `make chat` shows it. Not the Voix text box, which goes through the socket and is filtered.
+
+**Still mine and not started: the slides and the video.** The arena said those come first and I did this instead,
+on Claudio's instruction — recording that so the sequencing is not mistaken for the arena being ignored.
+
+**Open for you (lane A), unchanged from the arena:** the truck tool. When it exists I will write the hostile call
+for it, a caller asking for another client's truck, so `call_guard` is proven rather than assumed.
+
 ## 2026-11-24 00:58 (real clock, `date`) · Pablo's session (lane B) · branch `b/jury-findings`
 **Alexander (and Claudio for item 5): the 18 jury transcripts read against their `expected`** (`REVIEW.md` § 3.3,
 nobody had done it). Run on `dbcc191` (00:41–00:49, my machine): `make calls` **6/6** (median 2915 ms, worst
