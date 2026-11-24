@@ -149,6 +149,23 @@ def is_waiting_phrase(text: str) -> bool:
     return desk.norm(said) in known or bool(GREETING_ONLY.match(said))
 
 
+# A sentence the model wrote to itself rather than to the caller: it talks ABOUT the caller in the third person
+# (« Il pose la question lui-même, je peux donc proposer. », « Le client refuse les substitutions. ») or about its own
+# rules. Heard on a live test (Restaurant Leroy, 24/11). The prompt forbids it; this catches what slips through.
+ASIDE = re.compile(
+    r"\b(le client|la cliente|l['’]appelant|l['’]interlocuteur)\b"
+    r"|^(il|elle) (me |nous )?(pose|demande|dit|veut|souhaite|cherche|parle|appelle|a (dit|demandé|posé|confirmé|accepté|refusé))\b"
+    r"|\b(je peux donc|donc je peux|je dois donc|donc je dois)\b"
+    r"|\b(mes|les) (règles|consignes|instructions)\b",
+    re.I,
+)
+
+
+def is_aside(sentence: str) -> bool:
+    """True for a sentence that is the model's note to itself, never for something said to the caller. Not spoken."""
+    return bool(ASIDE.search(" ".join((sentence or "").split())))
+
+
 def said_goodbye(text: str) -> bool:
     """The caller is leaving ("merci, au revoir"): the moment to write the call report."""
     return bool(GOODBYE.search(text or ""))

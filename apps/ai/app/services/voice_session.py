@@ -58,7 +58,7 @@ from app.tools import ErpClient, all_tools
 from app.clients.mock_speech import silent_wav
 from app.schemas import MOCK_TTS_MIME
 
-from .call_prep import ack_note, choose_ack, is_waiting_phrase, said_goodbye
+from .call_prep import ack_note, choose_ack, is_aside, is_waiting_phrase, said_goodbye
 from .call_report import write_report
 from .warmup import WARM_EVERY_S, Warmer, warm_prompt_cache
 from .utterance import Utterance
@@ -422,6 +422,9 @@ class Speaker:
 
     def speak(self, sentence: str) -> None:
         if not sentence.strip():
+            return
+        if is_aside(sentence):  # the model talking about the caller or its rules, not to him: never spoken or shown
+            print(f"[ai] aside not spoken: {sentence.strip()[:160]}", flush=True)
             return
         if self.worker is None:
             self.worker = asyncio.create_task(self._speak_queued())

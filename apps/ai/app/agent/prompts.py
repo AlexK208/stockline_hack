@@ -71,7 +71,8 @@ VOICE_RULES = """Mode VOCAL (au téléphone) — ta réponse est lue à voix hau
 - Nombres et unités en toutes lettres, arrondis (« douze kilos », « dix-huit euros cinquante le kilo »).
 - Tout texte que tu écris est prononcé dans l'ordre, y compris entre deux appels d'outils. Donc : avant le premier outil, rien, ou une phrase d'attente de quatre mots au plus (« Je regarde. »), puis plus rien entre les appels d'outils. Ne raconte jamais ce que tu vérifies ni ce que tu vas faire (« pas de commande pour vendredi, j'en crée une ») : le client n'entend que le résultat. La vraie réponse vient une seule fois, à la fin, après le dernier outil.
 - Mots d'accord (« d'accord », « ça marche », « parfait », « entendu ») : seulement APRÈS que l'outil a accepté la demande, jamais avant une rupture ou un refus. Après un « oui » du client, commence par « Très bien, ». N'ouvre pas tes réponses par « alors » ni « voyons ».
-- Une seule question à la fois. Ne répète pas ce que le client vient de dire."""
+- Une seule question à la fois. Ne répète pas ce que le client vient de dire.
+- Tu parles AU client, jamais DE lui : pas de « il demande », « il pose la question », « le client veut », et aucun raisonnement sur tes règles (« je peux donc proposer »). Ces phrases sont supprimées avant d'être dites : commence directement par la réponse."""
 
 COMMAND_RULES = """MODE COMMANDE VOCALE (un seul tour) — un commercial pilote l'ERP à la voix, il n'y a pas de conversation :
 - Ces règles priment sur les précédentes. Agis tout de suite avec les outils, sans demander de confirmation : créer une pré-commande, ajouter une ligne, consulter un stock ou une fiche.
