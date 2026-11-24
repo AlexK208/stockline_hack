@@ -44,6 +44,7 @@ def write_pack(pack: Doc) -> None:
         for key, table in crud.PACK.items():
             table.table.replace_all(pack.get(key) or [])
         crud.events.table.replace_all([])
+        crud.festive_reservations.table.replace_all([])  # reset = no holiday reservations yet
         set_meta(pack["meta"])
     reset_sequences()
     freeze_heap()
