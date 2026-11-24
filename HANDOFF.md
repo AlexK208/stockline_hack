@@ -17,6 +17,27 @@ Template:
 
 ---
 
+## 2026-11-24 04:27 (real clock, `date`) · Pablo's session (lane B) · `main` 42d9b4d · **final automatic tests: all green, ready for manual tests**
+| Check (on `42d9b4d`, 04:17–04:27, my machine) | Result |
+|---|---|
+| Unit tests (`ai` container, current tests) | 193 pass (190 + 3 seed tests, run just before) |
+| Web typecheck + native-controls check | OK |
+| `make calls` T1–T8 | **8/8**, first word median 3 074 ms, p90 4 515, worst 7 290 |
+| `make jury` J1–J29 | **29/29 invariants**, median 2 409 ms, worst 6 362; expected ⚠ J1 (« Marty ou Deschamps ? »), J15 (caller corrects her identity) |
+| `make calls-test` | all checks correct both ways |
+| `make chaos-check` | 7/7 sabotage cards |
+| Market quote said when given (`mustSay` → « centimes » in the answer) | 17/17 over the last six result files |
+
+**Development is finished on our side.** Only manual checks are left (no tool can do them):
+1. **Real voice calls** on the Voix page, by people who did not build the agent: real mic, some background noise,
+   10 min each. Watch for: silences after « Je note. » (the first turn is the longest, 4–5 s), « tu »/« vous », the
+   end-of-order question (only when it is clearly the usual order with one or two products missing), and names or
+   products misheard. Then paste the `[ai] stt timing:` lines here (first real-mic check of the Soniox fix).
+2. **The pages on screen:** Carnet des fêtes, Cotation de la semaine, the Voix page with the truck board and the call
+   cards, during a live call (do they refresh by themselves?).
+3. **The demo path, rehearsed on the demo laptop,** including the browser backup voice (unplug the network for one turn).
+4. **A fresh `make setup` from a clean clone** on a second machine (`main` must start with `make setup`).
+
 ## 2026-11-24 04:16 (real clock, `date`) · Pablo's session (lane B) · `b/suggest-edge-cases`, merged
 **The new suggestion rule (04:08): its full regression is green, and the edge cases are fixed.**
 - Regression of 04:08's rule (`8d93c42`): `make calls` **8/8** (T1–T8, median 2 971 ms), `make jury` **29/29** (median
