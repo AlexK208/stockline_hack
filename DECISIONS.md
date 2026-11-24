@@ -269,7 +269,7 @@ camion de Corrèze part à **04:45**. À cette heure-là, personne n'a le temps 
   de la maison, depuis le stock réel, au prix du client. La raison donnée est la note de l'inventaire elle-même.
 - **Trois outils, chacun gardé par du code** : `truck_call_brief` (les faits seulement), `add_to_truck` (un
   complément confirmé sur la tournée du jour, refusé sans un « oui » du client dans sa dernière phrase, sans stock,
-  au-delà de deux fois le poids manquant ou une deuxième fois) et `take_off_truck` (seulement une ligne de
+  au-delà du poids manquant plus 20 % (2 kg au minimum) ou une deuxième fois) et `take_off_truck` (seulement une ligne de
   remplacement, jamais ce qu'il a commandé). Un appel = un client, comme pour les appels entrants.
 - **Les règles de l'appel sortant voyagent dans son premier message**, pas dans le prompt système : un appel
   entrant tourne sur le même prompt qu'avant. Vérifié : sur 26 appels entrants rejoués (`550a14b`), les trois
@@ -282,10 +282,12 @@ vide ce produit dans les camions du jour, par l'API de l'ERP seulement. Rien dan
 Cinq cartes sabotage (`DEMO.md` § 9) sont vérifiées sans modèle par `make chaos-check` : **5/5**, de 6 à 8 appels
 et de 441 à 3 902 € en jeu. Dix appels ont été rejoués avec le modèle sur des clients qu'il n'avait jamais vus.
 
-**Ce que ces rejeux ont trouvé, et que nous disons plutôt que de le cacher** : quand un commis décroche à la place
-du chef, rien n'est écrit, mais l'appel était enregistré « client prévenu » ; et la limite « deux fois le poids
-manquant » laisse passer « rajoutez vingt kilos » sur une grosse commande (seule la garde du « oui » l'arrête).
-État de ces deux points : § 6.
+**Ce que ces rejeux ont trouvé, et ce que nous en avons fait** : quand un commis décrochait à la place du chef,
+rien n'était écrit, mais l'appel était enregistré « client prévenu » et sortait de la liste ; et la limite de
+l'époque, « deux fois le poids manquant », laissait passer « rajoutez vingt kilos » sur une grosse commande (seule
+la garde du « oui » l'arrêtait). Les deux sont corrigés (`e3f1aa0`) : une mauvaise personne laisse l'appel
+« à rappeler », toujours sur la liste, et la limite est devenue le manquant plus 20 %. Trouvé par nos rejeux le
+soir même, corrigé dans l'heure ; à rejouer avec le modèle sur la nouvelle version (§ 6).
 
 ### 2.13 Le carnet des fêtes : réserver Noël au téléphone (lane B)
 
@@ -548,7 +550,7 @@ sans rien dire.
 | Latence texte | médiane **2696–2756 ms**, p90 3498–3777 ms, **pire 3513–4157 ms** (2 × 18 tours) — pire tour 8,0 s → 3,5 s depuis la référence |
 | Latence voix | **0,09 à 0,61 s** jusqu'au premier son sur une demande (8,7 s au départ) ; 1,2 à 1,7 s sur une phrase courte (avant `4ac4348`, devrait gagner ~1 s, non re-mesuré) ; « Très bien. » tout de suite après un « oui » ; STT fin de parole → transcription finale **0,15–0,60 s** (1,25–1,64 s avant `4ac4348`) |
 | Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache · **≈ $0,10–0,15 l'appel complet** (cache froid), ~$0,05 quand les appels s'enchaînent |
-| Appels sortants | « Avant le camion » : 2 appels dans les données, 6 à 8 avec `make chaos` (5/5 cartes vérifiées sans modèle). **Ouvert côté lane A au 24/11 02:40** : commis au bout du fil → appel noté « client prévenu » ; limite « 2 × le manquant » trop large sur une grosse commande |
+| Appels sortants | « Avant le camion » : 2 appels dans les données, 6 à 8 avec `make chaos` (5/5 cartes vérifiées sans modèle). 10 appels rejoués avec le modèle. Mauvaise personne → « à rappeler » et limite manquant + 20 % corrigées (`e3f1aa0`), **pas encore rejouées avec le modèle** |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |
