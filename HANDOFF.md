@@ -17,6 +17,65 @@ Template:
 
 ---
 
+## 2026-11-24 02:48 (real clock, `date`) · Pablo's session (lane B) · `b/cadran-annonce`, merged
+**New feature: « Le cadran annoncé ». The agent tells butchers how this week's market quote moved their carcass
+prices: once, from their own prices, recorded.** All additive, like the Carnet des fêtes.
+
+**Why (all from our pack).**
+- Carcasses and quarters are priced on the **weekly Limoges market quote, published on Monday**
+  (`05-prix-et-credit.md`). Peyronnet's hindquarter: 9.77 → 9.82 → 9.98 → 10.05 → 10.15 → 10.20 €/kg in a month.
+- The company's note for today: « Cotation du lundi en hausse de 6 centimes sur la génisse : **prévenir les
+  bouchers** ».
+- **16 client files** list « les hausses de cotation non annoncées » as a risk. Couzeix, now lost, is one of them,
+  and another lost butcher's note says « Nicolas passe le voir chaque mois avec la cotation ».
+- On the phone, butchers react with « Encore une hausse ? » (243 price-negotiation events).
+
+**What the agent does.**
+- A butcher orders, or asks the price of, carcasses or quarters → `cotation_semaine` runs **in the same step as
+  the order write** (no extra model step). If his price moved since his last delivery before Monday, the agent
+  says once: « Cette semaine l'arrière a pris cinq centimes, à dix euros vingt le kilo, c'est la cotation de lundi
+  au cadran de Limoges. » Drops are said too (« l'avant a baissé de trois centimes »). This is recorded as a client
+  event « Cotation de la semaine annoncée », and it is **never repeated in the same week**.
+- « Encore une hausse ? SOCOVIA me le fait moins cher » → his one-month trend (« de neuf soixante-dix-sept à dix
+  vingt, la cotation monte au cadran, c'est la même chose pour tous nos bouchers »). **No discount** (« je n'ai pas
+  la main sur le prix »). His reaction is logged as `price_negotiation` with the competitor, for his salesperson.
+- Restaurants ordering PAD cuts hear nothing about it (only carcasses and quarters follow the quote).
+- **Page « Cotation de la semaine »** (Ventes): the 34 clients who bought carcasses in the last 60 days, told or
+  not yet this week, with their move. The ones whose file says unannounced rises annoy them come first. It refreshes
+  live on `cotation.*` events.
+- Nothing changes a price, an order or a rule. The numbers come from the order lines and the same price resolver as
+  the order lines (`pricing.price_for`).
+
+**Files.**
+- New: `apps/backend/app/services/cotation.py`, `routers/cotation.py`, `apps/ai/app/tools/cotation.py`,
+  `apps/ai/tests/test_cotation.py`, `apps/web/src/pages/cotation/index.tsx`.
+- One-line registrations: `main.py` (router), `tools/__init__.py` (import), `routes.tsx` + `nav.ts` (Jed).
+- **Alexander:** one rule in `BASE_RULES`, the « Carcasses et quartiers… cotation_semaine » line, just above the
+  Fêtes line.
+
+**Verified on `aadef13`.**
+- Unit tests in the `ai` container: 162 pass (1 failure, already on `main`: `identify_caller`, `KeyError: 'idf'`).
+- Web typecheck and the native-controls check pass.
+- `make calls` **6/6** (median 2 111 ms, worst 5 786 ms). `make jury` **20/20** on the invariants (median 3 024 ms;
+  worst 8 270 ms on J7, an identify + create turn without the quote tool, the same slow case as before).
+- Carnet des fêtes F1/F2 still correct. One fix came out of it: the agent was also announcing the quote during a
+  **Christmas reservation**. The rule now excludes reservations (December's price is not known yet). Re-checked:
+  F1 no quote talk, C1 still announced.
+- Real calls through `POST /chat` (voice): C1 Peyronnet, two hindquarters → announced once, event written, and a
+  second call the same week → not repeated. C2 hindquarters + forequarter → rise and drop said, then « encore une
+  hausse ? SOCOVIA… » → trend, no discount, `price_negotiation` logged. C3 Vergnaud filet → nothing about the quote.
+
+**Claudio, please test it** (you have the replays). Suggested calls:
+1. A butcher orders two hindquarters for Thursday → one sentence on the move, the « Cotation de la semaine
+   annoncée » event on his history, and the page shows him as told.
+2. Same client calls again → nothing said about the quote.
+3. « Encore une hausse ? [competitor] est moins cher » → trend, no discount, reaction logged with the competitor.
+4. A restaurant orders PAD only → no quote talk.
+5. A supermarket (Hyper Frais Corgnac, flagged sensitive) orders quarters → told, and the page moves it to
+   « Déjà prévenus ».
+The script of my calls is `cadran_calls.py`, in my session's scratchpad: ask if you want it as an `evals/` scenario
+file. `make reset` clears the announcements (they are client events, reloaded from the seed), so every replay
+starts with nobody told.
 ## 2026-11-24 02:45 (real clock, `date`) · Claudio's session (lane D) · `main`
 **Alexander — R2 and R4 replayed on `75b62ab` (your `e3f1aa0` included): both fixes hold.** Same staging and same
 lines as on `550a14b`, typed turns over WS /voice.
