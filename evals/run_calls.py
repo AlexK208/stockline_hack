@@ -2,7 +2,7 @@
 """
 Automatic test calls: replays the scenarios of SCENARIOS.md against the running agent, then checks the ERP.
 
-    make calls                      # all scenarios (T1–T6)
+    make calls                      # all scenarios (T1–T7)
     make calls ARGS="T3 T6"         # some of them
     make calls ARGS="--repeat 3"    # each scenario 3 times (the model is not deterministic)
     python3 evals/run_calls.py -v   # also print the conversation
@@ -497,6 +497,28 @@ def check_t6(st: State, turns: list[Turn], c: Checks) -> None:
         c.soft("porc : samedi proposé à l'oral", bool(says(a, "samedi", "28/11")), t.answer[:120])
 
 
+def check_t7(st: State, turns: list[Turn], c: Checks) -> None:
+    o = one_new_order(st, "cli_0001", "2026-11-26", c)
+    if o:
+        c.hard(*(("2 quartiers arrière ≈ 200 kg",) + qty_in(o, "prd_0001", 180, 230)))
+        c.hard(*(("1 demi-veau",) + qty_in(o, "prd_0005", 55, 95)))
+        c.hard(*(("suggestion acceptée : 1 demi-carcasse de porc cul noir",) + qty_in(o, "prd_0007", 35, 65)))
+        c.hard("suggestion refusée : pas de quartier avant", not lines(o, "prd_0002"), describe(o))
+        c.hard("rien d'autre", len(o["lines"]) == 3, describe(o))
+        c.hard("commande confirmée", o["status"] == "confirmed", o["status"])
+    calls = [t for t in all_tools(turns) if t["name"] == "suggest_items"]
+    c.hard("suggest_items appelé une seule fois", len(calls) == 1, f"{len(calls)} appel(s)")
+    if len(turns) > 1:
+        t = turns[1]  # « Ce sera tout. »: read-back + first suggestion
+        a = norm(t.answer)
+        c.hard("1re suggestion au tour « ce sera tout »", bool(says(a, "porc", "cochon")), t.answer[:160])
+        c.soft("raison donnée", bool(says(a, "habitude", "d'hab", "souvent", "derniere", "an dernier", "d'ordinaire")), t.answer[:160])
+        c.soft(f"latence du tour de suggestion : 1er mot {t.first_text_ms} ms", True, "")
+    if len(turns) > 2:
+        c.soft("2e suggestion après le oui", bool(says(norm(turns[2].answer), "avant")), turns[2].answer[:160])
+    c.hard("jamais d'argument de marge", not says(norm(spoken(turns)), "marge", "profit", "rentab"), "")
+
+
 SCENARIOS = [
     Scenario(
         "T1",
@@ -567,6 +589,19 @@ SCENARIOS = [
         ],
         check_t6,
         watch=["CMD-2026-006248"],
+    ),
+    Scenario(
+        "T7",
+        "Suggestions en fin de commande — Boucherie Peyronnet",
+        ["cli_0001"],
+        [
+            "Bonjour, c'est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, comme d'hab : deux arrières et un demi-veau.",
+            "Ce sera tout.",
+            "Oui, mets-moi ça.",
+            "Non, pas cette semaine.",
+            "Oui, c'est bon.",
+        ],
+        check_t7,
     ),
 ]
 

@@ -5,20 +5,23 @@
  *    Removed lines stay visible, crossed out; changed quantities show the old one crossed out. Under them, in red, what
  *    the business rules refused during the call and why (out of stock, ordered too late, blocked account), read from
  *    the tools' results: the jury sees the rule applied, not just a sentence they might miss.
+ *  - Suggestions: what suggest_items found at the end of the order (dot + word for the reason, then the evidence).
+ *    The states are inferred, not reported: "proposé" once the agent's words name the product, accepted when it is in
+ *    the order (it then moves into the order card), "non retenu" once the next one is offered or the order confirmed.
  *
  * Sources: the agent's tool calls of this session (args, and `result` when the AI service forwards it) and the live ERP
  * events written by the voice agent since the session started. Nothing here writes to the ERP.
  */
 import { useMemo, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Ban, Phone, Repeat, ShoppingCart } from "lucide-react";
+import { ArrowUpRight, Ban, Lightbulb, Phone, Repeat, ShoppingCart } from "lucide-react";
 import type { ActivityEvent, ClientDetail, Id, OrderDetail, StockAvailability } from "@kit/shared";
 import type { VoiceTurn } from "@/features/assistant/useVoiceSession";
 import { cn } from "@/lib/cn";
 import { entityPath } from "@/lib/links";
 import { WEEKDAY_LABEL, WEEKDAYS } from "@/lib/labels";
 import { useClient, useEvents, useOrder, useProduct, useStockAvailability } from "@/lib/queries";
-import { Badge, DateLabel, Money, Qty, SECTION_LABEL, Skeleton, StatusDot } from "@/ui";
+import { Badge, DateLabel, Money, Qty, SECTION_LABEL, Skeleton, StatusDot, type Tone } from "@/ui";
 
 type Obj = Record<string, unknown>;
 const isObj = (x: unknown): x is Obj => !!x && typeof x === "object" && !Array.isArray(x);
@@ -38,11 +41,23 @@ export interface Refusal {
   day?: string; // "mercredi 25"
 }
 
+/** One product suggest_items found (tools/suggest.py), with where it came from. */
+export interface Suggestion {
+  productId: Id;
+  name: string;
+  qty: number;
+  unit: string;
+  kind: string; // "habitude" | "l'an dernier" | "lot à écouler" | "promo" | "réservation"
+  evidence: string;
+}
+
 interface CallState {
   clientId?: Id;
   candidates: Candidate[];
   orderId?: Id;
   refusals: Refusal[];
+  suggestions: Suggestion[];
+  suggestedAt?: number; // index of the turn where suggest_items ran
 }
 
 const ORDER_TOOLS = new Set(["create_draft_order", "add_order_line", "update_order_line", "update_order", "confirm_order"]);
@@ -92,9 +107,9 @@ export function refusalsOf(name: string, ok: boolean | undefined, result: unknow
 
 /** Walk the session's tool runs (oldest first): the latest client / order the agent worked on wins. */
 function fromTools(turns: VoiceTurn[]): CallState {
-  const s: CallState = { candidates: [], refusals: [] };
+  const s: CallState = { candidates: [], refusals: [], suggestions: [] };
   const refused = new Map<string, Refusal>();
-  for (const turn of turns) {
+  for (const [i, turn] of turns.entries()) {
     for (const t of turn.agent.tools) {
       const a = t.args ?? {};
       const r = isObj(t.result) ? t.result : undefined;
@@ -110,6 +125,13 @@ function fromTools(turns: VoiceTurn[]): CallState {
       if (argOrder) s.orderId = argOrder;
       if (r && t.ok && str(r.id) && typeof r.number === "string" && Array.isArray(r.lines)) s.orderId = r.id as Id;
       for (const x of refusalsOf(t.name, t.ok, t.result)) { refused.delete(x.key); refused.set(x.key, x); } // latest reason wins
+      if (t.name === "suggest_items" && t.ok && r && Array.isArray(r.suggestions)) {
+        s.suggestions = r.suggestions.filter(isObj).flatMap((x) => (str(x.productId) && num(x.qty) != null ? [{
+          productId: x.productId as Id, name: String(x.name ?? x.productId), qty: num(x.qty)!, unit: String(x.unit ?? ""),
+          kind: String(x.reasonKind ?? ""), evidence: String(x.evidence ?? ""),
+        }] : []));
+        s.suggestedAt = i;
+      }
     }
   }
   s.refusals = [...refused.values()];
@@ -128,11 +150,14 @@ export function CallCards({ turns, since }: { turns: VoiceTurn[]; since: string 
   const orderId = eventOrder ?? tools.orderId;
   const order = useOrder(orderId).data;
   const clientId = tools.clientId ?? order?.clientId;
+  const offers = useMemo(() => suggestionStates(tools, turns, order), [tools, turns, order]);
+  const accepted = useMemo(() => new Map(offers.filter((o) => o.state === "accepted").map((o) => [o.s.productId, o.s])), [offers]);
 
   return (
     <div className="flex flex-col">
       <ClientCard clientId={clientId} candidates={tools.candidates} />
-      <OrderCard orderId={orderId} order={order} session={since} refusals={tools.refusals} />
+      <OrderCard orderId={orderId} order={order} session={since} refusals={tools.refusals} accepted={accepted} />
+      <SuggestionList offers={offers.filter((o) => o.state !== "accepted")} />
     </div>
   );
 }
@@ -263,7 +288,7 @@ function stockState(line: Line, order: OrderDetail, rows: Map<Id, StockAvailabil
   return before <= 0 ? "out" : "short";
 }
 
-function OrderCard({ orderId, order, session, refusals: all }: { orderId?: Id; order?: OrderDetail; session: string; refusals: Refusal[] }) {
+function OrderCard({ orderId, order, session, refusals: all, accepted }: { orderId?: Id; order?: OrderDetail; session: string; refusals: Refusal[]; accepted: Map<Id, Suggestion> }) {
   const mem = useRef<Memory>({ initial: new Set(), lines: new Map(), firstQty: new Map() });
   const memKey = order ? `${order.id}|${order.createdAt}|${session}` : undefined;
   if (order && mem.current.key !== memKey) {
@@ -315,6 +340,7 @@ function OrderCard({ orderId, order, session, refusals: all }: { orderId?: Id; o
                     <span className="min-w-0 flex-1">
                       <span className={cn("block truncate", removed && "text-muted-foreground line-through")} title={l.productName}>{l.productName}</span>
                       {l.substituteFor && !removed ? <Replaces productId={l.substituteFor} /> : null}
+                      {!removed && accepted.has(l.productId) ? <AcceptedSuggestion s={accepted.get(l.productId)!} /> : null}
                     </span>
                     <span className={cn("flex shrink-0 items-baseline gap-1", removed && "line-through opacity-60")}>
                       {changed ? <span className="num text-[11px] text-muted-foreground line-through">{first}</span> : null}
@@ -373,6 +399,82 @@ function Replaces({ productId }: { productId: Id }) {
     <span className="flex items-center gap-1 text-[11px] text-success">
       <Repeat size={10} strokeWidth={2} className="shrink-0" />
       <span className="truncate">remplace {name ?? productId}</span>
+    </span>
+  );
+}
+
+// ───────────────────────── Suggestions ─────────────────────────
+
+/** Dot colour per reason, from the existing tones (no new colour). */
+const KIND_TONE: Record<string, Tone> = {
+  "l'an dernier": "violet",
+  "habitude": "info",
+  "promo": "success",
+  "lot à écouler": "warning",
+};
+const GENERIC = new Set(["demi", "carcasse", "boeuf", "limousin", "label", "rouge", "genisse", "sous", "mere", "frais", "fraiche", "facon", "entier", "entiere", "pour", "avec"]);
+const fold = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+const words = (name: string) => fold(name).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GENERIC.has(w));
+
+type OfferState = "proposed" | "accepted" | "declined";
+interface Offer { s: Suggestion; state: OfferState }
+
+/** Which suggestions the agent has offered so far, and what became of each (inferred: see the header comment). */
+function suggestionStates(tools: CallState, turns: VoiceTurn[], order: OrderDetail | undefined): Offer[] {
+  const list = tools.suggestions;
+  if (!list.length || tools.suggestedAt == null) return [];
+  const inOrder = new Set(order?.lines.map((l) => l.productId) ?? []);
+  // the words that tell a suggestion apart from the other suggestions and from the order's lines ("porc", "avant")
+  const others = (i: number) => new Set([...list.filter((_, j) => j !== i).map((x) => x.name), ...(order?.lines.map((l) => l.productName) ?? [])].flatMap(words));
+  const keys = list.map((x, i) => { const own = words(x.name); const k = own.filter((w) => !others(i).has(w)); return k.length ? k : own; });
+  const said = fold(turns.slice(tools.suggestedAt).map((t) => t.agent.text).join(" "));
+  let reached = -1;
+  keys.forEach((k, i) => { if (k.some((w) => said.includes(w))) reached = i; });
+  if (reached < 0 && said.trim()) reached = 0; // the agent spoke after the tool: the first one is on the table
+  const ended = !!order && order.status !== "draft";
+  return list.slice(0, reached + 1).map((s, i) => ({
+    s,
+    state: inOrder.has(s.productId) ? "accepted" : i < reached || ended ? "declined" : "proposed",
+  }));
+}
+
+function KindTag({ kind }: { kind: string }) {
+  return <StatusDot tone={KIND_TONE[kind] ?? "muted"} label={kind} className="text-[11px]" />;
+}
+
+/** "Suggestions": what the agent offered at the end of the order, and why (accepted ones are in the order card). */
+function SuggestionList({ offers }: { offers: Offer[] }) {
+  if (!offers.length) return null;
+  return (
+    <section className="border-b border-border py-2 text-[12px]">
+      <div className={cn(SECTION_LABEL, "mb-1 flex items-center gap-1.5 px-4")}><Lightbulb size={11} strokeWidth={2} />Suggestions</div>
+      <ul className="flex flex-col gap-1.5">
+        {offers.map(({ s, state }) => (
+          <li key={s.productId} className={cn("animate-flash px-4 leading-[16px]", state === "declined" && "opacity-55")}>
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate font-medium" title={s.name}>{s.name}</span>
+              <Qty value={s.qty} unit={s.unit} className="shrink-0 text-[12px]" />
+              <span className="w-[74px] shrink-0 text-right">
+                {state === "declined" ? <Badge>Non retenu</Badge> : <Badge tone="violet">Proposé</Badge>}
+              </span>
+            </div>
+            <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+              <KindTag kind={s.kind} />
+              <span className="truncate text-[11px]" title={s.evidence}>{s.evidence}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Under an order line the client took on the agent's suggestion. */
+function AcceptedSuggestion({ s }: { s: Suggestion }) {
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span>suggestion acceptée</span>
+      <KindTag kind={s.kind} />
     </span>
   );
 }

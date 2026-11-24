@@ -6,7 +6,7 @@ from app.core.listing import ListDep, Page
 from app.dependencies import CtxDep, data
 from app.schemas.domain import Client, ClientEvent, ClientPrice
 from app.schemas.inputs import ClientEventInput, ClientInput, ClientNoteInput, ClientPatch, ClientPriceInput
-from app.schemas.views import ClientDetail, ClientEventSummary, ClientSummary, Ok, UsualBasketLine
+from app.schemas.views import ClientDetail, ClientEventSummary, ClientPurchases, ClientSummary, Ok, UsualBasketLine
 from app.services import client_events, clients, pricing
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
@@ -35,6 +35,16 @@ async def get_client(id: str):
 async def client_usual(id: str):
     """"The usual": what this client typically orders (last 60 days)."""
     return clients.usual_basket(id)
+
+
+@router.get("/{id}/purchases", response_model=ClientPurchases)
+async def client_purchases(
+    id: str,
+    date_from: str = Query(..., alias="from", description="First delivery date, YYYY-MM-DD"),
+    date_to: str = Query(..., alias="to", description="Last delivery date, YYYY-MM-DD (inclusive)"),
+):
+    """What this client bought per product between two delivery dates (read-only; drafts and cancelled excluded)."""
+    return clients.purchases(id, date_from, date_to)
 
 
 @router.get("/{id}/events", response_model=list[ClientEventSummary] | Page[ClientEventSummary])
