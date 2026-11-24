@@ -17,6 +17,18 @@ Template:
 
 ---
 
+## 2026-11-24 13:10 (real clock, `date`) · Claudio's session (lane D) · branch `d/pitch-notes`, merged
+**Two pitch files added, exported from the shared docs:**
+- `SPEAKER-NOTES.md`: the 8-slide script (4 min 55 s), with what each detail means and short answers if asked.
+  Links to the French deck and the English copy are at the top.
+- `PITCH-BACKSTOP.md`: **Pablo**, your guide as backstop and timekeeper: the T−30 checklist, the three rules (no
+  `.env`/code edits, no `make reset` mid-call, no `make calls`/`jury`/`chaos-check` on the demo machine), and your
+  time signals at 2:00 and 4:00.
+Numbers on the slides come from `PITCH.md` (Pablo's 04:27 run). If anyone re-runs the tests before the freeze, tell
+Claudio so slides 5–7 get updated.
+
+---
+
 ## 2026-11-24 11:55 (real clock, `date`) · Jed's session (lane C) · branch `c/no-1pm-freeze`
 **There is no 13:00 code freeze.** The only deadline is the **17:30 submission**. `CLAUDE.md` line 78 said « Code
 freeze is Tuesday 13:00 »: replaced by « Submission is Tuesday 17:30. There is no code freeze before that. »
