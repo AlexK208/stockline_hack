@@ -17,6 +17,47 @@ Template:
 
 ---
 
+## 2026-11-24 03:49 (real clock, `date`) · Claudio's session (lane D) · branch `d/wrap-up-docs`, merged
+**Wrap-up: two checks nobody had done, the jury-facing docs brought up to date, and ONE list of what is still open.**
+Feature freeze respected: docs and checks only.
+
+**Verified:**
+- **A fresh clone of `main` (`cc38470`) passes all 193 unit tests** on the host. Nothing needed only exists on our
+  machines; the only missing piece is `data/seed`, git-ignored by design (team zip, `SETUP.md`). Not done: a full
+  `make setup` on a second machine (Docker ports here are taken by the running stack).
+- **« Date courte » end to end with the model**, through the approval step, typed over WS /voice like the Voix page:
+  `/appel` before a price → refused (« une personne doit d'abord fixer le prix ») ✅; `/offre prd_0047 5,00` → refused,
+  under cost ✅; `8,50` → refused, list price ✅; `7,20` → recorded ✅. Call to Charcuterie-Traiteur Esposito: date and
+  « au lieu de huit euros cinquante » in the first sentence, origin from the product's data, « vous me la faites à six
+  euros ? » → « le prix est fixé par la maison » ✅, 15 kg at 7,20 € written only after « oui, allez-y », report
+  `offre-date-courte`, board « pris » and 108 € sold ✅. Alexander, it works as you described.
+
+**Docs (lane D):**
+- `DECISIONS.md`: § 6 (freeze state) was still quoting 6/6 and 18/18 from midnight and « voix encore anglophone »:
+  now 7/7, 29/29, 193 tests, latency at the freeze (median 3058–3531 ms, worst 5334–6230, and why it went up),
+  voice frozen, and a row listing what goes beyond order-taking. § 2.9 title fixed. § 3.1 runs up to Pablo's
+  `50323dc`. **New § 2.15 « Date courte » (Alexander) and § 2.16 « Le cadran annoncé » (Pablo)**: written from your
+  entries plus my checks; please correct anything wrong. « Ce que nous ferions avec deux heures de plus » updated.
+- `DEMO.md` § 10: a one-table cheat sheet, how to show each feature on stage (command or click, and what the jury
+  should see).
+
+**Still open, per person (nothing else that I can find):**
+- **Jed:** (1) ~~the « Avant le camion » board on screen~~ **done, your 03:48 entry, 5/5** (written while you were
+  pushing it; your three display points are fixed in my next entry). (2) Alexander's 02:55 ask: a typed `/offre` gets `agent_text` + `agent_done` and no
+  audio, so check the page doesn't wait for sound on that turn; also that the `/appel` refusal (sent as an `error`
+  message) shows on the page. (3) The **Carnet des fêtes** and **Cotation de la semaine** pages have never been looked
+  at in a browser either.
+- **Alexander:** review Pablo's tu/vous fix in your `agent/loop.py` (`add_register_note`, Pablo's 03:38 entry).
+  Optional, inside the freeze, your call: the `short` opening with both figures, and the allocation reason from the
+  line note (my 03:12 entry).
+- **Team decision:** keep the end-of-order suggestions (`suggest_items`) on or not. Pablo's 03:38 entry: « butchers hate
+  the nagging upsell » (arena) and +3,3–4,0 s on that turn.
+- **By hand, anyone with a mic:** one real voice call end to end (nobody has done one since the STT and tu/vous
+  fixes), and `make setup` from a clean clone on a second machine.
+- **Pablo:** latency (in progress). **Claudio + Pablo:** slides and video.
+- Small: `CLAUDE.md` still says « Lane A is working on next: instant acknowledgement, caller lookup », both done long
+  ago. Shared file, left as is.
+
 ## 2026-11-24 03:48 (real clock, `date`) · Jed's session (lane C) · branch `c/truck-board` (fixes only, per Pablo's freeze)
 **« Avant le camion » board: tested on screen by Jed, Claudio's five tests.** All pass, after three lane C fixes.
 1. Board at rest: 2 cards, Panazol greyed, 91 € en jeu, clock from 04:38, Leroy « part dans 7 min ». ✅

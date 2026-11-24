@@ -144,7 +144,7 @@ habitude (« d'habitude ça se réserve une semaine avant, mais il y en a assez 
 délai d'une semaine ne s'applique que si le stock manque (`RESERVE_DAYS_WHEN_SHORT`, `tools/desk.py`). Décision
 commune lane A et lane D, 24/11 à 01:17.
 
-### 2.9 Voix de synthèse : modèle changé, voix encore à trouver (lane B)
+### 2.9 Voix de synthèse : modèle changé, puis voix gelée (lane B)
 
 Lane A a signalé deux fois que la voix par défaut « parle français avec un rythme anglais et marque une pause
 avant *kilos* ». C'est un défaut qui compte directement pour le prix « le plus naturel » et pour la démo live.
@@ -363,6 +363,35 @@ fois, deux au plus, toujours avec la raison, jamais d'argument de marge, et un �
 suggestion) : premier mot en **2,0 à 3,5 s** sur quatre passages, dans la plage des autres tours. L'outil lui-même :
 0,2 à 0,6 s (huit lectures ERP en parallèle).
 
+### 2.15 « Date courte » : vendre avant la date, à un prix fixé par une personne (lane A)
+
+Des lots arrivent en fin de date sans commande pour les prendre : sur un ERP neuf, 171 kg de viande hachée, 115 kg
+de chair à saucisse, 23 colis de steak haché, 17 kg de pâté, **2 695 € au prix d'achat**. Le code trouve ces lots et,
+pour chacun, les clients qui l'achètent d'habitude, ont un camion avant la date et ne l'ont pas déjà en commande
+(`GET /outbound/short-dated`). Ce qui est perdu de toute façon (22 kg qui expirent demain, camions déjà chargés) est
+dit perdu, pas proposé.
+
+**L'agent ne décide jamais d'une remise.** Une personne fixe le prix (`/offre prd_0047 7,20` dans la page Voix) ;
+il est refusé sous le prix d'achat et au prix catalogue ou au-dessus, et sans prix approuvé l'appel est refusé. Puis
+l'agent appelle : le produit, la date limite dès la première phrase, le prix approuvé « au lieu de » son prix
+habituel, une seule proposition, pas de marchandage (« le prix est fixé par la maison »). `take_offer` refuse sans
+un « oui » dans sa dernière phrase, au-delà du stock restant ou de trois fois son habitude, ou après la date.
+
+Vérifié de bout en bout (lane D, 03:50) : appel refusé sans prix, 5 € refusé (sous le coût), 8,50 € refusé (prix
+catalogue), 7,20 € accepté ; l'appel à la Charcuterie-Traiteur Esposito refuse « vous me la faites à six euros ? »,
+puis écrit 15 kg à 7,20 € après « oui, allez-y » ; le tableau passe le client à « pris » et compte 108 € vendus.
+
+### 2.16 Le cadran annoncé : dire au boucher que sa cotation a bougé, une fois (lane B)
+
+Carcasses et quartiers suivent la cotation du lundi au cadran de Limoges, et **16 fiches clients** citent « les
+hausses de cotation non annoncées » comme un risque ; la note du jour dit « prévenir les bouchers ». Quand un boucher
+commande ou demande le prix de carcasses ou de quartiers, `cotation_semaine` tourne **dans la même étape** que
+l'écriture de la commande : s'il y a un mouvement depuis sa dernière livraison, l'agent le dit une fois, à partir de
+**ses** prix (« l'arrière a pris cinq centimes, à dix euros vingt »), les baisses comprises. C'est enregistré, et
+jamais répété dans la semaine. À « encore une hausse ? », la tendance du mois, sans remise, et sa réaction est notée
+pour son commercial. Les restaurants qui commandent du PAD n'en entendent pas parler. Rien ne change un prix.
+Cinq appels jury le vérifient (J25–J29), dont un rappel du même boucher dans la semaine (J26, rien n'est redit).
+
 ---
 
 ## 3. Mesures
@@ -379,10 +408,16 @@ suggestion) : premier mot en **2,0 à 3,5 s** sur quatre passages, dans la plage
 | 22:59 | `38633a7` | **3/3** sur T5 | Garde-fou `identify_caller`. Défaut § 5.1 corrigé, confirmé sur 3 passages. |
 | 23:04 | `93fc71b` | **6/6** | Tous contrôles actifs. |
 | 23:29 | `8a2d158` | **6/6** | Audit lane A, gel de la voix, `make jury`. |
-| 00:02 | `31400b7` | **6/6** | **Passage de référence final** : déroulé « façon comptoir » (confirmer ce qui vient de changer, une seule relecture à la fin). |
+| 00:02 | `31400b7` | **6/6** | Déroulé « façon comptoir » (confirmer ce qui vient de changer, une seule relecture à la fin). |
+| 01:20 | `8acd196` | **6/6** | Pas de confirmation sans un « oui » (garde dans le code), tu/vous lu dans le code. |
+| 03:14 | `17ba118` | **7/7** | T7 ajouté (suggestions en fin de commande) ; 33 outils, dont les appels sortants : jamais appelés sur un appel entrant. |
+| 03:37 | `50323dc` | **7/7** | **Passage de référence final** (Pablo) : corrections de fin, tu/vous dès le premier tour, tableau « Avant le camion ». |
 
 Le passage de 6/6 à T5 en échec n'est **pas une régression** : c'est un défaut présent depuis le début que les
 contrôles ERP ne voyaient pas. Il a été corrigé, puis revérifié (§ 5.1).
+
+En parallèle, **29 appels « jury »** (`make jury`, J1–J29 : appelants difficiles, clients qui cherchent la faille, fêtes,
+cotation) passent **29/29** sur leurs invariants depuis `17ba118`.
 
 **Le 6/6 final compte plus que le premier : il est obtenu avec davantage de contrôles.** Le 6/6 de `be7eb4b`
 ne vérifiait que l'ERP. Celui de `93fc71b` passe en plus les trois contrôles sur la parole et le contrôle sur
@@ -599,15 +634,18 @@ sans rien dire.
 
 | | |
 |---|---|
-| Scénarios | **6/6 sur `608a233`**, deux passages, tous contrôles actifs (ERP + parole + outils appelés) · **18/18** sur les invariants des appels jury |
-| Latence texte | médiane **2696–2756 ms**, p90 3498–3777 ms, **pire 3513–4157 ms** (2 × 18 tours) — pire tour 8,0 s → 3,5 s depuis la référence |
+| Scénarios | **7/7** (T1–T7) sur `50323dc` et `17ba118`, tous contrôles actifs (ERP + parole + outils appelés) · **29/29** sur les invariants des appels jury (J1–J29) · 193 tests unitaires · `make chaos-check` 7/7 · un clone neuf de `main` passe les 193 tests |
+| Latence texte | au meilleur (`608a233`, 6 scénarios) : médiane **2696–2756 ms**, pire **3513–4157 ms**. Au gel (`17ba118` / `50323dc`, 7 scénarios, 33 outils) : médiane **3058–3531 ms**, pire **5334–6230 ms**. La hausse vient des étapes ajoutées (cotation sur les carcasses, suggestions sur « c'est tout ») ; le pire tour reste un premier tour qui identifie et écrit, couvert par l'accusé de réception parlé |
 | Latence voix | **0,09 à 0,61 s** jusqu'au premier son sur une demande (8,7 s au départ) ; 1,2 à 1,7 s sur une phrase courte (avant `4ac4348`, devrait gagner ~1 s, non re-mesuré) ; « Très bien. » tout de suite après un « oui » ; STT fin de parole → transcription finale **0,15–0,60 s** (1,25–1,64 s avant `4ac4348`) |
-| Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache · **≈ $0,10–0,15 l'appel complet** (cache froid), ~$0,05 quand les appels s'enchaînent |
+| Coût | ~150 000–178 000 jetons d'entrée par appel selon l'appel (~175 400 sur T1–T6), dont ~26 000 hors cache · **≈ $0,10–0,15 l'appel complet** (cache froid), ~$0,05 quand les appels s'enchaînent |
 | Appels sortants | « Avant le camion » : 2 appels dans les données, 6 à 8 avec `make chaos` (5/5 cartes vérifiées sans modèle). 10 appels rejoués avec le modèle. Mauvaise personne → « à rappeler » et limite manquant + 20 % corrigées (`e3f1aa0`) et **rejouées avec le modèle** (`75b62ab`) |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
-| Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
+| Voix | `eleven_v4_turbo` (137 ms au 1er octet), **gelée** : jugée bonne par notre testeur ; une voix vraiment française demanderait une clé Gradium, jamais reçue — § 2.9 |
+| Au-delà de la prise de commande | appels sortants « avant le camion » (+ « Cassez le matin », « Qui est servi d'abord »), offres « date courte » approuvées par une personne, carnet des fêtes, cadran annoncé, suggestions en fin de commande (§ 2.12–2.16) |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |
 
-**Ce que nous ferions avec deux heures de plus, dans l'ordre :** demander une clé Gradium pour une vraie voix
-française (§ 2.9), re-mesurer Haiku avec les nouveaux contrôles, rejouer T1–T6 en `--repeat 3` pour donner un
-intervalle plutôt qu'un point sur la latence, puis le ticket de pesée.
+**Ce que nous ferions avec deux heures de plus, dans l'ordre :** raccourcir le premier tour qui identifie et écrit
+(le seul tour lent, 5 à 8 s : deux étapes du modèle) ; demander une clé Gradium pour une vraie voix française
+(§ 2.9) ; re-mesurer Haiku avec les nouveaux contrôles ; rejouer T1–T7 en `--repeat 3` pour donner un intervalle
+plutôt qu'un point sur la latence ; mettre à l'écran l'approbation des prix « date courte » et le choix du plan
+« Qui est servi d'abord » (aujourd'hui en ligne de commande et dans la zone de texte de la page Voix).
