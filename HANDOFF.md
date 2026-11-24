@@ -17,6 +17,163 @@ Template:
 
 ---
 
+## 2026-11-24 00:58 (real clock, `date`) · Pablo's session (lane B) · branch `b/jury-findings`
+**Alexander (and Claudio for item 5): the 18 jury transcripts read against their `expected`** (`REVIEW.md` § 3.3,
+nobody had done it). Run on `dbcc191` (00:41–00:49, my machine): `make calls` **6/6** (median 2915 ms, worst
+6437), `make jury` **18/18 on the invariants** (median 2576 ms, worst 9561). Transcripts:
+`evals/results/jury-20261124-004527.json` (local to my machine, ask if you want it). Text mode, no STT/TTS. Your
+`7b72a6c` (instant words) came after, and changes none of the items below.
+
+**Problems, worst first (all in lane A files unless said):**
+1. **J7: it confirmed an order without a read-back or a yes.** Turn 2, the caller: « Bon, je sais pas, moi,
+   mettez-m'en huit kilos. » → `add_order_line` **and `confirm_order`** → « Très bien, c'est validé pour jeudi. »
+   Turn 3, the caller has to correct the steaks (« quarante steaks, pas quarante colis ») on an order already
+   confirmed. This is the only finding that changes the ERP, and it breaks the "read back, then confirm" rule.
+2. **Slow first turns when identification and creation happen in the same turn** (first word, text mode, so the
+   STT comes on top): J5 **9 561 ms** (`identify_caller` + `create_draft_order`), J7 6 522, J11 5 653, J16 5 180
+   (`save_context`), J13 4 742 and J15 4 630 (`create_draft_order`). The median is fine. One 9-second silence live is
+   not.
+3. **« tu » / « vous » not followed.** Céline says « Dis-moi », « mets-moi » and gets « vous » (J13, J18). Karim says
+   « vous » and gets « c'est noté sur **ta** commande » (J1). `REVIEW.md` lists it for T5 only, but it happens across calls.
+4. **J15: an order's content said to someone who then says she is someone else.** Turn 1 « c'est Frédéric, Boucherie
+   Rolland » → « Vous avez déjà une commande en cours pour demain mercredi, avec un quartier avant et de la bavette. »
+   Turn 2: « Non non pardon… moi c'est Céline ». Nothing was written on Rolland (correct), but the content was out.
+   Maybe: no order details on the first sentence before the caller asks for them.
+5. **J10 (matured ribs) contradicts its own scenario.** The agent accepts 12 kg for Saturday from stock, with the
+   « d'habitude ça se réserve une semaine avant » line (your decision). `evals/jury_calls.json` still expects a
+   refusal (« No prd_0011 line … before 2026-12-01 »). **Claudio / Alexander: one of the two must change**, or a juror
+   reading the scenario sees a failure.
+6. **Smaller:** text written before a tool call shows in the text transcript, e.g. J4 « Je tente quand même la mise
+   à jour pour obtenir le retour de l'outil. », J1 « …je crée. ». On the phone `voice_session.py` drops it (over 5
+   words, or after an instant word), so it is **not heard**. But a short raw note can slip through when no instant
+   word was said: J3 « **Paleron: 17 kg.** » (3 words). And `make jury` counts that hidden text as "spoken".
+   J16 opens awkwardly: « Vous êtes bien l'abattoir, mais de quel abattoir s'agit-il… ».
+
+**Solid, worth showing:** J2 his own prices to the cent (42,24 / 12,20), 1,6 kg of carré said honestly, no arrival
+date invented. J3 « pareil que samedi » with double and half worked out (17 / 4 kg). J4 moved to Saturday, no
+duplicate. J5 3-day rule held, BC 2026-0412 on the order and read back, 100 kg not 20. J6 asked for the cuts,
+bourguignon = paleron. J8 real weights (25 ordered / 24 weighed), complaint logged, no credit note, no discount.
+J9 no account invented, message saved. J12 « faut filet / tante de tranche / pas le rond » understood, « stop »
+ignored. J13, J14, J17, J18 firm refusals about other clients.
+
+**Next:** nothing pending in lane B. **Broken:** nothing in lane B.
+
+## 2026-11-24 00:56 (real clock, `date`) · Pablo's session (lane B) · branch `b/soniox-close`
+**Alexander — found and fixed the STT second. It was neither Soniox nor the vocabulary: we were waiting for the
+socket to close.**
+
+**Your two checks first:** both ruled out (24 runs, same production start request, browser-like WebM):
+- With the real vocabulary (6 000 characters of `context.terms`) and without it: finalize → final words still
+  **0,1–0,45 s**.
+- Audio cut right at the last word (my earlier files had 0,4–0,5 s of trailing silence, you were right to ask)
+  vs. not cut: same. Soniox is 2–4 words behind at the release, as in your logs, but it catches up in a few
+  hundred ms.
+
+**Then the same WebM file through our own `WS /voice` on my machine:** 1 250–1 640 ms, and the `[ai] stt timing:`
+lines matched yours exactly. So it was in our server, after Soniox had answered. Cause: `open_ws` in `clients/ws.py`
+ended with `await ws.close()`, and the final transcript only reaches `Utterance` once that block has exited.
+**Soniox takes 1,1–1,3 s to acknowledge a close** (measured alone: finalize → `<fin>` 110–356 ms, then
+`ws.close()` 1 092–1 290 ms, total 1 202–1 646 ms, which matches your 1 254–1 811).
+
+**Fix (lane B, `clients/ws.py`):** the socket is closed in the background (`close_later`: a task kept referenced
+until it finishes, its error swallowed). Nothing else changes: same messages, same transcript, and barge-in and
+errors still close the socket. It also applies to Deepgram live, which uses the same helper.
+
+| Same audio through `WS /voice` | audio_end → final transcript |
+|---|---|
+| before (`d058009`) | 1 250 – 1 640 ms (6 runs) |
+| **after** | **146 – 595 ms** (6 runs) |
+
+That is **about 1,1 s off every spoken turn**. It should also help the instant word: the final transcript now
+comes about as fast as the live one, so short sentences ("Oui.") get their word ~1 s earlier.
+
+**Tests:** new `tests/test_ws_close.py` (leaving `open_ws` does not wait for a slow close, and the close still
+happens; a failing close is swallowed). Both fail without the fix. The full suite was run inside the `ai` container:
+104 pass, 1 fails, and **that failure is already on `main` without my change**:
+`test_one_client_per_call.py::test_identify_caller_does_not_switch_client_on_a_guess` → `KeyError: 'idf'` in
+`tools/desk.py:161`. Lane A, please look.
+**Not done:** a spoken call through a real browser after the fix. Alexander, your next voice call will show it in the
+`stt timing` line ("final … ms after the end").
+## 2026-11-24 00:56 (real clock, `date`) · Alexander's session (lane A) · arena verdict for Claudio
+**Claudio — the arena has answered. Start the slides and the video NOW. All three judges said so, unprompted, in
+almost the same words: nothing below changes the story, and the video must never wait on code.**
+
+The arena is three independent role-played judges, each given the same brief (your seven ideas plus what I could
+check tonight): a juror who sells voice agents to food wholesalers and will phone us tomorrow, a senior engineer
+paid to say no, and a butcher with the wholesaler's telesales rep. They are AI judges, so read their arguments,
+not their votes.
+
+| # | Idea | Juror | Engineer | Butcher / rep | **Verdict** |
+|---|---|---|---|---|---|
+| 5 | Accepted substitution | 1st | 1st | both | **Build. Claudio writes the scenario, lane A fixes what it shows** |
+| 1 | Weigh ticket | 3rd, "what I most want to SEE in the video" | 2nd, "no code, it works: the video is the gap" | rep's 2nd | **Already works: put it in the video and the replay set** |
+| 2 | « Il est où mon camion ? » | refuses (new surface) | 3rd, with guards, "drop it if not green by 06:30" | butcher's 1st | **Build, lane A, read-only, with the guards below** |
+| 3 | Digits to French words in code | 2nd | refuses: frozen TTS path | "a basic requirement" | **Not in code. One prompt line for phone numbers only** |
+| 4 | Proactive « comme d'habitude » | refuses | refuses | rep: "butchers hate the nagging upsell" | **No** |
+| 6 | Jev for a yes/no | refuses | refuses | — | **No** |
+| 7 | Invoices by phone | refuses | refuses | "never an amount owed to an unverified caller" | **No. Say in Q&A that we left it out on purpose** |
+
+**What I checked before the judges saw it:**
+- **1 already works.** `order_history` gives ordered against weighed per line and the agent says it: jury call J8,
+  "commandé vingt-cinq kilos, pesé vingt-quatre, la facture suit le poids pesé", complaint logged, no credit note
+  promised. Only the lot and supplier are missing. It has never been filmed.
+- **2 has real data.** `GET /api/route-runs?date=…` returns, per round, the driver, the vehicle, the departure
+  time (05:00) and for each stop the client, its position in the round and a planned ETA ("05:36"). There is no
+  live position. So the honest answer is the butcher's own: "Pas de suivi en direct, mais c'est Thierry qui
+  livre, il part à cinq heures et vous êtes le premier de sa tournée, prévu vers cinq heures trente-six."
+
+**For you, Claudio (after the slides and video are started, not before):**
+- **A new jury call for idea 5,** three turns, on a client whose preferences allow substitution: the product is
+  out of stock, the caller says « bon, mettez-moi de la bavette à la place, même quantité », then validates. Check
+  on the final order: the substitute's product id, the quantity, `substituteFor` set, no line for the missing
+  product. A second variant with a condition (« d'accord, mais seulement dix kilos au lieu de quinze »). The
+  engineer's failure mode: the caller accepts and the order keeps the original product, price or weight.
+- **A hostile call for idea 2** once the tool exists: a caller asking for ANOTHER client's truck. `call_guard`
+  should refuse it; I want that proven, not assumed.
+- **Video:** the juror wants to open on a fast, natural order, then the weigh-ticket call.
+
+**For lane A (me), in this order:** the truck tool (read-only, the caller's own client id only, "prévu vers",
+never "il est à dix minutes"); then whatever your substitution scenario exposes. **Hard stop for the agent core:
+10:30** (the engineer's number, and I agree). After that, one full replay on the final commit, three voice calls,
+docs only.
+
+**One correction to `DECISIONS.md` from your 00:35 entry:** "2,5–3,5 s after a yes, where the agent is deliberately
+silent" is no longer true. Since `401765f` a yes gets « Très bien. » at once, and since `7b72a6c` so do « c'est
+tout » and « oui, valide, au revoir ».
+
+## 2026-11-24 00:49 (real clock, `date`) · Claudio's session (lane D) · branch `d/feature-ideas`
+**Alexander — a request, from Claudio directly: please run the AI agent arena on the seven ideas below and tell
+us which to build.** I don't know how your arena is set up, so I'm giving each idea with its evidence, cost,
+risk and owning lane so it can be judged without re-deriving anything. **I am holding off on the slides and the
+video until the arena answers**, so this is blocking me — a fast verdict is worth more than a thorough one.
+
+**Where the ideas came from.** The agent has 31 tools, but **20+ ERP endpoints are untouched**: all of
+`/api/invoices`, `/api/payments`, `/api/receivables`, `/api/purchase-orders/*`, `/api/routes`,
+`/api/route-runs*`, `/api/stock/movements`, `/api/prices/grid`, `/api/price-rules`, `/api/dashboard`.
+Excluded as already built: your `call_report.py` and `warmup.py`.
+
+| # | Idea | What it buys | Cost | Lane / files | Risk |
+|---|---|---|---|---|---|
+| 1 | **Weigh ticket / short delivery** — client calls about a light delivery, agent reads ordered vs weighed per line + lot | The showpiece `CLAUDE.md` promised and we never built. Data already exists: `order_history` returns `weighed` (`preparedQty`), `/api/stock` returns lots with supplier and dates | 1–2 h | A (`tools/`, `prompts.py`) | Low |
+| 2 | **« Il est où mon camion ? » — delivery round and ETA** | `/api/routes`, `/api/route-runs`, `/api/route-runs/plan`, `/api/route-runs/{id}/stops` are **entirely unused**. A butcher at 6 h asking when the van arrives is one of the most realistic calls in this trade, and I doubt any other team has touched routes | 1,5–2 h | A (new tool) | Medium — new surface |
+| 3 | **Numbers spoken as French words** — « 278,5 » → « deux cent soixante-dix-huit kilos cinq » | `GUIDE-VOIX.md` § 4.10 says in so many words that the kit has no number→spoken-French function and to write one if answers read prices. Straight naturalness, the axis we are judged on | ~45 min | A (`tools/catalog.py` `format_number`) | Low, unit-testable with no credits |
+| 4 | **Proactive « comme d'habitude »** — offer the usual basket instead of only reacting | `/api/clients/{id}/usual` is already in the card but never used to *offer*. « Je te mets ton foie de veau comme d'habitude ? » Makes the agent sound like it knows the client | ~30 min | A (`prompts.py`) | Low, but it is voice wording → your freeze |
+| 5 | **Accepted-substitution path** | `find_alternatives` exists; T3 only covers a client who *refuses*. A client who says yes is untested | ~1 h | A + D (new scenario) | Low |
+| 6 | **Jev for one fast yes/no** | `BRIEF.md` lists it as a technique, the key is set, it is completely unused. Shows model tiering | 1–2 h | A | Medium — new code near the freeze. **I would vote against** |
+| 7 | **Invoice / receivables questions** | `/api/invoices`, `/api/payments`, `/api/receivables` unused | 1–2 h | A | **Conflicts with a decision we already shipped**: you removed credit figures from the phone agent for confidentiality, and J17/J18 now pass because of it. Only with your explicit yes |
+
+**My own ranking, for what it is worth, so the arena has a baseline to beat:** 3 and 4 are the cheapest wins on
+"natural"; 1 and 2 are the ones that make a jury sit up, with 2 most likely to be unique to us; 6 and 7 I would
+not do today.
+
+**Two constraints the arena should weigh:**
+- It is **00:48**, freeze 13:00. Anything here competes with the slides and the video, which **still do not
+  exist** and which I am down to present (`DEMO.md`).
+- **4 touches spoken wording, so it is inside your voice freeze.** 1, 2, 3, 5 do not.
+
+**Reply with the numbers to build and I will start immediately.** If the arena says "none, do the slides", that
+is a perfectly good answer and I will take it.
+
 ## 2026-11-24 00:45 (real clock, `date`) · Alexander's session (lane A) · `7b72a6c`
 **Pablo — the STT timing lines you asked for, from a real spoken call on `c1d3ed9` (Alexander's Mac, 00:40).
 The second is not in the browser and not in our code. It is between our socket and Soniox.**
