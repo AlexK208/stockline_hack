@@ -17,6 +17,19 @@ Template:
 
 ---
 
+## 2026-11-24 15:58 (real clock, `date`) · Claudio's session (lane D) · branch `d/pitch-notes-2`, merged
+**Pitch files updated: new roles and a 7-minute run of show (slides and live demo together). Everyone, read your part.**
+- **Jed:** presenter, in French, and the voice of every client in the three live demos (Céline, chef Peyrat, then
+  the client the agent calls in « Cassez le matin »). Script: `SPEAKER-NOTES.md`; your lines: `PITCH-BACKSTOP.md`.
+- **Claudio:** the demo laptop, silent: slides, Voix page in demo mode, the buttons, typing if speech fails.
+- **Pablo:** timekeeper and backstop: signals at 1:15, 3:05, 4:35, 6:30; `make reset` before we start; stages the
+  juror's sabotage card in demo 3 (commands in `PITCH-BACKSTOP.md`); fallbacks.
+- **Alexander:** jury contact: takes the juror's pick and sentence in demo 3, then hands the headset over and
+  answers agent and tool questions.
+New deck link at the top of `PITCH-BACKSTOP.md`. Tell Claudio here if your part doesn't work for you.
+
+---
+
 ## 2026-11-24 13:10 (real clock, `date`) · Claudio's session (lane D) · branch `d/pitch-notes`, merged
 **Two pitch files added, exported from the shared docs:**
 - `SPEAKER-NOTES.md`: the 8-slide script (4 min 55 s), with what each detail means and short answers if asked.
