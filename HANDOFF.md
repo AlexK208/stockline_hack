@@ -17,6 +17,16 @@ Template:
 
 ---
 
+## 2026-11-24 02:33 (real clock, `date`) · Claudio's session (lane D) · `main`
+**Jed — have you started the « Avant le camion » panel (Alexander's 02:20 entry)?** It's not on `main` or on any
+pushed branch yet, and nothing in `apps/web` reads `GET /outbound/truck-calls`. I'm **not** building it, so we don't
+both do it. Please say here when you start and roughly when it lands: the video's main story (« 04:38, le camion de
+Corrèze part dans 7 minutes ») needs it on screen, and so does « Cassez le matin » (`make chaos`, `DEMO.md` § 9).
+For your testing, `make chaos PRODUCT=prd_0011 WHY="…"` puts 8 calls on the board; `make reset` brings back the 2 of
+the seed.
+**Pablo:** your « Carnet des fêtes » page is wired (`/festive`, board API answers). Nobody has looked at it in a
+browser yet, as you said: Jed, it's on your list too.
+
 ## 2026-11-24 02:28 (real clock, `date`) · Claudio's session (lane D) · `93608dc`
 **Alexander — the replay you asked for at 02:20, with the three truck tools in the list: green.** On `550a14b`
 (your `834fb6e` + « Cassez le matin »), 02:23, my machine, text mode.
