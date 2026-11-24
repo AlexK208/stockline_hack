@@ -241,7 +241,10 @@ TTS sont épuisés depuis 23 h 43 et personne ne peut plus chronométrer un tour
 **Ce correctif ne touche pas la reconnaissance vocale.** Le flux Soniox est un WebSocket séparé (`clients/ws.py`),
 pas le pool httpx. Mesuré de son côté : ouverture du socket 300–950 ms, et `finalize` → mots définitifs seulement
 95–375 ms — donc Soniox n'est pas le poste coûteux que nous croyions, et le reste du délai de transcription est
-dans notre propre code, pas chez le fournisseur.
+dans notre propre code, pas chez le fournisseur. **Pablo l'a trouvé ensuite (`4ac4348`) : nous attendions la
+fermeture du socket Soniox, qui met 1,1 à 1,3 s à être acquittée, avant de rendre la transcription finale.** Le
+socket se ferme maintenant en arrière-plan : fin de parole → transcription finale **1,25–1,64 s → 0,15–0,60 s**
+(même enregistrement envoyé 6 fois par `WS /voice`, avant et après). Détail en § 3.2.
 
 ---
 
@@ -311,10 +314,32 @@ chaque commit.
 | Kit de départ | 8,7 s |
 | Après le filler avant outils | 5,0 s |
 | Après l'accusé de réception parlé | 3,6 s |
-| Mesure lane C sur `WS /voice` (tours tapés, mesuré côté serveur, sans STT) | **0,09 à 0,61 s** jusqu'au premier son sur une demande ; **2,5 à 3,5 s** sur un tour après un « oui », où l'agent se tait volontairement |
+| Mesure lane C sur `WS /voice` (tours tapés, mesuré côté serveur, sans STT) | **0,09 à 0,61 s** jusqu'au premier son sur une demande |
 
 L'accusé de réception immédiat est ce qui transforme l'expérience : le client entend une voix tout de suite, puis
 la vraie réponse arrive. Les 2 à 5 s restantes sont le temps du modèle, pas du silence perçu.
+
+**Après un « oui », l'agent ne se tait plus.** Une mesure plus ancienne donnait 2,5 à 3,5 s de silence volontaire
+sur ce tour. Depuis `401765f`, un « oui » reçoit « Très bien. » tout de suite, et depuis `7b72a6c` « c'est tout » et
+« oui, valide, au revoir » aussi. Ce tour n'a pas été rechronométré depuis.
+
+**Reconnaissance vocale : une seconde gagnée à chaque tour, sans toucher au modèle** (lane B, `4ac4348`) :
+
+| Même enregistrement envoyé par `WS /voice` (6 fois) | Fin de parole → transcription finale |
+|---|---|
+| Avant | 1 250 – 1 640 ms |
+| **Après** | **146 – 595 ms** |
+
+La cause n'était ni Soniox ni la liste de vocabulaire (vérifié avec et sans, et avec un audio coupé net sur le
+dernier mot) : `clients/ws.py` attendait la fermeture du socket, que Soniox met 1,1 à 1,3 s à acquitter, avant de
+rendre le texte. Le socket se ferme maintenant en arrière-plan. Le gain est mesuré avec un audio enregistré
+passé par notre vrai socket, **pas encore avec un micro de navigateur** : un appel parlé sur la page Voix doit le
+confirmer.
+
+**Dernier passage complet** (`dbcc191`, mode texte, sans STT ni TTS, machine de Pablo) : T1–T6 **6/6**, premier mot
+médiane **2,9 s**, p90 3,9 s, **pire 6,4 s** ; appels jury **18/18** sur les invariants, médiane 2,6 s. Ce pire tour
+est au-dessus de la plage de `608a233` : c'est un seul passage, sur une autre machine (§ 5.3), à lire comme du
+bruit de tirage tant qu'un second passage ne le confirme pas.
 
 ### 3.3 Coût
 
@@ -367,7 +392,10 @@ longueur de l'appel. Dans un vrai standard téléphonique, où les appels s'ench
 le premier appel de la journée coûte le double.
 
 **Avec la voix** : +$0,02 à $0,06 par appel (500 à 1 500 caractères parlés, estimation d'après les tours mesurés
-par Jed). Soit **$0,05 à $0,15 l'appel complet**, de la reconnaissance à la réponse parlée.
+par Jed). La reconnaissance vocale (Soniox) coûte **moins de $0,005** par appel. Soit **$0,05 à $0,15 l'appel
+complet**, de la reconnaissance à la réponse parlée : **≈ $0,10 à 0,15 avec un cache froid** (modèle $0,074–0,087,
+voix $0,02–0,06, STT < $0,005), autour de $0,05 quand les appels s'enchaînent. **Le premier poste est le modèle,
+puis la voix.** Les caractères parlés par appel sont une estimation (500 à 1 500), et ce sont les prix catalogue en USD.
 
 ---
 
@@ -382,7 +410,8 @@ par Jed). Soit **$0,05 à $0,15 l'appel complet**, de la reconnaissance à la r�
 - **L'accusé de réception choisi par du code.** Sur une demande, le premier son tombe à **0,09–0,61 s** contre
   8,7 s au départ. Aucun risque d'invention puisque le modèle n'écrit pas cette phrase. À nuancer : sur une phrase
   courte (« Oui. ») le transcript en direct est trop court pour choisir le mot, qui part alors avec le transcript
-  final — 1,2 à 1,7 s.
+  final — 1,2 à 1,7 s. Ce transcript final arrive maintenant ~1 s plus tôt (`4ac4348`, § 3.2), donc ce cas devrait
+  gagner autant ; pas encore re-mesuré à la voix.
 - **Tester les contrôles eux-mêmes** (`make calls-test`). Nous a évité au moins un contrôle qui passait au vert
   pour une mauvaise raison.
 - **Un journal de passation partagé** (`HANDOFF.md`) entre quatre sessions d'agents de code sur quatre lanes. Tous
@@ -455,8 +484,8 @@ sans rien dire.
 |---|---|
 | Scénarios | **6/6 sur `608a233`**, deux passages, tous contrôles actifs (ERP + parole + outils appelés) · **18/18** sur les invariants des appels jury |
 | Latence texte | médiane **2696–2756 ms**, p90 3498–3777 ms, **pire 3513–4157 ms** (2 × 18 tours) — pire tour 8,0 s → 3,5 s depuis la référence |
-| Latence voix | **0,09 à 0,61 s** jusqu'au premier son sur une demande (8,7 s au départ) ; 1,2 à 1,7 s sur une phrase courte, 2,5 à 3,5 s après un « oui » (silence volontaire) |
-| Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache |
+| Latence voix | **0,09 à 0,61 s** jusqu'au premier son sur une demande (8,7 s au départ) ; 1,2 à 1,7 s sur une phrase courte (avant `4ac4348`, devrait gagner ~1 s, non re-mesuré) ; « Très bien. » tout de suite après un « oui » ; STT fin de parole → transcription finale **0,15–0,60 s** (1,25–1,64 s avant `4ac4348`) |
+| Coût | ~175 400 jetons d'entrée par appel, dont ~26 000 hors cache · **≈ $0,10–0,15 l'appel complet** (cache froid), ~$0,05 quand les appels s'enchaînent |
 | Modèle | `claude-sonnet-5-5` ; Haiku ré-évaluable maintenant que les contrôles existent |
 | Voix | `eleven_v4_turbo` (137 ms au 1er octet) ; voix encore anglophone, bloqué sur une clé Gradium — § 2.9 |
 | Données | figées au **mardi 24/11/2026, 05:00** (`meta.today`) |
