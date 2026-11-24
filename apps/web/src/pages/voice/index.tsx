@@ -151,7 +151,7 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
       />
       <div className="flex min-h-0 flex-1">
         {camion ? (
-          <aside className={cn("flex shrink-0 flex-col border-r border-border bg-card", demo ? "w-[340px] xl:w-[400px]" : "w-[300px] xl:w-[340px]")}>
+          <aside className={cn("flex shrink-0 flex-col border-r border-border bg-card", demo ? "w-[300px] xl:w-[340px] 2xl:w-[400px]" : "w-[300px] xl:w-[340px]")}>
             <TruckBoard canCall={ready && v.activity === "idle"} onCall={startTruckCall} activeOrderId={calling} />
           </aside>
         ) : null}
@@ -199,11 +199,12 @@ function CallMode({ modeSwitch }: { modeSwitch: ReactNode }) {
         <aside
           className={cn(
             "flex shrink-0 flex-col border-l border-border bg-card",
-            demo ? "w-[360px] xl:w-[420px] 2xl:w-[480px]" : "w-[300px] xl:w-[340px] 2xl:w-[400px]",
+            // with the truck board open as well, the cards keep the lab widths: the conversation needs the room
+            demo && !camion ? "w-[360px] xl:w-[420px] 2xl:w-[480px]" : "w-[300px] xl:w-[340px] 2xl:w-[400px]",
           )}
         >
           {/* zoom: the cards keep their compact sizes in the lab view and grow as one block in the demo. */}
-          <div className={cn("shrink-0 overflow-y-auto", demo ? "min-h-0 flex-1" : "max-h-[65%]")} style={demo ? { zoom: 1.2 } : undefined}>
+          <div className={cn("shrink-0 overflow-y-auto", demo ? "min-h-0 flex-1" : "max-h-[65%]")} style={demo ? { zoom: camion ? 1.05 : 1.2 } : undefined}>
             <CallCards turns={v.turns} since={since} />
           </div>
           {demo ? null : (

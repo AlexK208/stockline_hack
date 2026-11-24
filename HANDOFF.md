@@ -17,6 +17,39 @@ Template:
 
 ---
 
+## 2026-11-24 03:48 (real clock, `date`) · Jed's session (lane C) · branch `c/truck-board` (fixes only, per Pablo's freeze)
+**« Avant le camion » board: tested on screen by Jed, Claudio's five tests.** All pass, after three lane C fixes.
+1. Board at rest: 2 cards, Panazol greyed, 91 € en jeu, clock from 04:38, Leroy « part dans 7 min ». ✅
+2. **Appeler** on Leroy, Alexander's script: no discount promised, client card + conversation follow, violet border,
+   « fait » + outcome, **Récupéré 77 €**, the bavette shows « remplace Onglet de bœuf » on the order card. ✅
+3. `make chaos PRODUCT=prd_0011 …` without reloading: **8 cards, 3 902 €**, departure order. ✅
+4. The commis at La Table de Charlotte (`prd_0012` chaos): nothing written, the card stays with « Déjà tenté » +
+   « Rappeler », both client events in « ERP en direct ». ✅
+5. Mode démo + board at 125 % zoom (≈ 1 230 px, a projector): **broken, fixed** (see 2. below). ✅ after the fix.
+
+**Fixes (lane C, `apps/web/src/pages/voice/`):**
+1. **Order card badge on a prepared order** (`call-cards.tsx`): the filet missing from Charlotte's truck showed
+   **« En stock »**. The badge read the stock left for the date, which means nothing once the order is loaded. Now
+   on a prepared order it says what is in the truck, from `preparedQty`: **Chargé / Poids court / Absent** (±5 %,
+   the same tolerance as `truck_calls.py`).
+2. **Mode démo + board** (`index.tsx`, `timeline.tsx`): at 1 230 px the conversation got ~330 px and two fixed
+   halves, so one word per line. With the board open, the side columns keep the lab widths (cards zoom 1.05). In Mode
+   démo the conversation is one thread (caller left, agent right, bubbles up to 85 %, no time column). The lab view
+   is unchanged.
+3. Merge conflict on the board's width in `index.tsx`: kept the version tested at 125 %. `truck-board.tsx` on `main`
+   is byte-for-byte the one tested.
+
+**Seen, not changed (Claudio, your file, your call):**
+- « En jeu » stays at 91 € after 77 € is recovered: a juror may read it as « still 91 € to get back ».
+- Le Bœuf Limousin shows « −15,35 € » in red although it isn't counted in « En jeu » (already replaced in the truck).
+- A card is ~230 px tall: with `make chaos`, only 2 of the 8 cards are on screen at once.
+
+**Pablo, on `suggest_items` (« for the team to decide »):** noted, Jed decides with the team. Turning it off is the
+`suggest` import in `tools/__init__.py` plus the prompt line, nothing else depends on it.
+
+Checks on the merged code: typecheck + native controls OK, **193 unit tests pass**. No agent code touched, so no
+`make calls` (Pablo's 7/7 on `50323dc` holds).
+
 ## 2026-11-24 03:38 (real clock, `date`) · Pablo's session (lane B, fixes in lanes A, C, D) · `b/final-fixes`, merged
 **Development is finished on our side. This entry closes the last open items and gives the full test result.**
 Pablo asked for a feature freeze: from here on, fixes only.
