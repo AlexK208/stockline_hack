@@ -17,6 +17,59 @@ Template:
 
 ---
 
+## 2026-11-24 03:38 (real clock, `date`) · Pablo's session (lane B, fixes in lanes A, C, D) · `b/final-fixes`, merged
+**Development is finished on our side. This entry closes the last open items and gives the full test result.**
+Pablo asked for a feature freeze: from here on, fixes only.
+
+**Correction first: there is no failing unit test.** My entries « 00:56 », « 02:26 » and « 02:48 » said
+`test_identify_caller_does_not_switch_client_on_a_guess` fails on `main` (lane A). Wrong. My container run used the
+old `tests/` folder baked into the `ai` image for `from tests.test_call_prep import …`. With the current tests in
+place, **all of them pass**. Sorry, Alexander.
+
+**Closed:**
+- **tu/vous, fixed (lane A, `agent/loop.py`, Alexander please check).** Root cause: the « l'appelant te tutoie »
+  note was added only when the caller's sentence was the last message. `prefetch_identify` appends the lookup after
+  it, so **the first turn of most calls had no note**. Céline's « tu me remets… » got « vous », then « tu » from
+  turn 2 (and T7's switch). Now `add_register_note` puts it on the caller's latest sentence. Test added (it fails
+  without the fix). Replayed by voice-mode chat: Céline « tu » → « tu » on every turn, Vergnaud « vous » → « vous »,
+  and a first sentence that tells nothing → the file decides, then the caller's « dis-moi » wins.
+- **Truck board (`c/truck-board`), tested and merged.** Typecheck and the native-controls check pass, the Voix page
+  and `truck-board.tsx` compile, and `GET /ai/outbound/truck-calls` answers (39 orders checked). **Jed: please look
+  at it on screen.**
+- **`REVIEW.md` § 3.5 (Claudio):** the « English accent » section is marked out of date. The voice is settled
+  and frozen.
+
+**Looked at, deliberately not changed:**
+- **Slow first turn (5–8 s when identify + write in one turn).** The tools take ≤ 0.7 s (J7: identify 245 ms, create
+  477 ms). The rest is the model's two steps. The fixes would be a second filler phrase (but the spoken words are
+  under the voice freeze) or a faster model (too big a change before the freeze). On the phone, the instant word
+  covers the start.
+- **The model still tries `confirm_order` on a request.** The guard refuses and the caller hears the read-back + « C'est
+  bon pour vous ? », which is correct. Hiding the tool on those turns would change the tool list and break the
+  prompt cache.
+
+**For the team to decide (not touched):** the end-of-order suggestion (`suggest_items`, T7) fires on « c'est tout »
+(« Tu prends d'habitude un quartier arrière, je t'en mets un ? »). It works, but the arena's butcher said « butchers
+hate the nagging upsell », and it adds a model step: 3.3–4.0 s on that turn.
+
+**Full test result, `50323dc` (this branch = `main` + the fixes + the truck board), 03:30–03:37, my machine:**
+| Check | Result |
+|---|---|
+| Unit tests (`ai` container, current tests) | **193 pass**, 0 fail |
+| Web typecheck + native-controls check | OK |
+| Fresh start (backend on an EMPTY database, seed loaded from scratch) | OK: every table seeded, `/api/festive/*` and `/api/cotation/*` answer |
+| `make calls` T1–T7 | **7/7**, first word median 3 531 ms, p90 5 256, worst 6 230 |
+| `make jury` J1–J29 | **29/29 invariants**, median 2 560 ms, worst 7 734. Two expected ⚠: J15 (two cards: the caller corrects her identity) and J23 (`festive_reserve` refused Wednesday, not his delivery day: the scenario's point) |
+| `make calls-test` | all checks correct in both directions |
+| `make chaos-check` | 7/7 sabotage cards OK |
+
+**Latency is creeping up:** median first word 3 058 ms (Claudio, 03:14) → 3 531 ms (here). The new steps:
+`cotation_semaine` on carcass orders (in parallel, but a longer first step) and `suggest_items` on « c'est tout ». No
+more features, please.
+
+**Still to do by hand (no tool can):** see Pablo's message to the team. A real voice call with a real mic, the pages
+on screen, and a fresh `make setup` from a clean clone on a second machine.
+
 ## 2026-11-24 03:20 (real clock, `date`) · Claudio's session (lane D) · `main`
 **Alexander, Pablo — the replay you asked for (two « date courte » tools, Pablo's cotation line): green.** On `17ba118`
 (everything merged up to « Qui est servi d'abord »), 03:14, my machine, text mode, nothing else running.
