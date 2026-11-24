@@ -1,101 +1,134 @@
-# Pablo’s pitch guide — backstop and timekeeper
+# Pitch run sheet — roles, timing and backstop
 
-Exported 24/11 from the shared doc (https://claude.ai/artifact/RQyewyUMJ2G2dGQmygvSKV). Script for the slides: `SPEAKER-NOTES.md`.
+7 minutes, slides and live demo together. Deck: https://claude.ai/artifact/UM8P8vBhGso4evr9dEcqFk. What Jed says, word for word, and what every detail means: `SPEAKER-NOTES.md`.
 
-## Your job
+## Roles
 
-You are the backstop and the timekeeper. During the slides you keep Claudio on time. During the jury’s calls you keep the demo machine running: you reset the ERP between jurors, stage the “Cassez le matin” cards, watch the logs, and run the fallback if something breaks. You don’t speak unless someone asks you a question about speech, latency or cost.
+| Who | Role | In one line |
+| --- | --- | --- |
+| **Jed** | Presenter and the voice of every client | The only native French speaker: he presents in French and speaks to the agent in all three demos. Headset on the whole time. |
+| **Claudio** | Laptop (*régie*) | Runs the demo laptop, silently: slides, switching to the Voix page, the buttons, typing if voice fails. |
+| **Pablo** | Timekeeper and backstop | Keeps Jed on time, stages the “Cassez le matin” card, watches the logs, runs every fallback. |
+| **Alexander** | Jury contact and technical questions | Runs the juror moment in demo 3, then takes agent and tool questions and hands the headset to jurors. |
 
-**Three rules you never break**
+### Jed — presenter and client voice
+- Presents every slide in French (script in `SPEAKER-NOTES.md` and in the deck’s speaker notes).
+- Before each demo says who he plays (« Je joue Céline… », « Je joue le chef… »), then speaks to the agent with the exact lines below.
+- During a live call: no narration. If the agent mishears, correct it like a real caller (« Non, Peyronnet, P-E-Y… »).
+- Watches Pablo’s signals; skips the optional lines when Pablo points at his watch.
 
-1. **Never touch `.env` or the code during the demo.** Reload, `make reset` and `make chaos` are the only actions.
-2. **Never run `make reset` in the middle of a call.** It wipes everything the agent has written, including the order the juror is placing. Only between jurors, and tell Claudio first (a nod is enough).
-3. **Never run `make calls`, `make jury` or `make chaos-check` on the demo machine once we’re on.** They reset the ERP and use the shared API credits.
+### Claudio — laptop
+- Two full-screen windows: the deck in Present mode, and the Voix page in demo mode (`http://localhost:5173/voice?demo=1`). Switch with Cmd-Tab. Rehearse the switch.
+- Advances the slides on Jed’s cue (a nod, or “slide suivante”).
+- Demo 1: switches to the Voix page and points at the client card, then the new order for Thursday 26/11.
+- Demo 2: clicks **Avant le camion**, then **Appeler** on Leroy; points at the card turning “fait”, « Récupéré 77 € », and « remplace Onglet de bœuf » on the order.
+- Demo 3: when Pablo says “c’est prêt”, clicks **Appeler** on the first new card.
+- If speech recognition fails: types Jed’s lines in the text box (« Ou tapez la phrase de l’appelant… ») so the call carries on.
+- Never touches `.env` or the code.
+
+### Pablo — timekeeper and backstop
+- Starts the stopwatch on Jed’s first word; gives the signals in the run of show below.
+- Runs `make reset` right before we start (not between demos 1 and 2).
+- Demo 3: stages the juror’s card (procedure below), ~10 s.
+- Keeps `make logs` open, the phone hotspot ready, and the 2-minute video paused on its first frame.
+- Runs the fallbacks (table below).
+
+### Alexander — jury contact and technical questions
+- Demo 3: points the juror to the numbered options on slide 6, asks « Lequel ? Et qu’est-ce qui s’est passé cette nuit ? », writes the number and the sentence on paper or his phone, and hands it to Pablo. Keeps it to one short sentence a chef can hear.
+- After the 7 minutes: hands the headset to jurors who want to call; answers questions on the agent, tools and rules (Jed relays in French if needed).
+
+## Run of show
+
+| Time | On screen | Jed | Claudio | Pablo | Alexander |
+| --- | --- | --- | --- | --- | --- |
+| 0:00–0:35 | Slide 1 · 04:38 | Hook, who we are | Slides | Stopwatch on | — |
+| 0:35–1:15 | Slide 2 · Le problème | 61%, the rules | Slides | **Signal at 1:15** | — |
+| 1:15–2:30 | Slide 3 → Voix page | Intro 15 s, then plays Céline (2 turns) | Switch to Voix, point at cards; type if needed | Watch logs | — |
+| 2:30–3:05 | Slide 4 · Ce que vous venez d’entendre | The numbers | Back to slides | **Signal at 3:05** | — |
+| 3:05–4:35 | Slide 5 → Voix page | Intro 15 s, then plays chef Peyrat (5 turns) | Avant le camion → Appeler Leroy | Watch logs; **signal at 4:35** | Get ready for the juror |
+| 4:35–5:35 | Slide 6 → Voix page | Asks a juror to pick | Appeler on the first new card | `make chaos …` | Takes the juror’s number and sentence |
+| 5:35–6:30 | Slide 7 · Comment on le sait | Rules, tests, the bug | Slides | **Signal at 6:30** | — |
+| 6:30–7:00 | Slide 8 · À vous | Hands over to the jury | Back to the Voix page | `make reset` only if needed | Hands the headset over |
+
+**Signals (Pablo → Jed):** one finger up = “start the next demo now”; pointing at the watch = “you’re behind, skip the optional line”; flat hand = “wrap up”.
+- More than 30 s behind at 4:35: skip demo 3, go to slide 7, offer it after the 7 minutes.
+- Behind at 5:35: Jed keeps the first sentence and the numbers on slide 7, drops the bug story.
+
+## The live lines
+
+**Demo 1 — Jed as Céline, Boucherie Peyronnet**
+1. « Bonjour, c’est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, tu me mets deux arrières et un avant, la génisse de chez Dumontet comme d’habitude. »
+2. After the read-back: « C’est bon, vas-y. »
+
+**Demo 2 — Jed as chef Peyrat, Restaurant Leroy** (the agent speaks first after **Appeler**)
+1. « Vous vous foutez de moi ? J’ai l’onglet à la carte ce midi. Vous me faites un geste au moins ? » *(skip if behind)*
+2. « Bon. Vous avez quoi qui pourrait remplacer ? »
+3. « Mettez-moi quatre kilos et demi de bavette alors. »
+4. « Oui, allez-y. »
+5. « Merci, au revoir. »
+
+**Demo 3 — Jed as whichever client the agent calls:** one line (« Bon, laissez comme ça. »), then hang up.
+
+## Demo 3: staging the juror’s card (Pablo)
+
+1. Take the number and sentence from Alexander. No straight double quote `"` inside the sentence.
+2. Type the command for that number, the juror’s sentence between the quotes in `WHY`. No `make reset` here: the earlier demos don’t interfere.
+3. Check the output ends with `Contrôle sans modèle : OK`; say the number of calls to Jed if he wants it.
+4. Tell Claudio “c’est prêt”: the Avant le camion panel updates without a reload.
+
+| # on the slide | Product | Command |
+| --- | --- | --- |
+| 1 | Côte de bœuf maturée 21 jours | `make chaos PRODUCT=prd_0011 WHY="…"` |
+| 2 | Entrecôte | `make chaos PRODUCT=prd_0010 WHY="…"` |
+| 3 | Filet de bœuf paré | `make chaos PRODUCT=prd_0012 WHY="…"` |
+| 4 | Foie de veau | `make chaos PRODUCT=prd_0037 WHY="…"` |
+| 5 | Côte maturée, poids court | `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--short 30"` |
+
+If a juror wants another product: « On a vérifié ces cinq-là ; choisissez-en un, et la raison est la vôtre. » Never paleron (17 clients).
 
 ## Before we go on (T−30 min, on the demo machine)
 
-Tick each box. Most of this comes from DEMO.md § 3.
-
-- [ ] `git pull` on `main` at the frozen commit. Write it here: `________`
-- [ ] `make up`. Check `http://localhost:4000/docs` and `http://localhost:4100/docs` both answer.
-- [ ] Check `.env` without editing it: Soniox for speech-to-text, ElevenLabs `eleven_v4_turbo` with the frozen voice for TTS, the model the team agreed on.
-- [ ] **ElevenLabs credit.** It ran out at 23:43 last night (HANDOFF). Confirm with Stockline that it was topped up. Then one short spoken turn proves speech-to-text and the voice; one typed turn proves the model.
-- [ ] Hear the backup browser voice once (turn the network off for one turn). If it isn’t French, install a French system voice and reload the page.
-- [ ] Headset mic plugged in and selected in the browser. Speakers loud enough for the room.
-- [ ] Laptop on power, notifications off, other tabs closed.
-- [ ] Phone hotspot ready, next to you, unlocked.
-- [ ] Voix page open in demo mode: `http://localhost:5173/voice?demo=1` (Jed’s screen).
-- [ ] One warm-up call, then **`make reset`**.
-- [ ] The 2-minute video open in a second window, paused on its first frame.
-- [ ] Two terminal tabs on your side: one running `make logs`, one at the repo folder for commands. The cheat sheet at the end of this guide open beside them.
-- [ ] A visible timer for the 5 minutes (phone stopwatch), and the sabotage cards with their commands on the back.
-
-## During the 5-minute slides
-
-Start the stopwatch when Claudio says his first word. Sit where he can see you without turning his head. Agree the signals with him before we go on.
-
-| Time | Claudio should be on | Your signal | If he is behind |
-| --- | --- | --- | --- |
-| 2:00 | Slide 4 (Smart) | Two fingers up | Still on slide 3: point at your watch. He skips the Stockline-agents sentence. |
-| 4:00 | Slide 7 (How we know) | Four fingers up | Still on slide 6: point at your watch. He cuts the bug story to one sentence. |
-| 4:40 | Slide 8 (Your turn) | Flat hand, “wrap up” | He reads the jury line and stops. |
-| 5:00 | Done | Closed fist | — |
-
-While he talks, watch the `make logs` tab: an error now means fix it before the jury calls (reload the page, check the network). On slide 8, have the sabotage cards ready to hand to Alexander, and the command tab focused.
-
-## During the jury’s calls
-
-**Between two jurors:** if the last call left the ERP in a state that would confuse the next one, run `make reset` (a few seconds). Nod to Claudio first. If nothing was written, skip it.
-
-**When a juror picks a “Cassez le matin” card:**
-
-1. Take the card. Read the reason the juror wrote. Keep it as one sentence a chef can hear; if it’s long, ask “On garde cette phrase ?” and use what they say.
-2. Run `make reset` (only if a juror call has already written into the ERP).
-3. Type the command from the back of the card, with the juror’s sentence between the quotes in `WHY`. Don’t use a straight double quote `"` inside the sentence.
-4. Check the output ends with `Contrôle sans modèle : OK`. It also prints who gets called and the € at stake: read Claudio the number of calls.
-5. Tell Jed “c’est prêt”. The “Avant le camion” panel updates without a reload; he clicks **Appeler** on a card and the juror plays that client.
-
-| Card | Product | Suggested reason | Command |
-| --- | --- | --- | --- |
-| S1 | Côte de bœuf maturée 21 j | Chambre froide 2 en panne cette nuit : lot écarté par précaution | `make chaos PRODUCT=prd_0011 WHY="…"` |
-| S2 | Train de côtes / entrecôte | La palette de lundi a cassé la chaîne du froid | `make chaos PRODUCT=prd_0010 WHY="…"` |
-| S3 | Filet de bœuf paré | Filet saisi par les services vétérinaires ce matin | `make chaos PRODUCT=prd_0012 WHY="…"` |
-| S4 | Foie de veau | Lot refusé au contrôle qualité de 3 h | `make chaos PRODUCT=prd_0037 WHY="…"` |
-| S5 | Côte maturée, poids court | Une partie du lot n’a pas atteint ses 21 jours | `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--short 30"` |
-
-Only these five products. If a juror asks for another one, say: “On a vérifié ces cinq-là ; choisissez-en un, et la raison est la vôtre.” Never paleron (17 clients, too many for a live demo).
-
-**Our own “Avant le camion” call (if we show it):** `make reset` first, so both onglet calls (Leroy, Le Bœuf Limousin) are back on the board.
+| ✓ | Check | Who |
+| --- | --- | --- |
+| [ ] | `git pull` on `main`, then `make up`; `http://localhost:4000/docs` and `http://localhost:4100/docs` both answer | Pablo |
+| [ ] | `.env` checked, not edited: Soniox, ElevenLabs `eleven_v4_turbo` with the frozen voice, the agreed model | Pablo |
+| [ ] | ElevenLabs credit topped up (it ran out last night): one short spoken turn proves voice and transcription | Pablo |
+| [ ] | Jed’s voice through the headset: one test call, speech recognised | Jed + Claudio |
+| [ ] | Headset selected in the browser; room speakers loud enough | Claudio |
+| [ ] | Deck in Present mode + Voix page `?demo=1`, both full screen; Cmd-Tab rehearsed | Claudio |
+| [ ] | Laptop on power, notifications off, other tabs closed | Claudio |
+| [ ] | Phone hotspot ready and unlocked | Pablo |
+| [ ] | The 2-minute video open, paused on its first frame | Pablo |
+| [ ] | `make logs` in one terminal tab, the repo folder in another | Pablo |
+| [ ] | One full timed rehearsal, then **`make reset`** | Everyone |
 
 ## If something breaks
 
-From DEMO.md § 6, with your part in each. Stay calm and act in this order: wait once, look at the logs, then the smallest fix.
+Act in this order: wait once, look at the logs, then the smallest fix. Never touch `.env` or the code.
 
-| Symptom | You do | Who speaks |
+| Symptom | What we do | Who |
 | --- | --- | --- |
-| Silence over ~5 s after the caller speaks | Wait once. Look at `make logs`. If there’s an error, tell Jed “recharge”. If not, the caller repeats the sentence. | Caller |
-| Page error or the voice connection drops | Tell Jed to reload the Voix page and start a new call. | Jed |
-| Caller not transcribed (speech-to-text down or out of credit) | Tell Jed: typed turns. The Voix page has a text box (“Ou tapez la phrase de l’appelant…”). | Claudio says so plainly |
-| “TTS indisponible, voix de secours du navigateur” on screen | Nothing. The browser voice takes over and ElevenLabs is retried after 60 s. It answers later and sounds robotic. | Claudio, one sentence: “the voice provider failed, the agent switched to a backup voice” |
-| Model errors in the logs, or no network | Switch the laptop to your phone hotspot. Still down: start the 2-minute video, then show the `make calls` and `make jury` results. | Claudio |
-| `make chaos` doesn’t end with “OK” | `make reset`, then run the same command again. Still not OK: tell Claudio to move on to a normal call. | Claudio |
-| A juror’s call left a mess (wrong client, half order) | After the call ends: `make reset`. Never mid-call. | — |
+| Silence over ~5 s after Jed speaks | Wait once. Pablo checks `make logs`. Error → Claudio reloads the Voix page; none → Jed repeats the sentence. | Pablo, Claudio, Jed |
+| Agent mishears | Jed corrects it like a real caller. Nobody steps in. | Jed |
+| Speech not transcribed | Claudio types Jed’s lines in the text box; Jed says so in one sentence. | Claudio, Jed |
+| « TTS indisponible, voix de secours du navigateur » | Nothing: the browser voice takes over (robotic, later). Jed: « le fournisseur de voix a lâché, l’agent est passé sur une voix de secours ». | Jed |
+| Page error or socket drops | Claudio reloads the Voix page and restarts the call. | Claudio |
+| Model errors or no network | Pablo switches to the hotspot. Still down: Pablo plays the 2-minute video instead of demos 1–2, then slide 7. | Pablo |
+| `make chaos` not OK | `make reset`, same command again. Still not OK: skip demo 3. | Pablo |
+| A call left a mess | `make reset` after the call, never during. | Pablo |
 
-If you’re not sure what’s wrong, don’t guess in front of the jury: show Claudio a thumbs-down and switch to the video.
+Not sure what’s wrong? Pablo gives Jed a thumbs-down and plays the video. Don’t debug in front of the jury.
 
-## Cheat sheet
-
-Keep this open next to the terminal. Run everything from the repo folder.
+## Cheat sheet (Pablo’s terminal)
 
 | What | Command |
 | --- | --- |
 | Start the services | `make up` |
-| Watch the logs (Ctrl-C to stop) | `make logs` |
+| Watch the logs | `make logs` |
 | Reset the ERP to the data pack | `make reset` |
 | Stage a sabotage card | `make chaos PRODUCT=prd_0011 WHY="…"` |
-| Short-weight card (S5) | `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--short 30"` |
+| Short-weight card | `make chaos PRODUCT=prd_0011 WHY="…" ARGS="--short 30"` |
 | Products on today’s trucks | `python3 evals/break_morning.py --list` |
 | Voix page, demo mode | `http://localhost:5173/voice?demo=1` |
-| “Avant le camion” board | Header button **Avant le camion** on the Voix page (or `?camion=1`) |
 
-**Not during the demo:** `make calls`, `make jury`, `make chaos-check` (they reset the ERP and use credits), `make clean` (deletes the database), anything in `.env`.
+**Never during the pitch:** `make calls`, `make jury`, `make chaos-check` (they reset the ERP and use credits), `make clean`, anything in `.env`.
