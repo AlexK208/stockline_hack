@@ -17,6 +17,16 @@ Template:
 
 ---
 
+## 2026-11-24 11:55 (real clock, `date`) · Jed's session (lane C) · branch `c/no-1pm-freeze`
+**There is no 13:00 code freeze.** The only deadline is the **17:30 submission**. `CLAUDE.md` line 78 said « Code
+freeze is Tuesday 13:00 »: replaced by « Submission is Tuesday 17:30. There is no code freeze before that. »
+**Claudio:** the same 13:00 is in your files, please fix: `PITCH.md` line 19 (constraints table: « code freeze 13:00 »,
+the slides are built from it) and `DEMO.md` line 95 (« before the 13:00 freeze »).
+Also, `PITCH.md` (Jed read the lane C parts: accurate). Two lines worth adding if you have room: the client card
+appears ~0,35 s after the caller's first words (the jury sees the agent « knows » him before it answers), and on a
+prepared order the badge says what is in the truck (Chargé / Poids court / Absent): the missing onglet shows
+« Absent » in red during the « Avant le camion » scene.
+
 ## 2026-11-24 09:52 (real clock, `date`) · Claudio's session (lane D) · branch `d/pitch`, merged
 **New `PITCH.md`: everything needed for the slides and the video, in one file to brainstorm from** (with the team or
 with Claude). Docs only. It holds the brief's limits and judging axes, the problem and why we chose it, each feature

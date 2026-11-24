@@ -75,4 +75,4 @@ Lane A is working on next:
 - **Before every push, add an entry to `HANDOFF.md`.**
 - Never commit `.env` or `data/seed/`.
 - `main` must always start with `make setup`.
-- Code freeze is Tuesday 13:00. Submission is **Tuesday 17:30**.
+- Submission is **Tuesday 17:30**. There is no code freeze before that.
