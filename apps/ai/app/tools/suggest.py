@@ -15,6 +15,13 @@ Then ALL the missing products are offered at once, in one sentence, with the qua
     cannot be delivered is dropped (never suggest what we cannot deliver)
 Hard filters: blocked client → []; deliveries 19–31 December → [] (the carnet des fêtes, tools/festive.py, proposes
 last year's holiday basket itself).
+Edge cases, decided by common sense (24/11 ~04:15):
+    - a product he REMOVED from this order during the call (ERP log `order.line_removed`) or DECLINED out loud
+      (`declined_product_ids`, filled by the agent) is never offered back;
+    - a product he SWAPPED for a similar one (an extra product of the same category is in the order: standard
+      half-pork instead of cul noir) is not « forgotten »;
+    - a line that substitutes another (`substituteFor`) covers the product it replaces;
+    - two repeated orders equally close: the most recent one wins (deterministic).
 """
 
 from __future__ import annotations
@@ -52,14 +59,18 @@ def round_qty(qty: float, product: dict) -> tuple[float, float | None]:
     return max(1, round(qty)), None
 
 
-def forgotten(history: list[dict], current: set[str]) -> dict | None:
+def forgotten(
+    history: list[dict], current: set[str], declined: set[str] | frozenset = frozenset(), category: dict[str, str] | None = None
+) -> dict | None:
     """The rule, pure. `history`: his placed orders, each {"date": "YYYY-MM-DD", "lines": {productId: qty}};
-    `current`: the product ids of the order being taken.
+    `current`: the product ids of the order being taken (substitutes count for what they replace); `declined`: products
+    he removed or refused in this call; `category`: productId → category, to spot a swap for a similar product.
     → {"missing": [pid…], "times": n, "last": date, "qty": {pid: usual qty}} or None (nothing worth asking)."""
     if not current:
         return None
     sets = Counter(frozenset(o["lines"]) for o in history if o["lines"])
-    best = None
+    last_of = {b: max(o["date"] for o in history if frozenset(o["lines"]) == b) for b in sets}
+    qualified = []
     for basket, times in sets.items():
         if times < MIN_REPEATS:
             continue
@@ -68,18 +79,21 @@ def forgotten(history: list[dict], current: set[str]) -> dict | None:
             continue
         if len(missing) + len(extra) > MAX_DIFFERENCES or len(missing) / len(basket) > MAX_MISSING_SHARE:
             continue
-        key = (len(missing) + len(extra), -times)  # the closest repeated order, then the most frequent one
-        if best is None or key < best[0]:
-            best = (key, basket, times, missing)
-    if not best:
+        qualified.append((basket, times, missing, extra))
+    if not qualified:
         return None
-    _, basket, times, missing = best
+    # the closest repeated order, then the most frequent one, then the most recent one: always the same answer
+    basket, times, missing, extra = max(qualified, key=lambda q: (-(len(q[2]) + len(q[3])), q[1], last_of[q[0]], sorted(q[0])))
+    swapped_for = {category.get(e) for e in extra} - {None} if category else set()
+    offer = sorted(p for p in missing if p not in declined and not (category and category.get(p) in swapped_for))
+    if not offer:
+        return None  # what is missing was taken out, refused or swapped on purpose: nothing was forgotten
     same = [o for o in history if frozenset(o["lines"]) == basket]
     return {
-        "missing": sorted(missing),
+        "missing": offer,
         "times": times,
-        "last": max(o["date"] for o in same),
-        "qty": {pid: median(o["lines"][pid] for o in same) for pid in missing},
+        "last": last_of[basket],
+        "qty": {pid: median(o["lines"][pid] for o in same) for pid in offer},
     }
 
 
@@ -96,24 +110,39 @@ async def gather(erp: ErpClient, client_id: str, delivery_date: str) -> dict:
     since = (date.fromisoformat(meta["today"]) - timedelta(days=WINDOW_DAYS)).isoformat()
     past = [s for s in summaries if since <= (s.get("deliveryDate") or "") < meta["today"] and s.get("status") in PLACED]
     open_ = [s for s in summaries if s.get("deliveryDate") == delivery_date and s.get("status") in ("draft", "confirmed")]
-    details = await asyncio.gather(*(erp.get(f"/api/orders/{enc(s['id'])}") for s in past + open_))
+    details, events = await asyncio.gather(
+        asyncio.gather(*(erp.get(f"/api/orders/{enc(s['id'])}") for s in past + open_)),
+        erp.get("/api/events", {"entity": "order", "limit": 500}) if open_ else asyncio.sleep(0, result=[]),
+    )
     lines = lambda o: {l["productId"]: l.get("qty") or 0 for l in o.get("lines") or []}  # noqa: E731
     products = products if isinstance(products, list) else products.get("items", [])
+    by_name = {p["name"]: p["id"] for p in products}
+    open_ids = {s["id"] for s in open_}
+    events = events if isinstance(events, list) else events.get("items", [])
+    removed = {  # « Paleron de bœuf PAD retiré de CMD-… » on this call's open order(s)
+        by_name.get((e.get("summary") or "").split(" retiré de ")[0])
+        for e in events
+        if e.get("type") == "order.line_removed" and e.get("entityId") in open_ids
+    } - {None}
+    current_orders = details[len(past):]
     return {
         "client": {k: client.get(k) for k in ("id", "status")},
         "history": [{"date": (o.get("deliveryDate") or "")[:10], "lines": lines(o)} for o in details[: len(past)]],
-        "current": {pid for o in details[len(past):] for pid in lines(o)},
+        "current": {pid for o in current_orders for pid in lines(o)}
+        | {l["substituteFor"] for o in current_orders for l in o.get("lines") or [] if l.get("substituteFor")},
+        "removed": removed,
         "products": {p["id"]: p for p in products},
     }
 
 
-async def suggest(erp: ErpClient, client_id: str, delivery_date: str) -> list[dict]:
+async def suggest(erp: ErpClient, client_id: str, delivery_date: str, declined: list[str] | None = None) -> list[dict]:
     if FESTIVE[0] <= delivery_date[5:] <= FESTIVE[1]:
         return []
     facts = await gather(erp, client_id, delivery_date)
     if facts["client"].get("status") == "blocked":
         return []
-    found = forgotten(facts["history"], facts["current"])
+    category = {pid: p.get("category") for pid, p in facts["products"].items()}
+    found = forgotten(facts["history"], facts["current"], facts["removed"] | set(declined or []), category)
     if not found:
         return []
     out = []
@@ -145,6 +174,7 @@ async def suggest_items(
     ctx: ToolContext,
     client_id: str,
     delivery_date: str = Field(description="Date de livraison de la commande, YYYY-MM-DD"),
+    declined_product_ids: list[str] | None = Field(None, description="Produits qu'il a retirés ou refusés pendant cet appel (« enlève le paleron », « pas de veau cette semaine ») : jamais reproposés"),
 ) -> dict:
     """
     À appeler UNE fois, quand le client dit que sa commande est finie (« c'est tout »), avant la relecture. Rend les produits
@@ -152,7 +182,7 @@ async def suggest_items(
     (au moins 3 fois), avec au plus deux oublis. Déjà vérifiés (stock à la date, délai, jour de livraison). Liste vide = c'est
     une autre commande : ne lui demande pas s'il a oublié quelque chose.
     """
-    found = await suggest(ctx.erp, client_id, delivery_date)
+    found = await suggest(ctx.erp, client_id, delivery_date, declined_product_ids)
     out: dict = {"deliveryDate": delivery_date, "jour": jour(delivery_date), "suggestions": found}
     if found:
         out["plan"] = (

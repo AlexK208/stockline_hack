@@ -75,6 +75,29 @@ def test_the_usual_quantity_is_the_median_of_the_repeated_orders():
     assert forgotten(history, {A, C})["qty"][B] == 110
 
 
+# ───────────────────────── edge cases (common sense) ─────────────────────────
+
+
+def test_a_product_removed_or_declined_during_the_call_is_never_offered_back():
+    assert forgotten(orders(USUAL, 3), {A, C}, declined={B}) is None  # « enlève l'avant » / « pas d'avant cette semaine »
+    usual = {A: 1, B: 1, C: 1, D: 1, E: 1, F: 1}
+    assert forgotten(orders(usual, 3), {A, B, C, D}, declined={E})["missing"] == [F]  # only the other one
+
+
+def test_a_swap_for_a_similar_product_is_not_forgotten():
+    cat = {A: "carcasses", B: "porc", C: "veau", "prd_X": "porc"}
+    assert forgotten(orders(USUAL, 3), {A, C, "prd_X"}, category=cat) is None  # B swapped for X (same category)
+    cat_other = {**cat, "prd_X": "abats"}
+    assert forgotten(orders(USUAL, 3), {A, C, "prd_X"}, category=cat_other)["missing"] == [B]  # not a swap
+
+
+def test_equally_close_repeated_orders_pick_the_most_recent_one():
+    older = orders({A: 1, B: 1, C: 1}, 3, start=1)
+    newer = orders({A: 1, C: 1, D: 1}, 3, start=20)
+    got = forgotten(older + newer, {A, C})
+    assert got["missing"] == [D]  # same distance, same count: the most recent wins, every time
+
+
 # ───────────────────────── suggest(): the seed data, through the ERP ─────────────────────────
 
 
