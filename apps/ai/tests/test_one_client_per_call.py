@@ -47,7 +47,7 @@ def test_last_heard_drops_the_note_added_for_the_model():
 
 async def test_guard_refuses_another_clients_id_and_order():
     orders = {"ord_mine": {"clientId": "cli_0005"}, "ord_other": {"clientId": "cli_0009"}}
-    ctx = on_call("cli_0005", orders=orders)
+    ctx = on_call("cli_0005", heard="Oui, valide.", orders=orders)
     await call_guard(call("get_client_history", clientId="cli_0005"), ctx)
     await call_guard(call("confirm_order", orderId="ord_mine"), ctx)
     await call_guard(call("check_products", items=[]), ctx)  # names no client: nothing to check
@@ -118,3 +118,36 @@ def test_phone_prompt_has_no_named_clients_debts():
     kept = phone_safe(text)
     assert "Lacour" not in kept and "104" not in kept
     assert "Plafond d'encours" in kept and "Onglet" in kept  # house rules and stock notes stay
+
+
+async def test_confirm_order_needs_a_yes_in_the_callers_own_last_sentence():
+    orders = {"ord_mine": {"clientId": "cli_0005"}}
+    for said in ("Oui c'est bon, vas-y, tu peux valider.", "Oui, valide. Merci, au revoir.", "C'est bon pour moi.", "Ok ça marche", "Je te fais confiance."):
+        await call_guard(call("confirm_order", orderId="ord_mine"), on_call("cli_0005", heard=said, orders=orders))
+    # seen in a jury replay: confirmed on a request, with no read-back and no yes
+    for said in ("Bon, je sais pas, moi, mettez-m'en huit kilos.", "Mettez-les quand même.", "Et dix kilos de bavette.", "Non. Mettez juste le faux-filet.", ""):
+        with pytest.raises(PermissionError, match="accord"):
+            await call_guard(call("confirm_order", orderId="ord_mine"), on_call("cli_0005", heard=said, orders=orders))
+    # the web chat is not a phone call: a salesperson confirms what he wants
+    await call_guard(call("confirm_order", orderId="ord_mine"), ToolContext(erp=FakeErp(orders), actor="ai_chat"))
+
+
+def test_tu_or_vous_follows_the_caller():
+    from app.agent.loop import caller_register
+
+    def said(*sentences):
+        return [ChatMessage(role="user", content=s) for s in sentences]
+
+    assert caller_register(said("Bonjour, c'est Céline. Dis-moi, tu me mets deux arrières pour jeudi.")) == "tu"
+    assert caller_register(said("Bonjour, il vous reste de l'onglet ? Mettez-m'en trois kilos.")) == "vous"
+    assert caller_register(said("Bonjour, Boucherie Rolland.")) is None  # nothing tells: the file decides
+    assert caller_register(said("Dis-moi, tu as de l'onglet ?", "Oui.")) == "tu"  # the last sentence that shows it
+    assert caller_register(said("Mets-moi dix kilos\n\n[Système : tu viens déjà de dire « Je note. » à voix haute.]")) == "tu"  # our own note does not count
+
+
+def test_only_a_waiting_phrase_is_spoken_before_a_tool():
+    from app.services.call_prep import is_waiting_phrase
+
+    assert is_waiting_phrase("Je regarde.") and is_waiting_phrase("Un instant.") and is_waiting_phrase("Bonjour Céline.")
+    for note in ("Paleron: 17 kg.", "Je crée.", "Onglet en rupture.", "Vendredi 27, je crée."):
+        assert not is_waiting_phrase(note)

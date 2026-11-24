@@ -58,7 +58,7 @@ from app.tools import ErpClient, all_tools
 from app.clients.mock_speech import silent_wav
 from app.schemas import MOCK_TTS_MIME
 
-from .call_prep import ack_note, choose_ack, said_goodbye
+from .call_prep import ack_note, choose_ack, is_waiting_phrase, said_goodbye
 from .call_report import write_report
 from .warmup import WARM_EVERY_S, Warmer, warm_prompt_cache
 from .utterance import Utterance
@@ -340,7 +340,7 @@ class VoiceConnection:
                         # the text of the next step, i.e. after the whole tool round-trip.
                         # Only a short waiting phrase is worth saying there. A longer text before a tool is the
                         # model thinking aloud ("pas de commande existante, je la crée") : not for the caller.
-                        if ack or len(step_text.split()) > MAX_WAIT_WORDS:
+                        if ack or len(step_text.split()) > MAX_WAIT_WORDS or not is_waiting_phrase(step_text):
                             speaker.drop()  # (after an ack we already said something: the step comment stays unspoken)
                         else:
                             speaker.flush()

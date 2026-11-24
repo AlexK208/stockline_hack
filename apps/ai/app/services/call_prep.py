@@ -138,6 +138,17 @@ async def choose_ack(text: str, first_turn: bool, erp: ErpClient | None, recent:
     return next((t for t in words if t not in used), "")
 
 
+GREETING_ONLY = re.compile(r"^(bonjour|bonsoir|salut)( [\w' -]{1,30})?[.!]?$", re.I)
+
+
+def is_waiting_phrase(text: str) -> bool:
+    """True for the few words worth saying before a tool runs ("Je regarde.", "Bonjour Céline."). Anything else the
+    model writes there is a note to itself ("Paleron: 17 kg.", "pas de commande, je la crée") and is not spoken."""
+    said = " ".join((text or "").split())
+    known = {desk.norm(t) for pool in TOKENS.values() for t in pool}
+    return desk.norm(said) in known or bool(GREETING_ONLY.match(said))
+
+
 def said_goodbye(text: str) -> bool:
     """The caller is leaving ("merci, au revoir"): the moment to write the call report."""
     return bool(GOODBYE.search(text or ""))

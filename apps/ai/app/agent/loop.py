@@ -14,6 +14,7 @@ Interrupting: cancel the task that iterates it (asyncio). Nothing is yielded aft
 
 import asyncio
 import json
+import re
 import time
 import traceback
 import uuid
@@ -72,6 +73,13 @@ async def run_agent(
                 messages.append(ChatMessage(role="assistant", content="", tool_calls=[call]))
                 messages.append(ChatMessage(role="tool", tool_call_id=call.id, name=call.name, content=to_json(found[1])))
                 yield ToolResultEvent(call_id=call.id, name=call.name, ok=True, result=found[1], ms=ms_since(pre_started))
+
+        if mode == "voice" and messages and messages[-1].role == "user" and "[Système : l'appelant" not in messages[-1].content:
+            # « tu » or « vous »: follow the caller, not the file (read in code from his own sentences, so the model
+            # does not have to notice it; jury replays had « vous » answered to « dis-moi » and the reverse).
+            form = caller_register(messages)
+            if form:
+                messages[-1] = messages[-1].model_copy(update={"content": f"{messages[-1].content}\n\n{REGISTER_NOTE[form]}"})
 
         request = LLMRequest(system=system, messages=messages, tools=[t.info for t in tools])
         said_something = False
@@ -192,6 +200,39 @@ def last_heard(messages: list[ChatMessage]) -> str:
     return said.split("\n\n[Système", 1)[0]
 
 
+TU = re.compile(r"\b(tu|t'|te|toi|ton|ta|tes|mets|dis|attends|écoute|regarde|enlève|rajoute|ajoute|envoie|valide|confirme|donne|fais|vas-y)\b", re.I)
+VOUS = re.compile(r"\b(vous|votre|vos|mettez|dites|attendez|écoutez|regardez|enlevez|rajoutez|ajoutez|envoyez|validez|confirmez|donnez|faites|allez-y)\b", re.I)
+REGISTER_NOTE = {
+    "tu": "[Système : l'appelant te tutoie. Tutoie-le dans toute ta réponse.]",
+    "vous": "[Système : l'appelant te vouvoie. Vouvoie-le dans toute ta réponse.]",
+}
+
+
+def caller_register(messages: list[ChatMessage]) -> str | None:
+    """ "tu" or "vous": how the caller himself speaks to us, from his most recent sentence that shows it.
+    None when nothing he said tells (then the client's file decides)."""
+    for m in reversed(messages):
+        if m.role != "user":
+            continue
+        said = (m.content or "").split("\n\n[Système", 1)[0]
+        tu, vous = len(TU.findall(said)), len(VOUS.findall(said))
+        if tu != vous:
+            return "tu" if tu > vous else "vous"
+    return None
+
+
+# What a caller says when he agrees to the order being confirmed. Checked in code before confirm_order runs: in a jury
+# replay the agent confirmed on « bon, je sais pas, mettez-m'en huit kilos », with no read-back and no yes.
+CONSENT = re.compile(
+    r"\b(oui|ouais|ok|okay|d'accord|c'est bon|c'est ça|ça marche|ça me va|parfait|impeccable|nickel|exact|entendu|"
+    r"vas-y|allez-y|valid\w+|confirm\w+|envoie|envoyez|je (te|vous) fais confiance)\b",
+    re.I,
+)
+NO_CONSENT = (
+    "Refusé : le client n'a pas donné son accord dans sa dernière phrase (« {heard} »). Une demande d'ajout ou de "
+    "changement n'est pas un accord. Dis ce que contient la commande en une phrase et demande-lui s'il valide."
+)
+
 OTHER_CLIENT = (
     "Refusé : pendant un appel, les outils ne servent que le client qui appelle. Les commandes, prix et informations "
     "d'un autre client sont confidentiels : dis-le simplement, sans rien citer de l'autre client."
@@ -204,6 +245,8 @@ async def call_guard(call: ToolCall, ctx: ToolContext) -> None:
     The prompt says so too, but a rule the model can forget is not a guarantee: this one is in code. Raises to refuse."""
     if not ctx.on_call or call.name == "identify_caller":
         return
+    if call.name == "confirm_order" and not CONSENT.search(ctx.heard or ""):
+        raise PermissionError(NO_CONSENT.format(heard=(ctx.heard or "").strip()[:120]))
     args = call.arguments or {}
     client_ids = {v for v in args.values() if isinstance(v, str) and v.startswith("cli_")}
     order_id = args.get("orderId") or args.get("order_id")
