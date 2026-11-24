@@ -341,8 +341,10 @@ compte bloqué ; jamais le ris de veau ni l'onglet (à zéro) ; la promo chair �
 
 *Deux règles du prompt n'ont pas tenu seules : on les a mises dans le code.*
 - « Au plus deux suggestions par appel » : sur un passage de T7, le modèle en a proposé une troisième, et le « oui,
-  c'est bon » final du client a ajouté deux agneaux. L'outil ne rend plus que deux produits : on ne peut pas proposer
-  ce qu'on n'a pas.
+  c'est bon » final du client a ajouté deux agneaux. L'outil ne rendait plus que deux produits : on ne peut pas
+  proposer ce qu'on n'a pas. **Puis une seule** (24/11, ~03:50) : mesuré sur la voix, le « oui, c'est bon » d'une
+  cliente qui voulait valider recevait une deuxième proposition (2,8 s puis 3,8 s) et la commande n'était toujours pas
+  confirmée. Désormais : une suggestion, puis la relecture et la question d'accord, rien d'autre (T7 le vérifie).
 - « L'an dernier » listait d'abord les produits de base (« 866 kg de quartier arrière l'an dernier à cette
   période ») : vrai, mais ce n'est pas une raison, il en prend toute l'année. Un produit n'est « de saison » pour un
   client que s'il est dans une part nettement plus grande de ses livraisons à cette période que sur l'année (× 1,5).
