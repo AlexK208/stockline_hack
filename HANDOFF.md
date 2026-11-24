@@ -17,6 +17,47 @@ Template:
 
 ---
 
+## 2026-11-24 02:59 (real clock, `date`) · Claudio's session (lane D, plus one page in lane C) · `d/cadran-tests` merged, `c/truck-board` pushed
+**Pablo — « Le cadran annoncé »: your five tests pass, 5/5.** They're jury calls **J25–J29** now (`make jury ARGS="J25 J26
+J27 J28 J29"`). Median first word 2847 ms, worst 4906 ms.
+- **J25 Peyronnet, two hindquarters for Thursday:** « Cette semaine l'arrière a pris cinq centimes, à dix euros vingt le
+  kilo, c'est la cotation de lundi au cadran de Limoges », said once, in the same step as the order write.
+  « Cotation de la semaine annoncée » logged, the page shows her as told. ✅
+- **J26, the same butcher calls back** (new flag `keep_erp`: runs on J25's ERP, no reset): one more hindquarter, **nothing
+  about the quote**, no second event. ✅
+- **J27 Deschamps, rise + drop, then « Encore une hausse ? SOCOVIA… »:** both moves said; then the one-month trend
+  (9,86 → 10,28 €), « la même chose pour tous nos bouchers », no discount, `price_negotiation` « concurrent SOCOVIA moins
+  cher sur l'arrière » for Aurélie. ✅
+- **J28 Restaurant Vidal, PAD only:** `cotation_semaine` not called, nothing said. ✅
+- **J29 Hyper Frais Corgnac, quarters for Friday:** told once (10,05 → 10,10 €), page moves it to told. ✅
+- Small, text only: J27/J29 open with « Pas de commande vendredi : je crée. », which the voice path doesn't speak.
+`run_jury.py` now prints « cotation de la semaine : annoncée / pas annoncée » for the client.
+
+**Jed — the « Avant le camion » panel is on branch `c/truck-board` (`18df66e`), NOT merged: it's in your lane, and the
+testing is yours.** Typecheck and the native-controls check pass (run inside the `web` container), and the API answers
+through the Vite proxy. **I have not looked at it in a browser.**
+- New `apps/web/src/pages/voice/truck-board.tsx`; in `pages/voice/index.tsx`, a header button « Avant le camion » (or
+  `?camion=1`) opens it as a left column, next to the conversation and the call cards. Only `@/ui` components.
+- It polls `GET /ai/outbound/truck-calls` every 4 s. At the top: a demo clock that starts at **04:38** when the page
+  opens (click it to put it back to 04:38), and three counters (à appeler, en jeu, récupéré). One card per call: client,
+  contact, what's missing with the €, the truck (route, departure, driver, stop), a « part dans X min » countdown (red
+  under 5 min), the client's rule in his file's words, and **Appeler**. That button starts a new session and sends
+  `startWith`; the card under way gets a violet border. After the call: « fait » + `outcome.title` + what was recovered.
+  A wrong person (`lastAttempt`) shows « Déjà tenté : … » and the button becomes « Rappeler ». The gaps left alone are
+  listed in grey at the bottom.
+**What to test, please (then merge if it's fine, restyle freely):**
+1. `make reset`, open `/voice?camion=1`: 2 cards (Leroy 04:45, Le Bœuf Limousin 05:00), Panazol greyed at the bottom,
+   90,72 € en jeu, clock at 04:38 counting, Leroy « part dans 7 min ».
+2. **Appeler** on Leroy, then Alexander's script (« Vous vous foutez de moi ?… » → « Mettez-moi quatre kilos et demi de
+   bavette alors. » → « Oui, allez-y. »). Check that the conversation and the client card follow, the card turns « fait »
+   within ~4 s, and « Récupéré » goes up.
+3. `make chaos PRODUCT=prd_0011 WHY="Chambre froide 2 en panne cette nuit : lot écarté par précaution"`: 8 cards,
+   in departure order, 3 902 € en jeu, without reloading the page.
+4. The commis case (`DEMO.md` § 9, S3, `/appel ord_020813` after `make chaos PRODUCT=prd_0012 …`): the card stays, with
+   « Déjà tenté » and « Rappeler ».
+5. **Mode démo** + the board open at the same time, on the projector's width: does it all fit? If not, the zoom or the
+   widths in `index.tsx` are yours to change.
+
 ## 2026-11-24 02:57 (real clock, `date`) · Jed's session (lane C, plus lane A parts **approved by Alexander**) · branch `c/suggest-items`
 **Feature: suggestions at the end of an order call (V2, on top of the core).** After « c'est tout », the agent may
 offer one product at a time, at most two, each with a reason the client can check (« Vous prenez d'habitude un

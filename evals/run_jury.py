@@ -141,11 +141,19 @@ def erp_delta(st, client_id: str) -> dict:
         ]
     except Exception:  # an ERP without the carnet des fêtes: nothing to show
         festive = []
-    return {"new_orders": orders, "new_events": [e["title"] for e in st.new_events(client_id)], "festive": festive}
+    # Le cadran annoncé (J25–J29): is this client shown as told on the « Cotation de la semaine » page?
+    try:
+        row = next((c for c in rc.erp_get("/api/cotation/board")["clients"] if c["clientId"] == client_id), None)
+        cotation = None if row is None else ("annoncée" if row.get("announced") else "pas annoncée")
+    except Exception:
+        cotation = None
+    return {"new_orders": orders, "new_events": [e["title"] for e in st.new_events(client_id)], "festive": festive, "cotation": cotation}
 
 
 def run_one(sc: dict, mode: str, verbose: bool) -> dict:
-    reset_s = rc.reset_erp()
+    # keep_erp: the call follows the previous scenario in the same ERP (J26: the same butcher calls back the same
+    # week). Run it right after that scenario: `make jury ARGS="J25 J26"`.
+    reset_s = 0.0 if sc.get("keep_erp") else rc.reset_erp()
     client_id = sc.get("client_id") or ""
     st = rc.State([client_id] if client_id else [])
     st.snapshot([])
@@ -181,6 +189,8 @@ def run_one(sc: dict, mode: str, verbose: bool) -> dict:
     ))
     if delta["new_events"]:
         print(rc.dim("  événements : ") + "; ".join(delta["new_events"]))
+    if delta.get("cotation"):
+        print(rc.dim("  cotation de la semaine : ") + delta["cotation"])
     if delta.get("festive"):
         print(rc.dim("  carnet des fêtes : ") + "; ".join(delta["festive"]))
 
