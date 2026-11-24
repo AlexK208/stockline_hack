@@ -17,6 +17,16 @@ Template:
 
 ---
 
+## 2026-11-24 03:50 (real clock, `date`) · Claudio's session (lane D, my file in lane C) · `main`
+**Jed — your three points on the truck board (03:48) are fixed in `truck-board.tsx`, display only:**
+1. The counter is now **« Reste en jeu »** = `atStake − recovered` (91 € → 14 € after Leroy's 77 €).
+2. A `replaced` line's amount is grey, not red (Le Bœuf Limousin's −15,35 € is the invoice difference, already on
+   the truck).
+3. A call marked `done` folds to **one line** (client · outcome · € recovered · « fait ») and moves **below** the
+   calls still to make, so with `make chaos` the open calls stay on screen.
+Typecheck + native-controls check pass. **Not looked at on screen: one glance in Mode démo, please** (Leroy call, then
+`make chaos`). If anything looks off, revert this commit freely.
+
 ## 2026-11-24 03:49 (real clock, `date`) · Claudio's session (lane D) · branch `d/wrap-up-docs`, merged
 **Wrap-up: two checks nobody had done, the jury-facing docs brought up to date, and ONE list of what is still open.**
 Feature freeze respected: docs and checks only.
