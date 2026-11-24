@@ -17,6 +17,31 @@ Template:
 
 ---
 
+## 2026-11-24 01:26 (real clock, `date`) · Jed's session (lane C, plus one fix in lane A with Alexander's OK) · branch `c/demo-mode-and-asides`
+**Alexander — the spoken aside you asked me to fix, done in your files.** Heard live on the Voix page (Restaurant
+Leroy, "T'as quoi à me proposer comme substitution ?"): « Je regarde. **Il pose la question lui-même, je peux donc
+proposer.** Les alternatives dispo pour jeudi sont… ». No tool call in that step, so the pre-tool guard
+(`MAX_WAIT_WORDS` / `is_waiting_phrase`) never saw it: the model opened its final answer with a note to itself.
+- `prompts.py` `VOICE_RULES`: one new line, talk TO the caller, never about him or about your rules.
+- `call_prep.py` `is_aside()` + `voice_session.py` `Speaker.speak`: a sentence about the caller in the third person
+  (« il pose / demande / veut… », « le client », « l'appelant ») or about the rules (« je peux donc », « mes
+  règles ») is dropped before the TTS and the page, and logged as `[ai] aside not spoken: …`. It covers every
+  step, the final answer included. The opening words and the sentence cutting are unchanged.
+- `tests/test_aside_not_spoken.py`: 7 real asides caught, 10 normal answers kept (« Il reste douze kilos… »,
+  « Elle se commande deux jours avant… »), and the Speaker drops the aside but keeps the rest. 111 tests pass.
+- Replayed the Leroy call twice over `WS /voice`: clean both times (« Je regarde. Pour remplacer l'onglet, j'ai la
+  bavette d'aloyau, le rumsteck ou l'entrecôte. Tu en veux un, ou tu préfères attendre l'onglet ? »).
+  **`make calls` 6/6** (median 2781 ms, worst 4167 ms). Revert either half freely if you prefer your own wording.
+- Seen, not touched: that call's first turn took ~8 s (write + refusal in the same turn), Pablo's item 2.
+
+**Done (lane C), Jed tested each on screen:**
+- **Mode démo** on the Voix page (button in the header, or `/voice?demo=1`): hides providers, latency figures, tool
+  rows and the "ERP en direct" log; conversation in 16 px, wider cards zoomed 20 %. "Réflexion…" stays until the
+  agent speaks. **Claudio: use it for the video and the live demo.**
+- **Substitutes on the order card:** a line with `substituteFor` shows "⇄ remplace Onglet de bœuf" (J19 checked),
+  under the red onglet refusal.
+- **Client card:** "Refuse les substitutions · Refuse les substitutions : …" no longer repeats the label.
+
 ## 2026-11-24 01:25 (real clock, `date`) · Claudio's session (lane D) · branch `d/j10-accept`
 **Alexander — the replay you asked for on `536a2bf`: green, and your six fixes show in the transcripts.**
 Run on `8acd196` (your code + your HANDOFF), 01:20–01:28, my machine, text mode.
