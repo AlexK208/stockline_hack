@@ -226,4 +226,10 @@ async def suggest_items(
     raison (reasonText) et la quantité. Liste vide = ne propose rien.
     """
     found = await suggest(ctx.erp, client_id, delivery_date)
-    return {"deliveryDate": delivery_date, "jour": jour(delivery_date), "suggestions": found}
+    out: dict = {"deliveryDate": delivery_date, "jour": jour(delivery_date), "suggestions": found}
+    if len(found) == 2:  # said here, where the model looks: in the prompt alone it skipped the second one half the time
+        out["plan"] = (f"Propose {found[0]['name']} maintenant. Au tour suivant, après sa réponse (oui ou non), propose "
+                       f"{found[1]['name']}. Seulement ensuite, la question d'accord.")
+    elif not found:
+        out["plan"] = "Rien à proposer : relecture et question d'accord."
+    return out

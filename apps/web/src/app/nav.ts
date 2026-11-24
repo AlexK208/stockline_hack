@@ -7,7 +7,7 @@ import { History } from "lucide-react";
 import { BadgeEuro, Tags } from "lucide-react";
 import { Scale } from "lucide-react";
 import { BookOpen } from "lucide-react";
-import { Gift } from "lucide-react";
+import { Gift, TrendingUp } from "lucide-react";
 
 export interface NavItem { to: string; label: string; icon: LucideIcon; keywords?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
@@ -22,6 +22,7 @@ export const NAV: NavGroup[] = [
       { to: "/prices", label: "Prix", icon: BadgeEuro, keywords: "tarifs règles remise prix négocié grille simulateur marge" },
       { to: "/history", label: "Historique", icon: History, keywords: "historique réclamation litige retour avoir relation événements fournisseur" },
       { to: "/festive", label: "Carnet des fêtes", icon: Gift, keywords: "fêtes noël nouvel an réveillon réservations ris filet veau liste d'attente" },
+      { to: "/cotation", label: "Cotation de la semaine", icon: TrendingUp, keywords: "cotation cadran prix carcasses hausse bouchers prévenir" },
     ],
   },
   {
