@@ -1,107 +1,78 @@
-"""suggest_items (tools/suggest.py): the ranking on crafted facts, then the whole tool on the seed data (read-only;
-those tests are skipped when the ERP is not running; run `make reset` first for the exact seed state)."""
+"""suggest_items (tools/suggest.py): the « forgotten from a repeated order » rule on crafted orders, then the whole
+tool on the seed data (read-only; skipped when the ERP is not running)."""
 
 import httpx
 import pytest
 
 from app.config import settings
 from app.tools.erp import ErpClient
-from app.tools.suggest import rank, refuses_substitutes, suggest
+from app.tools.suggest import forgotten, suggest
 
-# ───────────────────────── rank(): pure, crafted facts ─────────────────────────
-
-
-def product(pid, category="pad-boeuf", caliber=None, active=True):
-    return {"id": pid, "name": f"Produit {pid}", "category": category, "unit": "kg", "caliber": caliber, "active": active}
+A, B, C, D, E, F = "prd_A", "prd_B", "prd_C", "prd_D", "prd_E", "prd_F"
 
 
-def facts(**over):
-    f = {
-        "today": "2026-11-24",
-        "deliveryDate": "2026-11-26",
-        "client": {"id": "cli_x", "status": "active", "preferences": "Accepte les substitutions équivalentes.", "deliveryDays": ["thu"]},
-        "inOrder": [],
-        "usual": [{"productId": "prd_a", "productName": "A", "unit": "kg", "avgQty": 10, "frequency": 0.8}],
-        "products": [product("prd_a"), product("prd_b"), product("prd_c", category="porc"), product("prd_p", category="charcuterie")],
-        "stock": [],
-        "rules": [],
-        "lastYear": {"orders": 50, "products": [
-            {"productId": "prd_a", "category": "pad-boeuf", "unit": "kg", "qty": 400, "orders": 40},
-            {"productId": "prd_p", "category": "charcuterie", "unit": "kg", "qty": 60, "orders": 5},
-        ]},
-        "seasons": [{"from": "2025-11-16", "to": "2025-12-06", "orders": 6, "products": []}],
-    }
-    f.update(over)
-    return f
+def orders(basket: dict, times: int, start: int = 1) -> list[dict]:
+    return [{"date": f"2026-10-{start + i:02d}", "lines": dict(basket)} for i in range(times)]
 
 
-def test_habit_missing_from_the_order_is_offered_with_its_reason():
-    out = rank(facts())
-    assert [(c["productId"], c["reasonKind"]) for c in out] == [("prd_a", "habitude")]
-    assert out[0]["qty"] == 10 and out[0]["evidence"]
+USUAL = {A: 200, B: 110, C: 72}  # placed 3 times, identical
 
 
-def test_never_something_already_in_the_order():
-    assert rank(facts(inOrder=["prd_a"])) == []
+# ───────────────────────── the rule, on crafted orders ─────────────────────────
 
 
-def test_blocked_client_gets_nothing():
-    assert rank(facts(client={"id": "cli_x", "status": "blocked", "preferences": ""})) == []
+def test_one_forgotten_product_of_a_three_times_repeated_order_is_offered():
+    got = forgotten(orders(USUAL, 3), {A, C})
+    assert got["missing"] == [B] and got["times"] == 3 and got["qty"][B] == 110
 
 
-def test_inactive_product_is_never_offered():
-    assert rank(facts(products=[product("prd_a", active=False)])) == []
+def test_two_forgotten_products_are_offered_together():
+    usual = {A: 1, B: 1, C: 1, D: 1, E: 1, F: 1}  # 2 of 6 missing = 33 %
+    got = forgotten(orders(usual, 3), {A, B, C, D})
+    assert got["missing"] == [E, F]
 
 
-def test_a_staple_is_not_seasonal_but_a_lifted_product_is():
-    seasons = [{"from": "2025-11-16", "to": "2025-12-06", "orders": 6, "products": [
-        {"productId": "prd_a", "unit": "kg", "qty": 50, "orders": 5},  # 5/6 vs 40/50: bought all year
-        {"productId": "prd_p", "unit": "kg", "qty": 30, "orders": 4},  # 4/6 vs 5/50: seasonal
-    ]}]
-    kinds = {c["productId"]: c["reasonKind"] for c in rank(facts(seasons=seasons))}
-    assert kinds == {"prd_p": "l'an dernier", "prd_a": "habitude"}
+def test_not_repeated_three_times_gives_nothing():
+    assert forgotten(orders(USUAL, 2), {A, C}) is None
 
 
-LOT = {"productId": "prd_b", "lots": [{"qtyRemaining": 30, "expiresAt": "2026-11-28"}]}
+def test_more_than_35_percent_missing_gives_nothing():
+    assert forgotten(orders({A: 1, B: 1}, 5), {A}) is None  # 1 of 2 = 50 %
+    assert forgotten(orders({A: 1, B: 1, C: 1, D: 1, E: 1}, 5), {A, B, C}) is None  # 2 of 5 = 40 %
 
 
-def test_lot_in_a_category_the_client_buys():
-    out = rank(facts(usual=[], stock=[LOT]))
-    assert [(c["productId"], c["reasonKind"]) for c in out] == [("prd_b", "lot à écouler")]
+def test_three_missing_gives_nothing_even_under_35_percent():
+    usual = {f"p{i}": 1 for i in range(10)}
+    assert forgotten(orders(usual, 3), {f"p{i}" for i in range(7)}) is None  # 3 of 10 = 30 %, but 3 missing
 
 
-def test_lot_expiring_on_the_delivery_day_is_not_offered():
-    lot = {"productId": "prd_b", "lots": [{"qtyRemaining": 30, "expiresAt": "2026-11-26"}]}
-    assert rank(facts(usual=[], stock=[lot])) == []
+def test_more_than_two_extra_products_gives_nothing():
+    assert forgotten(orders(USUAL, 3), {A, C, D, E, F}) is None  # 1 missing, 3 extra: another order
 
 
-def test_client_refusing_substitutes_only_gets_what_he_bought():
-    refuses = {"id": "cli_x", "status": "active", "preferences": "Génisses U+. Aucune substitution sans l'appeler."}
-    assert refuses_substitutes(refuses["preferences"])
-    assert rank(facts(usual=[], stock=[LOT], client=refuses)) == []  # prd_b: same category, never bought by him
-    own = {"productId": "prd_a", "lots": [{"qtyRemaining": 30, "expiresAt": "2026-11-28"}]}
-    assert [c["productId"] for c in rank(facts(usual=[], stock=[own], client=refuses))] == ["prd_a"]
+def test_more_than_three_differences_gives_nothing():
+    usual = {A: 1, B: 1, C: 1, D: 1, E: 1, F: 1}
+    assert forgotten(orders(usual, 3), {A, B, C, D, "x", "y"}) is None  # 2 missing + 2 extra = 4
 
 
-RULE = {"id": "prl_0008", "name": "Fêtes 2026 : chair à saucisse −8 % dès 10 kg", "productScope": {"kind": "product", "productId": "prd_p"},
-        "minQty": 10, "validFrom": "2026-12-01", "validTo": "2026-12-31"}
+def test_an_order_with_nothing_missing_gives_nothing():
+    assert forgotten(orders(USUAL, 3), {A, B, C}) is None
+    assert forgotten(orders(USUAL, 3), {A, B, C, D}) is None  # only an extra product: nothing forgotten
 
 
-def test_promo_only_when_valid_on_the_delivery_date():
-    assert rank(facts(usual=[], rules=[RULE])) == []  # delivered 26/11: the offer starts 01/12
-    out = rank(facts(usual=[], rules=[RULE], deliveryDate="2026-12-03"))
-    assert [(c["productId"], c["reasonKind"], c["qty"]) for c in out] == [("prd_p", "promo", 12)]  # his 12 kg, above the 10 kg
+def test_an_empty_order_gives_nothing():
+    assert forgotten(orders(USUAL, 3), set()) is None
 
 
-def test_permanent_discount_is_not_a_promo():
-    assert rank(facts(usual=[], rules=[{**RULE, "validTo": None, "validFrom": "2025-01-01"}])) == []
+def test_the_closest_repeated_order_wins():
+    history = orders(USUAL, 3) + orders({A: 1, C: 1, D: 1, E: 1}, 4, start=10)
+    got = forgotten(history, {A, C, D})  # missing B from USUAL (+1 extra D), or E from the other one (no extra)
+    assert got["missing"] == [E] and got["times"] == 4
 
 
-def test_nothing_on_the_carnet_des_fetes_dates():
-    """19–31 December go through the carnet des fêtes (tools/festive.py): no order there, so nothing to add to."""
-    assert rank(facts(deliveryDate="2026-12-22")) == []
-    assert rank(facts(deliveryDate="2026-12-31")) == []
-    assert [c["productId"] for c in rank(facts(deliveryDate="2026-12-18"))] == ["prd_a"]
+def test_the_usual_quantity_is_the_median_of_the_repeated_orders():
+    history = [{"date": f"2026-10-0{i}", "lines": {A: 200, B: q, C: 70}} for i, q in enumerate((100, 110, 130), 1)]
+    assert forgotten(history, {A, C})["qty"][B] == 110
 
 
 # ───────────────────────── suggest(): the seed data, through the ERP ─────────────────────────
@@ -115,26 +86,16 @@ def erp_up() -> bool:
 
 
 seed = pytest.mark.skipif(not erp_up(), reason="ERP not running")
-KINDS = {"l'an dernier", "réservation", "habitude", "promo", "lot à écouler"}
 
 
 async def suggested(client_id: str, day: str) -> list[dict]:
     return await suggest(ErpClient("voice_agent"), client_id, day)
 
 
-async def bought_last_year(client_id: str) -> set[str]:
-    got = await ErpClient("voice_agent").get(f"/api/clients/{client_id}/purchases", {"from": "2025-11-24", "to": "2026-11-24"})
-    return {r["productId"] for r in got["products"]}
-
-
 @seed
-async def test_seed_peyronnet_thursday():
-    out = await suggested("cli_0001", "2026-11-26")
-    assert len(out) == 1  # one suggestion per call: two chained a second upsell onto « oui, c'est bon »
-    for c in out:
-        assert c["reasonKind"] in KINDS and c["reasonText"] and c["evidence"] and c["qty"] > 0
-    # Peyronnet refuses substitutions: only products she has bought herself
-    assert {c["productId"] for c in out} <= await bought_last_year("cli_0001")
+async def test_seed_no_open_order_means_nothing_to_compare():
+    # Peyronnet has no order yet for Thursday 26/11 in the seed: no current order, nothing can be « forgotten »
+    assert await suggested("cli_0001", "2026-11-26") == []
 
 
 @seed
@@ -143,26 +104,5 @@ async def test_seed_blocked_client_gets_nothing():
 
 
 @seed
-async def test_seed_leroy_refuses_substitutes():
-    out = await suggested("cli_0024", "2026-11-26")
-    assert {c["productId"] for c in out} <= await bought_last_year("cli_0024")
-
-
-@seed
-async def test_seed_zero_stock_is_never_suggested():
-    # ris de veau and onglet are at zero (Peyronnet takes 5× more ris de veau in mid-December than the rest of the year)
-    for client_id, day in [("cli_0001", "2026-11-26"), ("cli_0001", "2026-12-15"), ("cli_0024", "2026-11-26"), ("cli_0008", "2026-11-26")]:
-        ids = {c["productId"] for c in await suggested(client_id, day)}
-        assert not ids & {"prd_0015", "prd_0038"}, (client_id, day, ids)
-
-
-@seed
 async def test_seed_christmas_week_is_left_to_the_carnet_des_fetes():
     assert await suggested("cli_0001", "2026-12-22") == []
-
-
-@seed
-async def test_seed_sausage_promo_not_before_december():
-    assert all(c["reasonKind"] != "promo" for c in await suggested("cli_0008", "2026-11-26"))
-    dec = await suggested("cli_0008", "2026-12-03")
-    assert ("prd_0047", "promo") in {(c["productId"], c["reasonKind"]) for c in dec}

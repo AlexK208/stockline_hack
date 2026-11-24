@@ -20,7 +20,8 @@ on vérifie la donnée et on corrige ce fichier.
 | T4 | Changement d'avis en cours d'appel | Le Petit Roger (`cli_0016`) | modifier et retirer des lignes |
 | T5 | Compte bloqué | Boucherie Lacour de Tulle (`cli_0005`) | aucune commande, message transmis |
 | T6 | « J'ai oublié un truc » | Boucherie Rolland (`cli_0086`) | compléter un brouillon existant |
-| T7 | Suggestions en fin de commande (V2) | Boucherie Peyronnet (`cli_0001`) | une seule suggestion, avec sa raison ; oui, puis relecture et accord |
+| T7 | Oubli dans la commande habituelle | Boucherie Peyronnet (`cli_0001`) | sa commande répétée moins un produit : l'oubli proposé, une seule question |
+| T8 | Une autre commande que l'habituelle | Boucherie Peyronnet (`cli_0001`) | aucune question « vous n'oubliez rien ? » |
 
 ---
 
@@ -148,33 +149,34 @@ on vérifie la donnée et on corrige ce fichier.
 
 ---
 
-## T7 — Suggestions en fin de commande : Boucherie Peyronnet (V2)
+## T7 — Oubli dans la commande habituelle : Boucherie Peyronnet (règle du 24/11, ~04:00)
 
-- **Appelant** : Céline Peyronnet, comme en T1. **Refuse les substitutions** : on ne lui propose que des produits
-  qu'elle a déjà achetés.
-- **Contexte ERP** : son habituel (60 jours) contient aussi la demi-carcasse de porc cul noir (`prd_0007`, 58 % de
-  ses livraisons), l'onglet (54 %, en rupture), le quartier avant (`prd_0002`, 50 %) et l'agneau (50 %).
-  Fin novembre, aucun produit n'est « de saison » pour elle, aucune promo n'est valable le 26/11 (`prl_0008` commence
-  le 01/12) : les suggestions viennent de l'habitude.
+- **Appelant** : Céline Peyronnet, comme en T1.
+- **Règle** (`tools/suggest.py`) : on ne propose que les produits **oubliés** d'une commande qu'il passe **à l'identique
+  au moins 3 fois en 6 mois**, et seulement si la commande en cours est nettement celle-là : **au plus 2 oublis, au plus
+  2 produits en plus, au plus 3 différences en tout, et pas plus de 35 % de la commande oubliés**. Tous les oublis en
+  **une seule question**. Sinon, rien.
+- **Contexte ERP** : sa commande « arrière + avant + demi-veau » revient **5 fois** en 6 mois (la dernière le 15/09).
 - **Script** :
   > « Bonjour, c'est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, comme d'hab : deux arrières et un demi-veau. »
   > « Ce sera tout. »
   > « Oui, mets-moi ça. »
   > « Oui, c'est bon. »
 - **Attendu** :
-  - sur « Ce sera tout », l'agent appelle **`suggest_items` une seule fois**, relit, et propose **le demi-porc cul
-    noir avec sa raison** (« vous en prenez d'habitude ») ;
-  - **une seule suggestion par appel** (depuis le 24/11 ~03:50) : après le oui, il l'ajoute, relit toute la commande
-    et pose la question d'accord, **sans proposer autre chose** ; sur un non, il n'insiste pas et pose la question
-    d'accord, sans valider ;
-  - commande du 26/11 confirmée : **2 arrières (≈ 200 kg), 1 demi-veau (≈ 72,5 kg), 1 demi-porc cul noir
-    (≈ 50 kg)**, pas de quartier avant, rien d'autre.
-- **Pièges** : une deuxième suggestion (l'outil n'en rend plus qu'une) ; valider sans un oui (refusé par le
-  garde-fou `call_guard`) ; proposer l'onglet (rupture) ; un argument de marge ou de volume.
-- **Page Voix** : section « Suggestions » sous la commande : le porc « Proposé » puis dans la commande (« suggestion
-  acceptée · habitude »), le quartier avant « Proposé » puis « Non retenu » une fois la commande confirmée.
+  - sur « Ce sera tout », **`suggest_items` une seule fois**, relecture, puis la question : **le quartier avant**
+    (1 sur 3 oublié = 33 %) ;
+  - après le oui : ajouté, relecture de toute la commande et question d'accord, **rien d'autre proposé** ;
+  - commande du 26/11 confirmée : **2 arrières (≈ 200 kg), 1 demi-veau, 1 avant (≈ 110 kg)**, rien d'autre.
+- **Pièges** : proposer autre chose que l'avant ; une deuxième question ; valider sans un oui (refusé par `call_guard`).
 
----
+## T8 — Une autre commande que l'habituelle : Boucherie Peyronnet
+
+- **Script** :
+  > « Bonjour, c'est Céline, Boucherie Peyronnet aux Halles. Pour jeudi, tu me mets dix kilos de bavette et cinq kilos de paleron. »
+  > « C'est tout. »
+  > « Oui, c'est bon. »
+- **Attendu** : aucune de ses commandes répétées ne ressemble à celle-ci (tout manque) : **pas de « vous n'oubliez rien ? »**,
+  relecture et question d'accord, puis validation. Commande du 26/11 : 10 kg de bavette, 5 kg de paleron, rien d'autre.
 
 ## Résultats
 

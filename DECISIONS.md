@@ -345,6 +345,13 @@ compte bloqué ; jamais le ris de veau ni l'onglet (à zéro) ; la promo chair �
   proposer ce qu'on n'a pas. **Puis une seule** (24/11, ~03:50) : mesuré sur la voix, le « oui, c'est bon » d'une
   cliente qui voulait valider recevait une deuxième proposition (2,8 s puis 3,8 s) et la commande n'était toujours pas
   confirmée. Désormais : une suggestion, puis la relecture et la question d'accord, rien d'autre (T7 le vérifie).
+- **Puis, plus de suggestion « commerciale » du tout** (24/11, ~04:00, décision de Pablo) : demander « vous n'oubliez
+  rien ? » rend service quand la commande est nettement l'habituelle avec un trou, et agace quand c'est une autre
+  commande. `suggest_items` ne rend plus que les produits **oubliés** d'une commande passée **à l'identique au moins
+  3 fois en 6 mois**, si la commande en cours en est nettement une : au plus 2 oublis, au plus 2 produits en plus,
+  au plus 3 différences, pas plus de 35 % oubliés ; tous les oublis en une seule question. Les sources « l'an
+  dernier », « promo » et « lot à écouler » sont retirées. T7 (l'oubli proposé) et T8 (une autre commande : rien) le
+  vérifient.
 - « L'an dernier » listait d'abord les produits de base (« 866 kg de quartier arrière l'an dernier à cette
   période ») : vrai, mais ce n'est pas une raison, il en prend toute l'année. Un produit n'est « de saison » pour un
   client que s'il est dans une part nettement plus grande de ses livraisons à cette période que sur l'année (× 1,5).
