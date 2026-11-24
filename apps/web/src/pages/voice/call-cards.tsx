@@ -6,9 +6,9 @@
  *    Removed lines stay visible, crossed out; changed quantities show the old one crossed out. Under them, in red, what
  *    the business rules refused during the call and why (out of stock, ordered too late, blocked account), read from
  *    the tools' results: the jury sees the rule applied, not just a sentence they might miss.
- *  - Suggestions: what suggest_items found at the end of the order (dot + word for the reason, then the evidence).
- *    The states are inferred, not reported: "proposé" once the agent's words name the product, accepted when it is in
- *    the order (it then moves into the order card), "non retenu" once the next one is offered or the order confirmed.
+ *  - Suggestions: the products suggest_items found forgotten at the end of the order (dot + word for the reason, then
+ *    the evidence). The states are inferred, not reported: "proposé" once the agent has spoken after the tool, accepted
+ *    when it is in the order (it then moves into the order card), "non retenu" if still missing once it is confirmed.
  *
  * Sources: the agent's tool calls of this session (args, and `result` when the AI service forwards it) and the live ERP
  * events written by the voice agent since the session started. Nothing here writes to the ERP.
@@ -421,36 +421,22 @@ function Replaces({ productId }: { productId: Id }) {
 // ───────────────────────── Suggestions ─────────────────────────
 
 /** Dot colour per reason, from the existing tones (no new colour). */
-const KIND_TONE: Record<string, Tone> = {
-  "l'an dernier": "violet",
-  "habitude": "info",
-  "promo": "success",
-  "lot à écouler": "warning",
-};
-const GENERIC = new Set(["demi", "carcasse", "boeuf", "limousin", "label", "rouge", "genisse", "sous", "mere", "frais", "fraiche", "facon", "entier", "entiere", "pour", "avec"]);
-const fold = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-const words = (name: string) => fold(name).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GENERIC.has(w));
-
+const KIND_TONE: Record<string, Tone> = { habitude: "info" }; // suggest_items only returns forgotten habits now
 type OfferState = "proposed" | "accepted" | "declined";
 interface Offer { s: Suggestion; state: OfferState }
 
-/** Which suggestions the agent has offered so far, and what became of each (inferred: see the header comment). */
+/** What the agent offered at the end of the order, and what became of it. suggest_items returns the forgotten products
+ * together and the agent asks about all of them in ONE question (BASE_RULES « Oublis »): they are on the table as soon
+ * as the agent speaks after the tool; one in the order is accepted; one still missing once the order is confirmed was
+ * not kept (inferred, hence « non retenu », not « refusé »). */
 function suggestionStates(tools: CallState, turns: VoiceTurn[], order: OrderDetail | undefined): Offer[] {
   const list = tools.suggestions;
   if (!list.length || tools.suggestedAt == null) return [];
+  const spoke = turns.slice(tools.suggestedAt).some((t) => t.agent.text.trim());
+  if (!spoke) return [];
   const inOrder = new Set(order?.lines.map((l) => l.productId) ?? []);
-  // the words that tell a suggestion apart from the other suggestions and from the order's lines ("porc", "avant")
-  const others = (i: number) => new Set([...list.filter((_, j) => j !== i).map((x) => x.name), ...(order?.lines.map((l) => l.productName) ?? [])].flatMap(words));
-  const keys = list.map((x, i) => { const own = words(x.name); const k = own.filter((w) => !others(i).has(w)); return k.length ? k : own; });
-  const said = fold(turns.slice(tools.suggestedAt).map((t) => t.agent.text).join(" "));
-  let reached = -1;
-  keys.forEach((k, i) => { if (k.some((w) => said.includes(w))) reached = i; });
-  if (reached < 0 && said.trim()) reached = 0; // the agent spoke after the tool: the first one is on the table
   const ended = !!order && order.status !== "draft";
-  return list.slice(0, reached + 1).map((s, i) => ({
-    s,
-    state: inOrder.has(s.productId) ? "accepted" : i < reached || ended ? "declined" : "proposed",
-  }));
+  return list.map((s) => ({ s, state: inOrder.has(s.productId) ? "accepted" : ended ? "declined" : "proposed" }));
 }
 
 function KindTag({ kind }: { kind: string }) {
