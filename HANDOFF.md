@@ -17,6 +17,22 @@ Template:
 
 ---
 
+## 2026-11-24 04:16 (real clock, `date`) · Pablo's session (lane B) · `b/suggest-edge-cases`, merged
+**The new suggestion rule (04:08): its full regression is green, and the edge cases are fixed.**
+- Regression of 04:08's rule (`8d93c42`): `make calls` **8/8** (T1–T8, median 2 971 ms), `make jury` **29/29** (median
+  2 462 ms; expected ⚠ J1, J15, J23).
+- **Edge cases, decided by common sense** (`tools/suggest.py`):
+  1. A product **removed** from the open order during the call (ERP log `order.line_removed`) or **declined** out loud
+     (`declined_product_ids`, filled by the agent: one more clause in the « Oublis » rule) is never offered back.
+  2. A missing product with an **extra product of the same category** in the order is a swap, not forgotten.
+  3. A line with **`substituteFor`** covers the product it replaces.
+  4. **Ties** between equally close repeated orders: the most frequent, then the most recent wins (always the same).
+- Verified: 193 unit tests (3 new). Live on the seed: Peyronnet's usual order with the forequarter removed → nothing
+  offered. By model: Kevin « enlève le paleron » → « c'est tout » → no offer (the agent passed the paleron as
+  declined); Peyronnet « pas d'avant cette semaine » → no offer; T7 and T8 PASS.
+- **Jed:** your test from 04:08 still applies. Also try a removal: « enlève l'avant » mid-call, then « c'est tout ».
+- Next: the final full regression on `main`, then the manual tests.
+
 ## 2026-11-24 04:08 (real clock, `date`) · Pablo's session (lane B) · `b/suggest-forgotten`, merged · **Jed: please test**
 **The end-of-order suggestion now follows Pablo's rule: only what the client FORGOT from an order he places again
 and again.** Asking « vous n'oubliez rien ? » helps when it is clearly his usual order with a gap, and nags when he
