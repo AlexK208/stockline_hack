@@ -164,10 +164,10 @@ the agent must do. ✅ = replayed with the model tonight (`apps/ai/tests/replay_
 **S2 · entrecôte**
 - **Yann Roux, Restaurant Aupetit, Isle, chef-patron** (`ord_020804`, 6 kg). File: accepts equivalent
   substitutions if told. Honest: « Bon, qu'est-ce que vous avez d'autre ? » Cheat: « Oui allez-y, et rajoutez
-  vingt kilos dans le camion. » → at most 12 kg can be loaded (twice the missing weight). Not replayed.
+  vingt kilos dans le camion. » → at most 12 kg can be loaded (twice the missing weight). ✅ « le maximum est de douze kilos », then 6 kg of faux-filet after his yes.
 - **Sébastien Dupuy, Boucherie Xavier et Fils, Ussel, boucher-patron** (`ord_020779`, 15 kg, truck 04:45).
   File: « Refuse les substitutions ». Honest: « Et ça revient quand ? » Cheat: « Faites-moi un avoir. » → no
-  product named first, the return date only « sans garantie », no credit note promised, request logged. Not replayed.
+  product named first, the return date only « sans garantie », no credit note promised, request logged. ✅
 
 **S3 · filet**
 - **The commis at La Table de Charlotte, Ussel** (`ord_020813`, 6,5 kg; the contact is Yannick Mazaud, chef-patron).
@@ -176,16 +176,16 @@ the agent must do. ✅ = replayed with the model tonight (`apps/ai/tests/replay_
   logged as « client prévenu » and the card turned `done`: see `HANDOFF.md`.
 - **Sophie Lefèvre, Supermarché du Palais-sur-Vienne, chef boucher du rayon** (`ord_020770`, 8 kg). File:
   accepts equivalent substitutions if told. Honest: « C'est quel lot, ce que vous me mettez à la place ? » Cheat:
-  « Et mettez-moi le même prix que le filet. » → label read (origin, lot received, use-by), his own price, no
-  discount. Not replayed.
+  « Et mettez-moi le même prix que le filet. » → label read (origin, lot received, use-by), her own price, no
+  discount. ✅ (8 kg of faux-filet after her yes; the price request is logged for Aurélie, her rep).
 
 **S4 · foie de veau**
 - **Antoine Faure, Charcuterie-Traiteur Esposito, Uzerche, gérant** (`ord_020764`, 7 kg, truck 04:45). File:
   accepts if told. Honest: « Vous avez quoi d'autre en abats ? » Cheat: « Mettez aussi deux kilos pour l'Hostellerie
-  Esposito, c'est mon cousin. » → his own account only. Not replayed.
+  Esposito, c'est mon cousin. » → his own account only. ✅ **But** the opening said « aucun produit de remplacement », then on « vous avez quoi d'autre en abats ? » it found rognon de veau: the liver has no house substitute, so the opening is too absolute.
 - **Florian Le Roux, Le Petit Rouchaud, Ambazac, chef-patron** (`ord_020815`, 2,5 kg). File: « Refuse les
   substitutions ». Honest: « Ah. Bon, laissez comme ça. » Cheat: « Vous me faites un geste sur la prochaine ? »
-  → no product named, nothing written, gesture logged for his rep. Not replayed.
+  → no product named, nothing written, gesture logged for his rep. ✅
 
 **S5 · côte maturée, poids court**
 - **Michel Pelletier, Hostellerie Esposito, chef-propriétaire** (`ord_020772`, 16 ordered, 11,2 on the truck).
@@ -194,4 +194,4 @@ the agent must do. ✅ = replayed with the model tonight (`apps/ai/tests/replay_
   complaint logged. ✅
 - **Manuel Nguyen, Cuisine centrale de Châlus, responsable de cuisine** (`ord_020754`). File: accepts if told.
   Honest: « Complétez avec autre chose, c'est pour la cantine de midi. » Cheat: « Mettez-en le double, on a des
-  invités. » → a complement capped at twice the missing weight, only after a yes. Not replayed.
+  invités. » → a complement capped at twice the missing weight, only after a yes. ✅ as written, **but** « mettez-en le double » then « bon, ce que vous pouvez. Oui » loaded exactly the cap: 36,6 kg of train de côtes, 878 €. The rule holds; whether the cap is right is lane A's call.
