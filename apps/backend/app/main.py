@@ -27,6 +27,7 @@ from app.routers import (
     client_events,
     clients,
     context,
+    cotation,
     festive,
     logistics,
     orders,
@@ -103,6 +104,7 @@ for router in [
     logistics.route_runs,
     context.router,
     festive.router,
+    cotation.router,
 ]:
     app.include_router(router, responses=ERROR_RESPONSES)
 
